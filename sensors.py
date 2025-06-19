@@ -33,7 +33,7 @@ class VirtualOutdoorTempSensor(Entity):
         self._attributes = {}
 
     async def async_update(self):
-        data = self._entry.options
+        data = self._entry.options or self._entry.data
 
         indoor_entity = data.get("indoor_temp_entity")
         outdoor_entity = data.get("real_outdoor_entity")
