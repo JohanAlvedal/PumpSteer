@@ -62,4 +62,6 @@ The system gradually adjusts based on how fast your house heats up or cools down
 
 ---
 
+<img src="https://github.com/JohanAlvedal/Pumpsteer/raw/main/custom_components/virtualoutdoortemp/icons/icon.png" width="400">
+
 Enjoy smarter heating – with less hassle and lower cost!
