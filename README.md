@@ -60,7 +60,7 @@ The system gradually adjusts based on how fast your house heats up or cools down
 
 ## 💬 Support & Feedback
 
-- GitHub: [JohanAlvedal/Pumpsteer](https://github.com/JohanAlvedal/)
+- GitHub: [JohanAlvedal/Pumpsteer](https://github.com/JohanAlvedal/VirtualOutdoor)
 - Issues: [Open an issue](https://github.com/JohanAlvedal/Pumpsteer/issues)
 
 ---
