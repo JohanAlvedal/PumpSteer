@@ -1,0 +1,80 @@
+type: vertical-stack
+cards:
+  - type: entities
+    title: VirtualOutdoorTemp Controls
+    show_header_toggle: false
+    entities:
+      - entity: input_number.virtualoutdoortemp_aggressiveness
+        name: Aggressiveness (0–5)
+      - entity: input_number.indoor_target_temperature
+        name: Target Temperature
+      - entity: input_number.virtualoutdoortemp_summer_threshold
+        name: Summer Mode Threshold
+      - entity: input_boolean.virtualoutdoortemp_summer_mode
+        name: Summer Mode Active?
+      - entity: input_text.hourly_forecast_temperatures
+        name: Forecast Data (raw)
+        secondary_info: last-updated
+      - entity: input_number.house_inertia
+        secondary_info: last-changed
+      - entity: sensor.indoor_temperature_delta
+        secondary_info: last-changed
+      - entity: sensor.virtualoutdoortemp
+        secondary_info: last-changed
+      - entity: sensor.temperatur_nu
+        secondary_info: last-changed
+      - entity: sensor.temp_hall_nere_temperature
+        secondary_info: last-changed
+      - entity: number.ohmigohass_temperature
+        secondary_info: last-changed
+  - type: custom:apexcharts-card
+    header:
+      title: VirtualOutdoorTemp Gasa / Bromsa
+      show: true
+    graph_span: 24h
+    span:
+      start: day
+    apex_config:
+      chart:
+        height: 300px
+        type: line
+      yaxis:
+        - title:
+            text: Temperatur (°C)
+    series:
+      - entity: sensor.virtualoutdoortemp
+        name: Virtual Outdoor Temp
+        type: line
+        color: "#0077FF"
+      - entity: sensor.real_outdoor_temperature
+        name: Real Outdoor Temp
+        type: line
+        color: "#777777"
+      - entity: sensor.virtualoutdoortemp_tempdiff
+        name: Boost/Block Effect
+        type: column
+        color_threshold:
+          - value: -0.1
+            color: "#0077FF"
+          - value: 0.1
+            color: "#AAAAAA"
+          - value: 100
+            color: "#FF4444"
+        stroke_width: 0
+        group_by:
+          func: avg
+          duration: 10min
+  - type: markdown
+    content: >
+      ### 🧠 VirtualOutdoorTemp Status
+
+      **Mode:** {{ state_attr('sensor.virtualoutdoortemp', 'mode') }}
+
+      **Indoor Temp:** {{ state_attr('sensor.virtualoutdoortemp',
+      'indoor_temperature') }} °C   **Target Temp:** {{
+      state_attr('sensor.virtualoutdoortemp', 'target_temperature') }} °C  
+      **Electricity Price:** {{ state_attr('sensor.virtualoutdoortemp',
+      'electricity_price') }} kr/kWh   **Aggressiveness:** {{
+      state_attr('sensor.virtualoutdoortemp', 'aggressiveness') }}   **Temp
+      Diff:** {{ state_attr('sensor.virtualoutdoortemp', 'difference_to_target')
+      }} °C
