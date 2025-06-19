@@ -31,11 +31,13 @@
 /config/custom_components/virtualoutdoortemp/
 ```
 
-2. Restart Home Assistant.
+2. **Restart Home Assistant** after installing the integration.
 
 3. Go to **Settings → Devices & Services → Add Integration → VirtualOutdoorTemp**
 
 4. Select your indoor temperature sensor, outdoor sensor, price sensor etc.
+
+ℹ️ *Note: Some sensors may show `n/a` or be missing from charts initially — wait a few minutes for history to build up.*
 
 ---
 
@@ -58,7 +60,7 @@ The system gradually adjusts based on how fast your house heats up or cools down
 
 ## 💬 Support & Feedback
 
-- GitHub: [JohanAlvedal/Pumpsteer](https://github.com/JohanAlvedal/Pumpsteer)
+- GitHub: [JohanAlvedal/Pumpsteer](https://github.com/JohanAlvedal/)
 - Issues: [Open an issue](https://github.com/JohanAlvedal/Pumpsteer/issues)
 
 ---
