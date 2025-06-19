@@ -1,0 +1,13 @@
+{
+  "name": "VirtualOutdoorTemp",
+  "render_readme": true,
+  "description": "Simulate a virtual outdoor temperature based on indoor temp, electricity prices and more.",
+  "domains": [
+    "sensor"
+  ],
+  "country": "SE",
+  "homeassistant": "2026.06.1",
+  "iot_class": "local_polling",
+  "filename": "virtualoutdoortemp",
+  "zip_release": false
+}
