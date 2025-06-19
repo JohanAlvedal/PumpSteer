@@ -1,0 +1,91 @@
+input_number:
+  virtualoutdoortemp_aggressiveness:
+    name: VirtualOutdoorTemp Aggressiveness
+    min: 0
+    max: 5
+    step: 1
+    unit_of_measurement: "level"
+    icon: mdi:lightning-bolt-circle
+
+  virtualoutdoortemp_summer_threshold:
+    name: Summer Mode Threshold
+    min: 0
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: box
+
+  indoor_target_temperature:
+    name: Indoor Target Temperature
+    min: 0
+    max: 27
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+
+input_text:
+  hourly_forecast_temperatures:
+    name: Hourly Forecast Temperatures
+    max: 255
+
+input_boolean:
+  virtualoutdoortemp_summer_mode:
+    name: VirtualOutdoorTemp Summer Mode
+    icon: mdi:weather-sunny
+
+automation:
+  - alias: Update VirtualOutdoorTemp on SummerMode change
+    trigger:
+      - platform: state
+        entity_id: input_boolean.virtualoutdoortemp_summer_mode
+    action:
+      - service: homeassistant.update_entity
+        target:
+          entity_id: sensor.virtualoutdoortemp
+
+template:
+  - sensor:
+      - name: "Real Outdoor Temperature"
+        state: >
+          {{ state_attr('sensor.virtualoutdoortemp', 'real_outdoor_temperature') }}
+        unit_of_measurement: "°C"
+        device_class: temperature
+
+      - name: "VirtualOutdoorTemp Tempdiff"
+        state: >
+          {% set fake = states('sensor.virtualoutdoortemp') | float %}
+          {% set real = state_attr('sensor.virtualoutdoortemp', 'real_outdoor_temperature') | float %}
+          {{ (fake - real) | round(2) }}
+        unit_of_measurement: "°C"
+
+      - name: "Heating Mood"
+        state: >
+          {% set mode = state_attr('sensor.virtualoutdoortemp', 'mode') %}
+          {% if mode == "preboost" %}
+            ⚡ Preboost
+          {% elif mode == "balance" %}
+            ↕ Active Control
+          {% elif mode == "neutral" %}
+            😐 Neutral
+          {% elif mode == "summer_mode" %}
+            ☀ Summer Mode
+          {% else %}
+            ❓ Unknown
+          {% endif %}
+
+      - name: "Current Heating Mode"
+        state: >
+          {{ state_attr('sensor.virtualoutdoortemp', 'mode') | title }}
+        icon: >
+          {% set mode = state_attr('sensor.virtualoutdoortemp', 'mode') %}
+          {% if mode == 'preboost' %}
+            mdi:flash
+          {% elif mode == 'balance' %}
+            mdi:swap-vertical
+          {% elif mode == 'neutral' %}
+            mdi:pause-circle
+          {% elif mode == 'summer_mode' %}
+            mdi:weather-sunny
+          {% else %}
+            mdi:help-circle
+          {% endif %}
