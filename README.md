@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://dummyimage.com/600x200/0077FF/ffffff&text=VirtualOutdoorTemp" alt="VirtualOutdoorTemp Logo" width="400">
+  <img src="https://github.com/JohanAlvedal/VirtualOutdoorTemp/raw/main/custom_components/virtualoutdoortemp/icons/icon.png" alt="VirtualOutdoorTemp Logo" width="400">
 </p>
 
 # 🌡️ VirtualOutdoorTemp – Smarter Heating via Virtual Temperature Control
@@ -62,6 +62,11 @@ The system gradually adjusts based on how fast your house heats up or cools down
 
 ---
 
-<img src="https://github.com/JohanAlvedal/Pumpsteer/raw/main/custom_components/virtualoutdoortemp/icons/icon.png" width="400">
+## 💬 Support & Feedback
+
+- GitHub: [JohanAlvedal/VirtualOutdoorTemp](https://github.com/JohanAlvedal/VirtualOutdoorTemp)
+- Issues: [Open an issue](https://github.com/JohanAlvedal/VirtualOutdoorTemp/issues)
+
+---
 
 Enjoy smarter heating – with less hassle and lower cost!
