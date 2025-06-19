@@ -1,0 +1,13 @@
+{
+  "domain": "virtualoutdoortemp",
+  "name": "VirtualOutdoorTemp",
+  "version": "2.0",
+  "documentation": "https://github.com/JohanAlvedal/virtualoutdoortemp",
+  "issue_tracker": "https://github.com/JohanAlvedal/virtualoutdoortemp/issues",
+  "logo": "icons/icon.png",
+  "config_flow": true,
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": ["@yourgithub"],
+  "iot_class": "local_polling"
+}
