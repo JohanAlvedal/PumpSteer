@@ -1,8 +1,3 @@
-
-<p align="center">
-  <img src="https://github.com/JohanAlvedal/VirtualOutdoorTemp/raw/main/custom_components/virtualoutdoortemp/icons/icon.png" alt="VirtualOutdoorTemp Logo" width="400">
-</p>
-
 # 🌡️ VirtualOutdoorTemp – Smarter Heating via Virtual Temperature Control
 
 **VirtualOutdoorTemp** is a Home Assistant custom integration that intelligently simulates outdoor temperature to steer your heating system based on electricity prices, weather forecasts, indoor conditions, and house inertia.
