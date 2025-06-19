@@ -49,7 +49,7 @@
 
 This integration also relies on helpers and templates. You need to:
 
-1. **Manually copy the file** `packages/virtualoutdoortemp.yaml` into your Home Assistant `/config/packages/` folder  
+1. **Manually copy the file** `packages/virtualoutdoortemp.yaml` and `vitrtualoutdoortemp_learning.yaml` into your Home Assistant `/config/packages/` folder  
 2. Make sure this is in your `configuration.yaml`:
 
 ```yaml
