@@ -45,6 +45,24 @@
 
 ---
 
+## ⚙️ Additional Setup Required
+
+This integration also relies on helpers and templates. You need to:
+
+1. **Manually copy the file** `packages/virtualoutdoortemp.yaml` into your Home Assistant `/config/packages/` folder  
+2. Make sure this is in your `configuration.yaml`:
+
+```yaml
+homeassistant:
+  packages: !include_dir_named packages
+```
+
+3. **Manually add the UI elements to your Lovelace dashboard**  
+   - You can use the example dashboard configuration in this repository  
+   - ApexCharts card is recommended (available via HACS)
+
+---
+
 ## 📊 Lovelace Dashboard
 
 Use the included ApexCharts template and entity cards to show:
