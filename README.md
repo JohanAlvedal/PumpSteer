@@ -9,6 +9,10 @@
 
 ---
 
+> 🧪 **Note:** This integration is a *Work In Progress* and actively being improved. Expect frequent updates and new features!
+
+---
+
 ## 🚀 Features
 
 ✅ Simulates outdoor temperature to influence heat pump behavior  
