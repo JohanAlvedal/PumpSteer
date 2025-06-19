@@ -58,11 +58,4 @@ The system gradually adjusts based on how fast your house heats up or cools down
 
 ---
 
-## 💬 Support & Feedback
-
-- GitHub: [JohanAlvedal/Virtualoutdoortemp]([https://github.com/JohanAlvedal/VirtualOutdoor](https://github.com/JohanAlvedal/VirtualOutdoorTemp))
-- Issues: [Open an issue](https://github.com/JohanAlvedal/VirtualOutdoor/issues)
-
----
-
 Enjoy smarter heating – with less hassle and lower cost!
