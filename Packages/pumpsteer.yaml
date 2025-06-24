@@ -1,5 +1,5 @@
 input_number:
-  pumpsteertemp_aggressiveness:
+  pumpsteer_aggressiveness:
     name: PumpSteerTemp Aggressiveness
     min: 0
     max: 5
@@ -7,7 +7,7 @@ input_number:
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
 
-  pumpsteertemp_summer_threshold:
+  pumpsteer_summer_threshold:
     name: Summer Mode Threshold
     min: 0
     max: 30
@@ -38,14 +38,14 @@ template:
 
       - name: "PumpSteerTemp Tempdiff"
         state: >
-          {% set fake = states('sensor.pumpsteertemp') | float %}
-          {% set real = state_attr('sensor.pumpsteertemp', 'real_outdoor_temperature') | float %}
+          {% set fake = states('sensor.pumpsteer') | float %}
+          {% set real = state_attr('sensor.pumpsteer', 'real_outdoor_temperature') | float %}
           {{ (fake - real) | round(2) }}
         unit_of_measurement: "°C"
 
       - name: "Heating Mood"
         state: >
-          {% set mode = state_attr('sensor.pumpsteertemp', 'mode') %}
+          {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
           {% if mode == "preboost" %}
             ⚡ Preboost
           {% elif mode == "balance" %}
@@ -62,7 +62,7 @@ template:
         state: >
           {{ state_attr('sensor.pumpsteertemp', 'mode') | title }}
         icon: >
-          {% set mode = state_attr('sensor.pumpsteertemp', 'mode') %}
+          {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
           {% if mode == 'preboost' %}
             mdi:flash
           {% elif mode == 'balance' %}
