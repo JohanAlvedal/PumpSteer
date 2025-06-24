@@ -52,7 +52,7 @@ class PumpSteerSensor(Entity):
 
     @property
     def unique_id(self):
-        return "virtual_outdoor_temp"
+        return "pumpsteer_temp"
 
     @property
     def device_class(self):
