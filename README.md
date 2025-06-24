@@ -1,8 +1,8 @@
-# 🌡️ VirtualOutdoorTemp Home Assistant Integration
+# 🌡️ PumpSteer Home Assistant Integration
 
-![VirtualOutdoorTemp Logo](https://github.com/JohanAlvedal/VirtualOutdoorTemp/blob/main/icons/icon.png) ## Overview
+![PumpSteer Logo](https://github.com/JohanAlvedal/PumpSteer/blob/main/icons/icon.png) ## Overview
 
-`VirtualOutdoorTemp` is a custom Home Assistant integration that creates a dynamic, virtual outdoor temperature sensor. This sensor is designed to provide more intelligent control of your heat pump or boiler by adjusting the reported outdoor temperature based on several key factors: your indoor temperature, real-time and future electricity prices, optional weather forecasts, and your home's thermal inertia.
+`PumpSteer` is a custom Home Assistant integration that creates a dynamic, virtual outdoor temperature sensor. This sensor is designed to provide more intelligent control of your heat pump or boiler by adjusting the reported outdoor temperature based on several key factors: your indoor temperature, real-time and future electricity prices, optional weather forecasts, and your home's thermal inertia.
 
 The primary goal is to optimize your home's heating for both comfort and cost-efficiency. For instance, it can "pre-boost" your heating during periods of cheap electricity or reduce heating when it's not needed, even if the actual outdoor temperature might suggest otherwise.
 
@@ -17,7 +17,7 @@ The primary goal is to optimize your home's heating for both comfort and cost-ef
 
 ## Prerequisites
 
-To use the `VirtualOutdoorTemp` integration, you need:
+To use the `PumpSteer` integration, you need:
 
 * Home Assistant version 2023.12 or newer.
 * Access to the Home Assistant file system (e.g., via Samba Share or File Editor add-on) for manual installation.
@@ -28,8 +28,8 @@ To use the `VirtualOutdoorTemp` integration, you need:
 
 * You will also need the following [Home Assistant Helper entities](#helper-entities-recommended-packages-file), which are configured in your `configuration.yaml` or via the Home Assistant UI:
     * `input_number.indoor_target_temperature`: Your desired indoor temperature setting.
-    * `input_number.virtualoutdoortemp_summer_threshold`: The outdoor temperature at which heating should be suppressed (summer mode).
-    * `input_number.virtualoutdoortemp_aggressiveness` (Optional, Recommended): Controls the overall responsiveness of the system.
+    * `input_number.pumpsteer_summer_threshold`: The outdoor temperature at which heating should be suppressed (summer mode).
+    * `input_number.pumpsteer_aggressiveness` (Optional, Recommended): Controls the overall responsiveness of the system.
     * `input_number.house_inertia` (Optional): Allows manual adjustment or override of the calculated house inertia.
 
 ### For Pre-boost Feature (Optional)
@@ -42,8 +42,8 @@ To enable the intelligent pre-boost functionality, you must additionally provide
 
     ```yaml
     # Example automation to update input_text.hourly_forecast_temperatures
-    alias: Update Weather Forecast for VirtualOutdoorTemp Pre-boost
-    description: Fills the input_text helper with comma-separated temperature forecasts for VirtualOutdoorTemp.
+    alias: Update Weather Forecast for PumpSteer Pre-boost
+    description: Fills the input_text helper with comma-separated temperature forecasts for PumpSteer.
     trigger:
       - platform: time_pattern
         minutes: "5" # Runs every hour at xx:05
@@ -51,7 +51,7 @@ To enable the intelligent pre-boost functionality, you must additionally provide
     action:
       - service: input_text.set_value
         target:
-          entity_id: input_text.hourly_forecast_temperatures # This is the input_text you select in the VirtualOutdoorTemp configuration
+          entity_id: input_text.hourly_forecast_temperatures # This is the input_text you select in the PumpSteer configuration
         data_template:
           value: >
             {% set forecast = state_attr('weather.smhi', 'forecast') %} {# !!! IMPORTANT: Adjust 'weather.smhi' to your actual weather entity !!! #}
@@ -71,14 +71,14 @@ To enable the intelligent pre-boost functionality, you must additionally provide
 ### Manual Installation (Recommended for Development and Advanced Users)
 
 1.  **Create Custom Component Folder:** In your Home Assistant configuration directory (`config/`), create a new folder named `custom_components`.
-2.  **Download Integration Files:** Inside `custom_components/`, create another folder named `virtualoutdoortemp`.
-3.  **Copy Files:** Copy all files from this repository (specifically `__init__.py`, `config_flow.py`, `const.py`, `manifest.json`, `options_flow.py`, `pre_boost.py`, `sensor.py`, and `info.md`) into the `config/custom_components/virtualoutdoortemp/` folder.
+2.  **Download Integration Files:** Inside `custom_components/`, create another folder named `PumpSteer`.
+3.  **Copy Files:** Copy all files from this repository (specifically `__init__.py`, `config_flow.py`, `const.py`, `manifest.json`, `options_flow.py`, `pre_boost.py`, `sensor.py`, and `info.md`) into the `config/custom_components/pumpsteer/` folder.
     Your folder structure should look like this:
 
     ```
     <config_dir>/
     └── custom_components/
-        └── virtualoutdoortemp/
+        └── pumpsteer/
             ├── __init__.py
             ├── config_flow.py
             ├── const.py
@@ -92,18 +92,18 @@ To enable the intelligent pre-boost functionality, you must additionally provide
 
 ## Configuration
 
-The `VirtualOutdoorTemp` integration is configured via the Home Assistant User Interface (UI Config Flow).
+The `PumpSteer` integration is configured via the Home Assistant User Interface (UI Config Flow).
 
 1.  **Add Integration:** After restarting Home Assistant, navigate to **Settings** -> **Devices & Services** -> **Integrations** tab.
 2.  Click the **"Add Integration"** button (blue circle with a plus sign in the bottom right).
-3.  Search for "VirtualOutdoorTemp" and select it from the list.
+3.  Search for "PumpSteer" and select it from the list.
 4.  **Follow the On-Screen Prompts:** The configuration flow will guide you to select the necessary sensor and `input_number`/`input_text` entities. Ensure you select the helper entities you have defined (see [Helper Entities](#helper-entities-recommended-packages-file) below), for example:
     * **Indoor Temperature Sensor:** Select your sensor reporting current indoor temperature.
     * **Real Outdoor Temperature Sensor:** Select your sensor reporting current real outdoor temperature.
     * **Electricity Price Forecast Sensor:** Select your electricity price sensor (e.g., `sensor.nordpool_spot_prices`).
     * **Weather Forecast Entity (Optional):** Select `input_text.hourly_forecast_temperatures`. Leave this field blank if you do not wish to use the pre-boost feature based on weather forecasts.
     * **Target Temperature Entity:** Select `input_number.indoor_target_temperature`.
-    * **Summer Threshold Entity:** Select `input_number.virtualoutdoortemp_summer_threshold`.
+    * **Summer Threshold Entity:** Select `input_number.pumpsteer_summer_threshold`.
 
 After successful configuration, a new sensor entity named `sensor.virtual_outdoor_temp` will be created in your Home Assistant instance.
 
@@ -117,10 +117,10 @@ The sensor also exposes several useful attributes providing insight into its cur
 * `Måltemp`: The set target indoor temperature (`input_number.indoor_target_temperature`).
 * `Elpris`: The current electricity price from your selected sensor.
 * `Ute (verklig)`: The current real outdoor temperature (`sensor.your_real_outdoor_temp`).
-* `Sommartröskel`: The configured summer mode activation threshold (`input_number.virtualoutdoortemp_summer_threshold`).
+* `Sommartröskel`: The configured summer mode activation threshold (`input_number.pumpsteer_summer_threshold`).
 * `Tröghet`: The calculated or manually set thermal inertia of your home.
 * `Delta till mål`: The temperature difference between `Innetemp` and `Måltemp`.
-* `Aggressivitet`: The current aggressiveness setting (`input_number.virtualoutdoortemp_aggressiveness`).
+* `Aggressivitet`: The current aggressiveness setting (`input_number.pumpsteer_aggressiveness`).
 * `scaling_factor`: An internal calculated factor used in the virtual temperature determination.
 * `Läge`: The current operating mode of the virtual sensor (e.g., `heating`, `braking/neutral`, `pre_boost`, `summer_mode`, `unavailable`).
 * `Virtuell UteTemp`: A duplicate of the sensor's main state, included as an attribute for convenience.
