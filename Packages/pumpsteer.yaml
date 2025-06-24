@@ -1,13 +1,13 @@
 input_number:
-  virtualoutdoortemp_aggressiveness:
-    name: VirtualOutdoorTemp Aggressiveness
+  pumpsteertemp_aggressiveness:
+    name: PumpSteerTemp Aggressiveness
     min: 0
     max: 5
     step: 1
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
 
-  virtualoutdoortemp_summer_threshold:
+  pumpsteertemp_summer_threshold:
     name: Summer Mode Threshold
     min: 0
     max: 30
@@ -32,20 +32,20 @@ template:
   - sensor:
       - name: "Real Outdoor Temperature"
         state: >
-          {{ state_attr('sensor.virtualoutdoortemp', 'real_outdoor_temperature') }}
+          {{ state_attr('sensor.pumpsteertemp', 'real_outdoor_temperature') }}
         unit_of_measurement: "°C"
         device_class: temperature
 
-      - name: "VirtualOutdoorTemp Tempdiff"
+      - name: "PumpSteerTemp Tempdiff"
         state: >
-          {% set fake = states('sensor.virtualoutdoortemp') | float %}
-          {% set real = state_attr('sensor.virtualoutdoortemp', 'real_outdoor_temperature') | float %}
+          {% set fake = states('sensor.pumpsteertemp') | float %}
+          {% set real = state_attr('sensor.pumpsteertemp', 'real_outdoor_temperature') | float %}
           {{ (fake - real) | round(2) }}
         unit_of_measurement: "°C"
 
       - name: "Heating Mood"
         state: >
-          {% set mode = state_attr('sensor.virtualoutdoortemp', 'mode') %}
+          {% set mode = state_attr('sensor.pumpsteertemp', 'mode') %}
           {% if mode == "preboost" %}
             ⚡ Preboost
           {% elif mode == "balance" %}
@@ -60,9 +60,9 @@ template:
 
       - name: "Current Heating Mode"
         state: >
-          {{ state_attr('sensor.virtualoutdoortemp', 'mode') | title }}
+          {{ state_attr('sensor.pumpsteertemp', 'mode') | title }}
         icon: >
-          {% set mode = state_attr('sensor.virtualoutdoortemp', 'mode') %}
+          {% set mode = state_attr('sensor.pumpsteertemp', 'mode') %}
           {% if mode == 'preboost' %}
             mdi:flash
           {% elif mode == 'balance' %}
