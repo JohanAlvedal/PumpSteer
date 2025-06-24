@@ -1,0 +1,32 @@
+{
+  "title": "VirtualOutdoorTemp",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure VirtualOutdoorTemp",
+        "description": "Select the sensors and entities to use for virtual outdoor temperature simulation."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adjust Options",
+        "description": "Change sensor inputs or target temperature entity"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "virtualoutdoortemp": {
+        "name": "Virtual Outdoor Temperature",
+        "state": {
+          "summer_mode": "Summer Mode",
+          "preboost": "Preboost",
+          "neutral": "Neutral",
+          "balance": "Balance"
+        }
+      }
+    }
+  }
+}
