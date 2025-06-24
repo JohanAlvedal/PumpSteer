@@ -1,6 +1,6 @@
 input_number:
   pumpsteer_aggressiveness:
-    name: PumpSteerTemp Aggressiveness
+    name: PumpSteer Aggressiveness
     min: 0
     max: 5
     step: 1
@@ -32,11 +32,11 @@ template:
   - sensor:
       - name: "Real Outdoor Temperature"
         state: >
-          {{ state_attr('sensor.pumpsteertemp', 'real_outdoor_temperature') }}
+          {{ state_attr('sensor.pumpsteer', 'real_outdoor_temperature') }}
         unit_of_measurement: "°C"
         device_class: temperature
 
-      - name: "PumpSteerTemp Tempdiff"
+      - name: "PumpSteer Tempdiff"
         state: >
           {% set fake = states('sensor.pumpsteer') | float %}
           {% set real = state_attr('sensor.pumpsteer', 'real_outdoor_temperature') | float %}
@@ -60,7 +60,7 @@ template:
 
       - name: "Current Heating Mode"
         state: >
-          {{ state_attr('sensor.pumpsteertemp', 'mode') | title }}
+          {{ state_attr('sensor.pumpsteer', 'mode') | title }}
         icon: >
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
           {% if mode == 'preboost' %}
