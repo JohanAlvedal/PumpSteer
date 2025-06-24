@@ -1,85 +1,69 @@
-# 🌡️ VirtualOutdoorTemp – Smarter Heating via Virtual Temperature Control
+# 🌡️ VirtualOutdoorTemp
 
-**VirtualOutdoorTemp** is a Home Assistant custom integration that intelligently simulates outdoor temperature to steer your heating system based on electricity prices, weather forecasts, indoor conditions, and house inertia.
+Simulate a virtual outdoor temperature to steer your heat pump or boiler intelligently based on:
 
----
-
-> 🧪 **Note:** This integration is a *Work In Progress* and actively being improved. Expect frequent updates and new features!
-
----
-
-## 🚀 Features
-
-✅ Simulates outdoor temperature to influence heat pump behavior  
-✅ Adapts using indoor temp, electricity price, and weather forecast  
-✅ "Aggressiveness" slider lets you control energy-saving intensity  
-✅ Boost mode pre-heats when electricity is cheap  
-✅ Learns your house's thermal inertia over time  
-✅ Summer mode bypasses control above a temperature threshold  
-✅ Clean dashboard with ApexCharts integration  
-✅ Fully local – no cloud dependency  
-✅ Easy configuration via UI  
+- Indoor temperature
+- Electricity price
+- Weather forecast (optional)
+- House thermal inertia
 
 ---
 
-## 🛠 Installation
+## ⚙️ Features
 
-1. Copy the `virtualoutdoortemp` folder to your `config/custom_components/` directory.
-
-```bash
-/config/custom_components/virtualoutdoortemp/
-```
-
-2. **Restart Home Assistant** after installing the integration.
-
-3. Go to **Settings → Devices & Services → Add Integration → VirtualOutdoorTemp**
-
-4. Select your indoor temperature sensor, outdoor sensor, price sensor etc.
-
-ℹ️ *Note: Some sensors may show `n/a` or be missing from charts initially — wait a few minutes for history to build up.*
+- Adaptive temperature steering
+- **Optional Pre-boost:** Proactively heats your home when cold temperatures are expected and electricity prices are high. Requires both electricity price and weather forecast to be configured.
+- Summer mode override
+- Aggressiveness control
+- Learns how your home retains heat
+- Works entirely locally
 
 ---
 
-## ⚙️ Additional Setup Required
+## 📌 Förutsättningar
 
-This integration also relies on helpers and templates. You need to:
+* Home Assistant 2023.12 eller nyare.
+* Sensorer tillgängliga i Home Assistant för:
+    * Aktuell inomhustemperatur.
+    * Aktuell verklig utomhustemperatur.
+    * Elprisprognoser (en sensor som exponerar framtida priser i attributet `today`, t.ex. från Nordpool eller Tibber integrationer).
+    * Önskad måltemperatur (en `input_number` entitet).
+    * Sommarlägeströskel (en `input_number` entitet).
+    * (Valfritt) Husets termiska tröghet (en `input_number` entitet, t.ex. `input_number.house_inertia`). Om denna inte finns, använder integrationen ett beräknat värde.
+    * (Valfritt, rekommenderas) Aggressivitetskontroll (en `input_number` entitet, t.ex. `input_number.virtualoutdoortemp_aggressiveness`). Om denna inte finns, används ett standardvärde (1.0).
 
-1. **Manually copy the file** `packages/virtualoutdoortemp.yaml` and `vitrtualoutdoortemp_learning.yaml` into your Home Assistant `/config/packages/` folder  
-2. Make sure this is in your `configuration.yaml`:
+### För Pre-boost (valfritt)
 
-```yaml
-homeassistant:
-  packages: !include_dir_named packages
-```
+För att aktivera pre-boost-funktionen måste du även tillhandahålla:
 
-3. **Manually add the UI elements to your Lovelace dashboard**  
-   - You can use the example dashboard configuration in this repository  
-   - ApexCharts card is recommended (available via HACS)
+* **Väderprognostemperaturer** (en `input_text` entitet). Denna `input_text` måste *själv* uppdateras regelbundet, t.ex. via en Home Assistant-automatisering. Den ska innehålla en kommaseparerad sträng av framtida timvisa temperaturer (t.ex. `"2.5,3.1,4.0,..."`).
+
+    **Exempel på automatisering för `input_text.hourly_forecast_temperatures`:**
+    (Anpassa `weather.your_weather_integration` till din faktiska väderentitet och dess attribut.)
+
+    ```yaml
+    alias: Uppdatera väderprognos för VirtualOutdoorTemp Pre-boost
+    description: Fyller input_text med kommaseparerade temperaturprognoser för VirtualOutdoorTemp.
+    trigger:
+      - platform: time_pattern
+        minutes: "5" # Kör varje timme vid xx:05
+    condition: []
+    action:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.hourly_forecast_temperatures # Välj denna entitet i VirtualOutdoorTemp-konfigurationen
+        data_template:
+          value: >
+            {% set forecast = state_attr('weather.smhi', 'forecast') %} {# Exempel med SMHI, anpassa till din #}
+            {% set temps = [] %}
+            {# Plocka ut de första 6 timmarnas temperaturer, anpassa lookahead_hours i pre_boost.py vid behov #}
+            {% for item in forecast | list | selectattr('temperature', 'is_number') | list %}
+              {% if loop.index <= 6 %}
+                {% set temps = temps + [item.temperature] %}
+              {% endif %}
+            {% endfor %}
+            {{ temps | join(',') }}
+    mode: single
+    ```
 
 ---
-
-## 📊 Lovelace Dashboard
-
-Use the included ApexCharts template and entity cards to show:
-
-- Virtual vs real outdoor temp
-- Heating mode (neutral, balance, boost)
-- Energy price and heating aggressiveness
-- Live difference to target temp
-
----
-
-## 🧠 Learning Mode
-
-The system gradually adjusts based on how fast your house heats up or cools down, thanks to the optional `house_inertia` automation template.
-
----
-
-## 💬 Support & Feedback
-
-- GitHub: [JohanAlvedal/VirtualOutdoorTemp](https://github.com/JohanAlvedal/VirtualOutdoorTemp)
-- Issues: [Open an issue](https://github.com/JohanAlvedal/VirtualOutdoorTemp/issues)
-
----
-
-Enjoy smarter heating – with less hassle and lower cost!
