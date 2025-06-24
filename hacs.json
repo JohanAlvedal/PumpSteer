@@ -1,5 +1,5 @@
 {
-  "name": "VirtualOutdoorTemp",
+  "name": "PumpSteer",
   "render_readme": true,
   "description": "Simulate a virtual outdoor temperature based on indoor temp, electricity prices and more.",
   "domains": [
@@ -8,6 +8,6 @@
   "country": "SE",
   "homeassistant": "2026.06.1",
   "iot_class": "local_polling",
-  "filename": "virtualoutdoortemp",
+  "filename": "pumpsteer",
   "zip_release": false
 }
