@@ -1,4 +1,4 @@
-"""VirtualOutdoorTemp integration."""
+"""PumpSteer integration."""
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -14,4 +14,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return await hass.config_entries.async_unload_platforms(entry, ["sensor"])
 
 async def async_get_options_flow(config_entry):
-    return VirtualOutdoorTempOptionsFlowHandler(config_entry)
+    return PumpSteerOptionsFlowHandler(config_entry)
