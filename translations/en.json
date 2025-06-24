@@ -1,9 +1,9 @@
 {
-  "title": "VirtualOutdoorTemp",
+  "title": "PumpSteer",
   "config": {
     "step": {
       "user": {
-        "title": "Configure VirtualOutdoorTemp",
+        "title": "Configure PumpSteer",
         "description": "Select the sensors and entities to use for virtual outdoor temperature simulation."
       }
     }
@@ -18,8 +18,8 @@
   },
   "entity": {
     "sensor": {
-      "virtualoutdoortemp": {
-        "name": "Virtual Outdoor Temperature",
+      "PumpSteer": {
+        "name": "PumpSteer",
         "state": {
           "summer_mode": "Summer Mode",
           "preboost": "Preboost",
