@@ -1,6 +1,6 @@
 # 🌡️ VirtualOutdoorTemp Home Assistant Integration
 
-![VirtualOutdoorTemp Logo](https://raw.githubusercontent.com/JohanAlvedal/VirtuelOutdoorTemp/main/icons/icon.png) ## Overview
+![VirtualOutdoorTemp Logo](https://github.com/JohanAlvedal/VirtualOutdoorTemp/blob/main/icons/icon.png) ## Overview
 
 `VirtualOutdoorTemp` is a custom Home Assistant integration that creates a dynamic, virtual outdoor temperature sensor. This sensor is designed to provide more intelligent control of your heat pump or boiler by adjusting the reported outdoor temperature based on several key factors: your indoor temperature, real-time and future electricity prices, optional weather forecasts, and your home's thermal inertia.
 
