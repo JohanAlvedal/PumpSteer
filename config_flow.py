@@ -2,14 +2,14 @@ from homeassistant import config_entries
 import voluptuous as vol
 from homeassistant.helpers.selector import selector
 
-DOMAIN = "virtualoutdoortemp"
+DOMAIN = "pumpsteer"
 
-class VirtualOutdoorTempConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for VirtualOutdoorTemp."""
+class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for PumpSteer."""
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
-            return self.async_create_entry(title="VirtualOutdoorTemp", data=user_input)
+            return self.async_create_entry(title="PumpSteer", data=user_input)
 
         return self.async_show_form(
             step_id="user",
