@@ -4,7 +4,7 @@ from homeassistant.core import HomeAssistant
 
 from .options_flow import PumpSteerOptionsFlowHandler
 
-DOMAIN = "virtualoutdoortemp"
+DOMAIN = "pumpsteer"
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
