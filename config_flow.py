@@ -1,11 +1,11 @@
-from homeassistant import config_entries
 import voluptuous as vol
+from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
 
 DOMAIN = "pumpsteer"
 
 class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for PumpSteer."""
+    """Handle a config flow for pumpsteer."""
 
     async def async_step_user(self, user_input=None):
         if user_input is not None:
@@ -17,7 +17,8 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("indoor_temp_entity"): selector({"entity": {"domain": "sensor"}}),
                 vol.Required("real_outdoor_entity"): selector({"entity": {"domain": "sensor"}}),
                 vol.Required("electricity_price_entity"): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("weather_entity"): selector({"entity": {"domain": "weather"}}),
+                vol.Required("weather_entity"): selector({"entity": {"domain": "input_text"}}),
                 vol.Required("target_temp_entity"): selector({"entity": {"domain": "input_number"}}),
+                vol.Required("summer_threshold_entity"): selector({"entity": {"domain": "input_number"}}), # NY RAD
             })
         )
