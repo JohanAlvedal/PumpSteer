@@ -1,16 +1,16 @@
 type: vertical-stack
 cards:
   - type: entities
-    title: PumpSteerTemp Controls
+    title: PumpSteer Controls
     show_header_toggle: false
     entities:
-      - entity: input_number.pumpsteertemp_aggressiveness
+      - entity: input_number.pumpsteer_aggressiveness
         name: Aggressiveness (0–5)
       - entity: input_number.indoor_target_temperature
         name: Target Temperature
-      - entity: input_number.pumpsteertemp_summer_threshold
+      - entity: input_number.pumpsteer_summer_threshold
         name: Summer Mode Threshold
-      - entity: input_boolean.pumpsteertemp_summer_mode
+      - entity: input_boolean.pumpsteer_summer_mode
         name: Summer Mode Active?
       - entity: input_text.hourly_forecast_temperatures
         name: Forecast Data (raw)
@@ -19,7 +19,7 @@ cards:
         secondary_info: last-changed
       - entity: sensor.indoor_temperature_delta
         secondary_info: last-changed
-      - entity: sensor.pumpsteertemp
+      - entity: sensor.pumpsteer
         secondary_info: last-changed
       - entity: sensor.temperatur_nu
         secondary_info: last-changed
@@ -29,7 +29,7 @@ cards:
         secondary_info: last-changed
   - type: custom:apexcharts-card
     header:
-      title: PumpSteerTemp Gasa / Bromsa
+      title: PumpSteer Gasa / Bromsa
       show: true
     graph_span: 24h
     span:
@@ -42,7 +42,7 @@ cards:
         - title:
             text: Temperatur (°C)
     series:
-      - entity: sensor.pumpsteertemp
+      - entity: sensor.pumpsteer
         name: Virtual Outdoor Temp
         type: line
         color: "#0077FF"
@@ -50,7 +50,7 @@ cards:
         name: Real Outdoor Temp
         type: line
         color: "#777777"
-      - entity: sensor.pumpsteertemp_tempdiff
+      - entity: sensor.pumpsteer_tempdiff
         name: Boost/Block Effect
         type: column
         color_threshold:
@@ -66,15 +66,15 @@ cards:
           duration: 10min
   - type: markdown
     content: >
-      ### 🧠 pumpsteerTemp Status
+      ### 🧠 pumpsteer Status
 
-      **Mode:** {{ state_attr('sensor.pumpsteertemp', 'mode') }}
+      **Mode:** {{ state_attr('sensor.pumpsteer', 'mode') }}
 
-      **Indoor Temp:** {{ state_attr('sensor.pumpsteertemp',
+      **Indoor Temp:** {{ state_attr('sensor.pumpsteer',
       'indoor_temperature') }} °C   **Target Temp:** {{
-      state_attr('sensor.pumpsteertemp', 'target_temperature') }} °C  
-      **Electricity Price:** {{ state_attr('sensor.pumpsteertemp',
+      state_attr('sensor.pumpsteer', 'target_temperature') }} °C  
+      **Electricity Price:** {{ state_attr('sensor.pumpsteer',
       'electricity_price') }} kr/kWh   **Aggressiveness:** {{
-      state_attr('sensor.pumpsteertemp', 'aggressiveness') }}   **Temp
-      Diff:** {{ state_attr('sensor.pumpsteertemp', 'difference_to_target')
+      state_attr('sensor.pumpsteer', 'aggressiveness') }}   **Temp
+      Diff:** {{ state_attr('sensor.pumpsteer', 'difference_to_target')
       }} °C
