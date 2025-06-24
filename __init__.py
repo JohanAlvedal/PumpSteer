@@ -2,7 +2,7 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .options_flow import VirtualOutdoorTempOptionsFlowHandler
+from .options_flow import PumpSteerOptionsFlowHandler
 
 DOMAIN = "virtualoutdoortemp"
 
