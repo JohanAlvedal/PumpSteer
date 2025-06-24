@@ -1,8 +1,8 @@
-# 🌡️ VirtualOutdoorTemp Home Assistant Integration
+# 🌡️ PumpSteer Home Assistant Integration
 
-![VirtualOutdoorTemp Logo](https://raw.githubusercontent.com/JohanAlvedal/VirtuelOutdoorTemp/main/icons/icon.png) ## Overview
+![PumpSteer Logo](https://raw.githubusercontent.com/JohanAlvedal/PumpSteer/icons/icon.png) ## Overview
 
-`VirtualOutdoorTemp` is a custom Home Assistant integration that creates a dynamic, virtual outdoor temperature sensor. This sensor is designed to provide more intelligent control of your heat pump or boiler by adjusting the reported outdoor temperature based on several key factors: your indoor temperature, real-time and future electricity prices, optional weather forecasts, and your home's thermal inertia.
+`PumpSteer` is a custom Home Assistant integration that creates a dynamic, virtual outdoor temperature sensor. This sensor is designed to provide more intelligent control of your heat pump or boiler by adjusting the reported outdoor temperature based on several key factors: your indoor temperature, real-time and future electricity prices, optional weather forecasts, and your home's thermal inertia.
 
 The primary goal is to optimize your home's heating for both comfort and cost-efficiency. For instance, it can "pre-boost" your heating during periods of cheap electricity or reduce heating when it's not needed, even if the actual outdoor temperature might suggest otherwise.
 
@@ -17,7 +17,7 @@ The primary goal is to optimize your home's heating for both comfort and cost-ef
 
 ## Prerequisites
 
-To use the `VirtualOutdoorTemp` integration, you need:
+To use the `PumpSteer` integration, you need:
 
 * Home Assistant version 2023.12 or newer.
 * Access to the Home Assistant file system (e.g., via Samba Share or File Editor add-on) for manual installation.
@@ -28,8 +28,8 @@ To use the `VirtualOutdoorTemp` integration, you need:
 
 * You will also need the following [Home Assistant Helper entities](#helper-entities-recommended-packages-file), which are configured in your `configuration.yaml` or via the Home Assistant UI:
     * `input_number.indoor_target_temperature`: Your desired indoor temperature setting.
-    * `input_number.virtualoutdoortemp_summer_threshold`: The outdoor temperature at which heating should be suppressed (summer mode).
-    * `input_number.virtualoutdoortemp_aggressiveness` (Optional, Recommended): Controls the overall responsiveness of the system.
+    * `input_number.pumpsteer_summer_threshold`: The outdoor temperature at which heating should be suppressed (summer mode).
+    * `input_number.pumpsteer_aggressiveness` (Optional, Recommended): Controls the overall responsiveness of the system.
     * `input_number.house_inertia` (Optional): Allows manual adjustment or override of the calculated house inertia.
 
 ### For Pre-boost Feature (Optional)
