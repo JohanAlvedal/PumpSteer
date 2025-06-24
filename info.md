@@ -1,7 +1,5 @@
 # 🌡️ PumpSteer Home Assistant Integration
 
-![PumpSteer Logo](https://raw.githubusercontent.com/JohanAlvedal/PumpSteer/icons/icon.png) ## Overview
-
 `PumpSteer` is a custom Home Assistant integration that creates a dynamic, virtual outdoor temperature sensor. This sensor is designed to provide more intelligent control of your heat pump or boiler by adjusting the reported outdoor temperature based on several key factors: your indoor temperature, real-time and future electricity prices, optional weather forecasts, and your home's thermal inertia.
 
 The primary goal is to optimize your home's heating for both comfort and cost-efficiency. For instance, it can "pre-boost" your heating during periods of cheap electricity or reduce heating when it's not needed, even if the actual outdoor temperature might suggest otherwise.
