@@ -2,9 +2,9 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
 
-DOMAIN = "virtualoutdoortemp"
+DOMAIN = "pumpsteer"
 
-class VirtualOutdoorTempOptionsFlowHandler(config_entries.OptionsFlow):
+class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
         self.config_entry = config_entry
 
