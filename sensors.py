@@ -31,10 +31,10 @@ def get_attr(hass, entity_id, attribute):
     return entity.attributes.get(attribute) if entity and attribute in entity.attributes else None
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    sensors = [VirtualOutdoorTempSensor(hass, entry)]
+    sensors = [PumpSteerSensor(hass, entry)]
     async_add_entities(sensors, True)
 
-class VirtualOutdoorTempSensor(Entity):
+class PumpSteerSensor(Entity):
     def __init__(self, hass: HomeAssistant, config: ConfigEntry):
         self.hass = hass
         self._config = config.data # Använd .data för att hämta konfigurationen
@@ -48,7 +48,7 @@ class VirtualOutdoorTempSensor(Entity):
 
     @property
     def name(self):
-        return "VirtualOutdoorTemp"
+        return "pumpsteer"
 
     @property
     def unique_id(self):
@@ -81,34 +81,34 @@ class VirtualOutdoorTempSensor(Entity):
         # --- Hämta och parsa rådata från sensorer ---
         indoor_temp_str = get_state(self.hass, indoor_temp_entity_id)
         indoor_temp = safe_float(indoor_temp_str)
-        _LOGGER.debug(f"VirtualOutdoorTemp: Indoor temp raw: '{indoor_temp_str}', parsed: {indoor_temp}")
+        _LOGGER.debug(f"PumpSteer: Indoor temp raw: '{indoor_temp_str}', parsed: {indoor_temp}")
 
         target_temp_str = get_state(self.hass, target_temp_entity_id)
         target_temp = safe_float(target_temp_str)
-        _LOGGER.debug(f"VirtualOutdoorTemp: Target temp raw: '{target_temp_str}', parsed: {target_temp}")
+        _LOGGER.debug(f"PumpSteer: Target temp raw: '{target_temp_str}', parsed: {target_temp}")
 
         real_outdoor_temp_str = get_state(self.hass, real_outdoor_entity_id)
         real_outdoor_temp = safe_float(real_outdoor_temp_str)
-        _LOGGER.debug(f"VirtualOutdoorTemp: Real outdoor temp raw: '{real_outdoor_temp_str}', parsed: {real_outdoor_temp}")
+        _LOGGER.debug(f"PumpSteer: Real outdoor temp raw: '{real_outdoor_temp_str}', parsed: {real_outdoor_temp}")
 
         current_electricity_price_str = get_state(self.hass, electricity_price_entity_id)
         current_electricity_price = safe_float(current_electricity_price_str)
-        _LOGGER.debug(f"VirtualOutdoorTemp: Current electricity price raw: '{current_electricity_price_str}', parsed: {current_electricity_price}")
+        _LOGGER.debug(f"PumpSteer: Current electricity price raw: '{current_electricity_price_str}', parsed: {current_electricity_price}")
 
         # Hämta aggressivitet (vi har ingen input för detta i config_flow just nu, så vi sätter ett default)
         # Antag att aggressiveness_entity_id är hårdkodad eller kommer från en framtida konfiguration
-        aggressiveness_entity_id = "input_number.virtualoutdoortemp_aggressiveness"
+        aggressiveness_entity_id = "input_number.PumpSteer_aggressiveness"
         aggressiveness_str = get_state(self.hass, aggressiveness_entity_id)
         aggressiveness = safe_float(aggressiveness_str)
-        _LOGGER.debug(f"VirtualOutdoorTemp: Aggressiveness raw: '{aggressiveness_str}', parsed: {aggressiveness}")
+        _LOGGER.debug(f"PumpSteer: Aggressiveness raw: '{aggressiveness_str}', parsed: {aggressiveness}")
         if aggressiveness is None:
-            _LOGGER.warning("VirtualOutdoorTemp: Aggressiveness entity is unavailable or not a number. Using default 1.0.")
+            _LOGGER.warning("PumpSteer: Aggressiveness entity is unavailable or not a number. Using default 1.0.")
             aggressiveness = DEFAULT_INERTIA_VALUE # Se till att aggressiveness alltid är ett nummer
 
 
         # Kontrollera att nödvändiga grundläggande sensorer är tillgängliga
         if indoor_temp is None or target_temp is None or real_outdoor_temp is None:
-            _LOGGER.warning("VirtualOutdoorTemp: En eller flera av de nödvändiga grundläggande sensorerna är otillgängliga eller inte nummer.")
+            _LOGGER.warning("PumpSteer: En eller flera av de nödvändiga grundläggande sensorerna är otillgängliga eller inte nummer.")
             self._state = None # Sätt tillstånd till None om data saknas
             self._attributes = {
                 "Innetemp": indoor_temp,
@@ -153,11 +153,11 @@ class VirtualOutdoorTempSensor(Entity):
 
                     # Uppdatera self.current_inertia med ett viktat medelvärde
                     self.current_inertia = (self.current_inertia * INERTIA_WEIGHT_FACTOR + calculated_inertia) / INERTIA_DIVISOR
-                    _LOGGER.debug(f"VirtualOutdoorTemp: Inertia updated. Delta Indoor: {delta_indoor:.2f}, Delta Outdoor: {delta_outdoor:.2f}, Calculated Inertia: {calculated_inertia:.2f}, Current Weighted Inertia: {self.current_inertia:.2f}")
+                    _LOGGER.debug(f"PumpSteer: Inertia updated. Delta Indoor: {delta_indoor:.2f}, Delta Outdoor: {delta_outdoor:.2f}, Calculated Inertia: {calculated_inertia:.2f}, Current Weighted Inertia: {self.current_inertia:.2f}")
                 else:
-                    _LOGGER.debug("VirtualOutdoorTemp: Skipping inertia update due to small outdoor temperature change.")
+                    _LOGGER.debug("PumpSteer: Skipping inertia update due to small outdoor temperature change.")
             else:
-                _LOGGER.debug("VirtualOutdoorTemp: Not enough historical data for inertia calculation yet.")
+                _LOGGER.debug("PumpSteer: Not enough historical data for inertia calculation yet.")
 
             # Uppdatera senaste värden efter varje beräkning (eller efter intervall)
             self.last_indoor_temp = indoor_temp
@@ -168,22 +168,22 @@ class VirtualOutdoorTempSensor(Entity):
             self.last_indoor_temp = indoor_temp
             self.last_outdoor_temp = real_outdoor_temp
             self.last_update_time = now
-            _LOGGER.debug("VirtualOutdoorTemp: Initializing last known temperatures for inertia calculation.")
+            _LOGGER.debug("PumpSteer: Initializing last known temperatures for inertia calculation.")
         else:
-            _LOGGER.debug(f"VirtualOutdoorTemp: Inertia update skipped. Next update in {(INERTIA_UPDATE_INTERVAL - (now - self.last_update_time)).total_seconds():.0f} seconds.")
+            _LOGGER.debug(f"PumpSteer: Inertia update skipped. Next update in {(INERTIA_UPDATE_INTERVAL - (now - self.last_update_time)).total_seconds():.0f} seconds.")
 
         # Hämta värde från input_number.house_inertia om den finns, annars använd den beräknade
         house_inertia_input_id = "input_number.house_inertia" # Detta ID måste skapas av användaren
         house_inertia_input_str = get_state(self.hass, house_inertia_input_id)
         house_inertia_from_input = safe_float(house_inertia_input_str)
-        _LOGGER.debug(f"VirtualOutdoorTemp: House Inertia Input raw: '{house_inertia_input_str}', parsed: {house_inertia_from_input}")
+        _LOGGER.debug(f"PumpSteer: House Inertia Input raw: '{house_inertia_input_str}', parsed: {house_inertia_from_input}")
 
         if house_inertia_from_input is not None:
             current_inertia = house_inertia_from_input
-            _LOGGER.debug(f"VirtualOutdoorTemp: Using user-defined House Inertia: {current_inertia}")
+            _LOGGER.debug(f"PumpSteer: Using user-defined House Inertia: {current_inertia}")
         else:
             current_inertia = self.current_inertia # Använd den beräknade trögheten om ingen input_number finns
-            _LOGGER.warning("VirtualOutdoorTemp: User-defined House inertia (input_number.house_inertia) is unavailable or not a number. Using calculated inertia or default.")
+            _LOGGER.warning("PumpSteer: User-defined House inertia (input_number.house_inertia) is unavailable or not a number. Using calculated inertia or default.")
 
         # --- Hämta framtida temperaturer för pre-boost ---
         # Nu hämtar vi från input_text.hourly_forecast_temperatures state
@@ -195,10 +195,10 @@ class VirtualOutdoorTempSensor(Entity):
                 future_temps = [safe_float(t.strip()) for t in raw_temps_str.split(',') if safe_float(t.strip()) is not None]
                 future_temps_csv = ",".join(map(str, future_temps))
             except Exception as e:
-                _LOGGER.warning(f"VirtualOutdoorTemp: Error parsing weather forecast temperatures from '{raw_temps_str}': {e}")
+                _LOGGER.warning(f"PumpSteer: Error parsing weather forecast temperatures from '{raw_temps_str}': {e}")
                 future_temps_csv = ""
         else:
-            _LOGGER.warning(f"VirtualOutdoorTemp: Could not get weather forecast temperatures from {weather_entity_id}. Pre-boost may not work.")
+            _LOGGER.warning(f"PumpSteer: Could not get weather forecast temperatures from {weather_entity_id}. Pre-boost may not work.")
             future_temps_csv = ""
 
         # --- Hämta framtida elpriser ---
@@ -206,7 +206,7 @@ class VirtualOutdoorTempSensor(Entity):
         raw_prices_list = get_attr(self.hass, electricity_price_entity_id, "today") # <-- Denna returnerar en LISTA
 
         # Lägger till en debug-logg för att bekräfta typen direkt i koden
-        _LOGGER.debug(f"VirtualOutdoorTemp: Raw electricity prices from attribute 'today': '{raw_prices_list}' (type: {type(raw_prices_list)})") 
+        _LOGGER.debug(f"PumpSteer: Raw electricity prices from attribute 'today': '{raw_prices_list}' (type: {type(raw_prices_list)})") 
         
         future_prices = []
         if raw_prices_list: # Om listan inte är tom eller None
@@ -214,22 +214,22 @@ class VirtualOutdoorTempSensor(Entity):
                 # Iterera direkt över listan och konvertera varje element till float
                 # safe_float() hanterar redan konverteringen och None för ogiltiga värden
                 future_prices = [safe_float(p) for p in raw_prices_list if safe_float(p) is not None] # <-- ÄNDRAD HÄR: Itererar direkt, ingen split()
-                _LOGGER.debug(f"VirtualOutdoorTemp: Parsed future_prices: {future_prices}")
+                _LOGGER.debug(f"PumpSteer: Parsed future_prices: {future_prices}")
             except Exception as e:
-                _LOGGER.warning(f"VirtualOutdoorTemp: Error parsing electricity price forecast from attribute 'today' of '{electricity_price_entity_id}': {e}. Raw data: '{raw_prices_list}'")
+                _LOGGER.warning(f"PumpSteer: Error parsing electricity price forecast from attribute 'today' of '{electricity_price_entity_id}': {e}. Raw data: '{raw_prices_list}'")
                 future_prices = []
         else:
-            _LOGGER.warning(f"VirtualOutdoorTemp: Could not get electricity price forecast from attribute 'today' of {electricity_price_entity_id}. Pre-boost may not work.")
+            _LOGGER.warning(f"PumpSteer: Could not get electricity price forecast from attribute 'today' of {electricity_price_entity_id}. Pre-boost may not work.")
             future_prices = []
 
         # --- Hantering av sommarläge baserat på temperaturtröskel ---
         summer_mode_threshold_str = get_state(self.hass, summer_threshold_entity_id)
         summer_mode_threshold = safe_float(summer_mode_threshold_str)
-        _LOGGER.debug(f"VirtualOutdoorTemp: Summer mode threshold raw: '{summer_mode_threshold_str}', parsed: {summer_mode_threshold}")
+        _LOGGER.debug(f"PumpSteer: Summer mode threshold raw: '{summer_mode_threshold_str}', parsed: {summer_mode_threshold}")
 
         # Om sommarlägeströskeln är tillgänglig OCH verklig utomhustemp är över eller lika med den
         if summer_mode_threshold is not None and real_outdoor_temp >= summer_mode_threshold:
-            _LOGGER.info(f"VirtualOutdoorTemp: Summer mode activated. Real outdoor temp ({real_outdoor_temp}°C) >= threshold ({summer_mode_threshold}°C). Setting virtual temp to 25.0 °C.")
+            _LOGGER.info(f"PumpSteer: Summer mode activated. Real outdoor temp ({real_outdoor_temp}°C) >= threshold ({summer_mode_threshold}°C). Setting virtual temp to 25.0 °C.")
             self._state = 25.0
             
             # Uppdatera common_attributes med det korrekta tröskelvärdet
@@ -267,7 +267,7 @@ class VirtualOutdoorTempSensor(Entity):
         # Original pre-boost logik
         should_preboost = check_combined_preboost(future_temps_csv, future_prices, lookahead_hours=6)
         if should_preboost:
-            _LOGGER.info("VirtualOutdoorTemp: Pre-boost activated!")
+            _LOGGER.info("PumpSteer: Pre-boost activated!")
             pre_boost_temp_offset = -5.0
             fake_temp = real_outdoor_temp + pre_boost_temp_offset
             
@@ -281,7 +281,7 @@ class VirtualOutdoorTempSensor(Entity):
                 "Läge": "pre_boost",
                 "Virtuell UteTemp": self._state
             })
-            _LOGGER.info("VirtualOutdoorTemp: Pre-boost output (fake temp: %.1f °C)", fake_temp)
+            _LOGGER.info("PumpSteer: Pre-boost output (fake temp: %.1f °C)", fake_temp)
             return
 
         # Original neutral/balance logik
@@ -293,7 +293,7 @@ class VirtualOutdoorTempSensor(Entity):
                 "Läge": "neutral",
                 "Virtuell UteTemp": self._state
             })
-            _LOGGER.info("VirtualOutdoorTemp: Neutral (within tolerance)")
+            _LOGGER.info("PumpSteer: Neutral (within tolerance)")
         else:
             # Säkerställ att aggressiveness är inom rimliga gränser
             aggressiveness = max(1.0, min(5.0, aggressiveness))
@@ -320,11 +320,11 @@ class VirtualOutdoorTempSensor(Entity):
                  # Sätt en övre gräns för den "kalla" signalen så den inte överstiger 20.0 om den vill värma.
                  # En virtuell temp över 20.0 indikerar att ingen värme behövs.
                  fake_temp = min(fake_temp, 20.0)
-                 _LOGGER.info("VirtualOutdoorTemp: Adjusted output (fake temp: %.1f °C, diff: %.2f) - Heating", fake_temp, diff)
+                 _LOGGER.info("PumpSteer: Adjusted output (fake temp: %.1f °C, diff: %.2f) - Heating", fake_temp, diff)
             else: # diff >= 0 (för varmt inne eller inom tolerans), vill bromsa eller är neutral.
                 # Ingen övre gräns här. När det är för varmt inne ska fake_temp kunna gå högt
                 # för att helt stänga av värmen.
-                _LOGGER.info("VirtualOutdoorTemp: Adjusted output (fake temp: %.1f °C, diff: %.2f) - Braking/Neutral", fake_temp, diff)
+                _LOGGER.info("PumpSteer: Adjusted output (fake temp: %.1f °C, diff: %.2f) - Braking/Neutral", fake_temp, diff)
 
             self._state = round(fake_temp, 1)
             self._attributes.update(common_attributes)
