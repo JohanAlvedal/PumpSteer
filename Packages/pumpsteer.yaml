@@ -1,13 +1,13 @@
 input_number:
   pumpsteer_aggressiveness:
-    name: VirtualOutdoorTemp Aggressiveness
+    name: PumpSteer Aggressiveness
     min: 0
     max: 5
     step: 1
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
 
-  pumpsteer_summer_threshold: # TYPO KORRIGERAD HÄR
+  pumpsteer_summer_threshold:
     name: Summer Mode Threshold
     min: 0
     max: 30
