@@ -17,8 +17,8 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("indoor_temp_entity"): selector({"entity": {"domain": "sensor"}}),
                 vol.Required("real_outdoor_entity"): selector({"entity": {"domain": "sensor"}}),
                 vol.Required("electricity_price_entity"): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("hourly_forecast_temperatures_entity", default=self.config_entry.options.get("hourly_forecast_temperatures_entity")): selector({"entity": {"domain": "input_text"}}),
+                vol.Required("hourly_forecast_temperatures_entity"): selector({"entity": {"domain": "input_text"}}), # ÄNDRAD RAD
                 vol.Required("target_temp_entity"): selector({"entity": {"domain": "input_number"}}),
-                vol.Required("summer_threshold_entity"): selector({"entity": {"domain": "input_number"}}), # NY RAD
+                vol.Required("summer_threshold_entity"): selector({"entity": {"domain": "input_number"}}),
             })
         )
