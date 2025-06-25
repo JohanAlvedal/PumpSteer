@@ -1,6 +1,6 @@
 # 🌡️ PumpSteer Home Assistant Integration
 
-## ![PumpSteer Logo](https://github.com/JohanAlvedal/PumpSteer/blob/main/icons/icon.png)
+<img src="https://github.com/JohanAlvedal/PumpSteer/blob/main/icons/icon.png" alt="PumpSteer Logo" width="120" /> 
 
 ## English – Overview
 
