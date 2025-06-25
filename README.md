@@ -49,6 +49,31 @@ This virtual sensor reports a modified outdoor temperature. It also exposes attr
 
 ### Installation Guide
 
+**Note:** All required `input_number` and `input_text` helpers are already included in the default `packages` file provided with this integration. You only need to set up an automation to regularly populate `input_text.hourly_forecast_temperatures` if you plan to use the pre-boost feature.
+
+#### Example automation to fill hourly forecast (if using pre-boost)
+
+```yaml
+alias: Update hourly forecast for PumpSteer
+mode: single
+trigger:
+  - platform: time_pattern
+    minutes: "5"
+action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.hourly_forecast_temperatures
+    data:
+      value: >
+        {% set forecast = state_attr('weather.smhi', 'forecast') %}
+        {% if forecast is none %}unavailable{% else %}
+        {% set temps = forecast[:6] | map(attribute='temperature') | list %}
+        {{ temps | join(',') }}
+        {% endif %}
+```
+
+**Note:** All required `input_number` and `input_text` helpers are already included in the default `packages` file provided with this integration. You only need to set up an automation to regularly populate `input_text.hourly_forecast_temperatures` if you plan to use the pre-boost feature.
+
 1. **Download or clone this repository.**
 2. Copy the folder `pumpsteer` into your Home Assistant custom components directory:
 
@@ -110,6 +135,31 @@ Denna sensor rapporterar en manipulerad utomhustemperatur. Den visar också föl
 
 ### Installationsguide
 
+**Obs!** Alla nödvändiga `input_number` och `input_text` är redan inkluderade i den medföljande `packages`-filen. Det enda du själv behöver skapa är en automation som uppdaterar `input_text.hourly_forecast_temperatures` om du vill använda pre-boost-funktionen.
+
+#### Exempelautomation för att fylla väderprognosen (vid pre-boost)
+
+```yaml
+alias: Uppdatera timvis prognos till PumpSteer
+mode: single
+trigger:
+  - platform: time_pattern
+    minutes: "5"
+action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.hourly_forecast_temperatures
+    data:
+      value: >
+        {% set forecast = state_attr('weather.smhi', 'forecast') %}
+        {% if forecast is none %}unavailable{% else %}
+        {% set temps = forecast[:6] | map(attribute='temperature') | list %}
+        {{ temps | join(',') }}
+        {% endif %}
+```
+
+**Obs!** Alla nödvändiga `input_number` och `input_text` är redan inkluderade i den medföljande `packages`-filen. Det enda du själv behöver skapa är en automation som uppdaterar `input_text.hourly_forecast_temperatures` om du vill använda pre-boost-funktionen.
+
 1. **Ladda ner eller klona detta GitHub-repo.**
 2. Kopiera mappen `pumpsteer` till din Home Assistant-mapp för anpassade komponenter:
 
@@ -122,4 +172,4 @@ Denna sensor rapporterar en manipulerad utomhustemperatur. Den visar också föl
 6. Klicka på **"Lägg till integration"**, sök efter **PumpSteer** och följ guiden.
 7. Klart! Nu finns sensorn `sensor.virtual_outdoor_temp` tillgänglig.
 
-För avancerade exempel, automations och visualiseringar, se projektets GitHub-sida.
+För avancerade exempel, automations, visualiseringar och förslag på Lovelacekort, se projektets GitHub-sida.
