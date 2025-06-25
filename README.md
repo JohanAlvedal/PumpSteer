@@ -1,6 +1,6 @@
 # 🌡️ PumpSteer Home Assistant Integration
 
-<img src="https://github.com/JohanAlvedal/PumpSteer/blob/main/icons/icon.png" alt="PumpSteer Logo" width="120" /> 
+<img src="https://github.com/JohanAlvedal/PumpSteer/blob/main/icons/icon.png" alt="PumpSteer Logo" width="120" />
 
 ## English – Overview
 
@@ -17,35 +17,33 @@ PumpSteer is a custom Home Assistant integration that creates a dynamic, virtual
 
 ### Required Entities
 
-* `sensor.indoor_temperature`
-* `sensor.real_outdoor_temperature`
-* `sensor.electricity_price_forecast`
-* `input_number.indoor_target_temperature`
-* `input_number.pumpsteer_summer_threshold`
+| Entity                                    | Description                                                                                                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sensor.indoor_temperature`               | The sensor that reports the current indoor temperature.                                                                                                           |
+| `sensor.real_outdoor_temperature`         | The sensor that reports the actual outdoor temperature.                                                                                                           |
+| `sensor.electricity_price_forecast`       | A sensor that provides the electricity price for the current time and the next 6 hours.                                                                           |
+| `input_text.hourly_forecast_temperatures` | A helper that stores a comma-separated forecast of outdoor temperatures for the next 6 hours. Populated via automation. Included in the provided `packages` file. |
+| `input_number.indoor_target_temperature`  | A number helper representing your desired indoor target temperature. Included in the `packages` file.                                                             |
+| `input_number.pumpsteer_summer_threshold` | A number helper representing the temperature threshold above which summer mode is active. Included in the `packages` file.                                        |
 
 ### Optional Entities
 
-* `input_number.pumpsteer_aggressiveness`
-* `input_number.house_inertia`
-* `input_text.hourly_forecast_temperatures`
+These entities can be used to further customize how PumpSteer behaves:
 
-### Output Sensor: `sensor.virtual_outdoor_temp`
+* `input_number.pumpsteer_aggressiveness` – Adjusts the system’s responsiveness (aggressiveness).
+* `input_number.house_inertia` – Manually define your home's thermal inertia (optional override).
 
-This virtual sensor reports a modified outdoor temperature. It also exposes attributes:
+### Entities Included via the Packages File
 
-| Attribute              | Description                                                           |
-| ---------------------- | --------------------------------------------------------------------- |
-| `indoor_temperature`   | Current indoor temperature (`sensor.indoor_temperature`)              |
-| `target_temperature`   | Desired target temperature (`input_number.indoor_target_temperature`) |
-| `electricity_price`    | Current electricity price                                             |
-| `outdoor_real`         | Real outdoor temperature (`sensor.real_outdoor_temperature`)          |
-| `summer_threshold`     | Threshold for activating summer mode                                  |
-| `thermal_inertia`      | Calculated or user-defined inertia                                    |
-| `delta_to_target`      | Difference between indoor and target temperature                      |
-| `aggressiveness`       | Responsiveness of the system                                          |
-| `scaling_factor`       | Internal multiplier used in calculations                              |
-| `mode`                 | Current mode (`heating`, `pre_boost`, `summer_mode`, etc.)            |
-| `virtual_outdoor_temp` | Same as main sensor state (included as attribute)                     |
+These helpers and sensors are included automatically when using the provided `packages` file:
+
+| Entity                                             | Description                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------- |
+| `input_number.virtualoutdoortemp_aggressiveness`   | Controls how responsive the system is to changing conditions. |
+| `input_number.virtualoutdoortemp_summer_threshold` | Sets the threshold above which summer mode is activated.      |
+| `input_number.indoor_target_temperature`           | Defines your desired indoor temperature.                      |
+| `input_number.house_inertia`                       | Represents your home's thermal inertia.                       |
+| `input_text.hourly_forecast_temperatures`          | Stores 6-hour temperature forecast used for pre-boost.        |
 
 ### Installation Guide
 
@@ -72,8 +70,6 @@ action:
         {% endif %}
 ```
 
-**Note:** All required `input_number` and `input_text` helpers are already included in the default `packages` file provided with this integration. You only need to set up an automation to regularly populate `input_text.hourly_forecast_temperatures` if you plan to use the pre-boost feature.
-
 1. **Download or clone this repository.**
 2. Copy the folder `pumpsteer` into your Home Assistant custom components directory:
 
@@ -85,91 +81,10 @@ action:
 5. Go to **Settings → Devices & Services → Integrations**.
 6. Click **"Add Integration"**, then search for **PumpSteer** and follow the setup wizard.
 7. Done! You should now have a sensor called `sensor.virtual_outdoor_temp`.
-
----
-
-## 🇸🇪 Svenska – Översikt
-
-PumpSteer är en Home Assistant-integration som skapar en dynamisk, virtuell utomhustemperatursensor. Denna sensor ger smart styrning av din värmepump eller panna genom att justera rapporterad utetemperatur baserat på innetemperatur, elpris, väderprognos och husets värmetröghet.
-
-### Funktioner
-
-* Adaptiv temperaturstyrning
-* Möjlighet till förvärmning ("pre-boost")
-* Sommarläge stänger av uppvärmning vid varmt väder
-* Justerbar aggressivitet i styrningen
-* Lär sig husets värmetröghet
-* Helt lokal – ingen molntjänst krävs
-
-### Kräver följande entiteter
-
-* `sensor.indoor_temperature`
-* `sensor.real_outdoor_temperature`
-* `sensor.electricity_price_forecast`
-* `input_number.indoor_target_temperature`
-* `input_number.pumpsteer_summer_threshold`
-
-### Valbara entiteter
-
-* `input_number.pumpsteer_aggressiveness`
-* `input_number.house_inertia`
-* `input_text.hourly_forecast_temperatures`
-
-### Utdatavärde: `sensor.virtual_outdoor_temp`
-
-Denna sensor rapporterar en manipulerad utomhustemperatur. Den visar också följande attribut (på engelska):
-
-| Attribute              | Beskrivning                             |
-| ---------------------- | --------------------------------------- |
-| `indoor_temperature`   | Aktuell temperatur inomhus              |
-| `target_temperature`   | Önskad temperatur inomhus               |
-| `electricity_price`    | Aktuellt elpris                         |
-| `outdoor_real`         | Verklig utomhustemperatur               |
-| `summer_threshold`     | Gräns för att aktivera sommarläge       |
-| `thermal_inertia`      | Beräknad eller manuell värmetröghet     |
-| `delta_to_target`      | Skillnad mellan inne- och måltemperatur |
-| `aggressiveness`       | Hur känslig styrningen är               |
-| `scaling_factor`       | Intern beräkningsfaktor                 |
-| `mode`                 | Aktuellt driftläge                      |
-| `virtual_outdoor_temp` | Sensorvärdet även som attribut          |
-
-### Installationsguide
-
-**Obs!** Alla nödvändiga `input_number` och `input_text` är redan inkluderade i den medföljande `packages`-filen. Det enda du själv behöver skapa är en automation som uppdaterar `input_text.hourly_forecast_temperatures` om du vill använda pre-boost-funktionen.
-
-#### Exempelautomation för att fylla väderprognosen (vid pre-boost)
-
-```yaml
-alias: Uppdatera timvis prognos till PumpSteer
-mode: single
-trigger:
-  - platform: time_pattern
-    minutes: "5"
-action:
-  - service: input_text.set_value
-    target:
-      entity_id: input_text.hourly_forecast_temperatures
-    data:
-      value: >
-        {% set forecast = state_attr('weather.smhi', 'forecast') %}
-        {% if forecast is none %}unavailable{% else %}
-        {% set temps = forecast[:6] | map(attribute='temperature') | list %}
-        {{ temps | join(',') }}
-        {% endif %}
-```
-
-**Obs!** Alla nödvändiga `input_number` och `input_text` är redan inkluderade i den medföljande `packages`-filen. Det enda du själv behöver skapa är en automation som uppdaterar `input_text.hourly_forecast_temperatures` om du vill använda pre-boost-funktionen.
-
-1. **Ladda ner eller klona detta GitHub-repo.**
-2. Kopiera mappen `pumpsteer` till din Home Assistant-mapp för anpassade komponenter:
-
-   ```
-   <config>/custom_components/pumpsteer/
-   ```
-3. Säkerställ att `configuration.yaml` innehåller rätt `input_number`, `input_text` och sensorer.
-4. Starta om Home Assistant.
-5. Gå till **Inställningar → Enheter & Tjänster → Integrationer**.
-6. Klicka på **"Lägg till integration"**, sök efter **PumpSteer** och följ guiden.
-7. Klart! Nu finns sensorn `sensor.virtual_outdoor_temp` tillgänglig.
-
-För avancerade exempel, automations, visualiseringar och förslag på Lovelacekort, se projektets GitHub-sida.
+   \| Description                                                  |
+   \|-----------------------------------------------|--------------------------------------------------------------|
+   \| `input_number.virtualoutdoortemp_aggressiveness` | Controls how responsive the system is to changing conditions. |
+   \| `input_number.virtualoutdoortemp_summer_threshold` | Sets the threshold above which summer mode is activated.      |
+   \| `input_number.indoor_target_temperature`       | Defines your desired indoor temperature.                     |
+   \| `input_number.house_inertia`                  | Represents your home's thermal inertia.                      |
+   \| `input_text.hourly_forecast_temperatures`     | Stores 6-hour temperature forecast used for pre-boost.       |
