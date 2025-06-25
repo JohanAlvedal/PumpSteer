@@ -26,13 +26,6 @@ PumpSteer is a custom Home Assistant integration that creates a dynamic, virtual
 | `input_number.indoor_target_temperature`  | A number helper representing your desired indoor target temperature. Included in the `packages` file.                                                             |
 | `input_number.pumpsteer_summer_threshold` | A number helper representing the temperature threshold above which summer mode is active. Included in the `packages` file.                                        |
 
-### Optional Entities
-
-These entities can be used to further customize how PumpSteer behaves:
-
-* `input_number.pumpsteer_aggressiveness` – Adjusts the system’s responsiveness (aggressiveness).
-* `input_number.house_inertia` – Manually define your home's thermal inertia (optional override).
-
 ### Entities Included via the Packages File
 
 These helpers and sensors are included automatically when using the provided `packages` file:
