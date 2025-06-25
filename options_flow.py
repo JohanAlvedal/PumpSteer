@@ -9,19 +9,32 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
+        """Manage the options."""
         if user_input is not None:
+            # Saving to data to ensure compatibility with how sensor.py reads config
             return self.async_create_entry(title="", data=user_input)
 
+        # Fetch current values from config_entry.data for defaults in the form
+        current_indoor_temp = self.config_entry.data.get("indoor_temp_entity")
+        current_real_outdoor = self.config_entry.data.get("real_outdoor_entity")
+        current_electricity_price = self.config_entry.data.get("electricity_price_entity")
+        current_hourly_forecast = self.config_entry.data.get("hourly_forecast_temperatures_entity")
+        current_target_temp = self.config_entry.data.get("target_temp_entity")
+        current_summer_threshold = self.config_entry.data.get("summer_threshold_entity")
+        current_aggressiveness = self.config_entry.data.get("aggressiveness_entity")
+        current_house_inertia = self.config_entry.data.get("house_inertia_entity")
+
+        # This schema allows editing all fields, both required and optional.
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required("indoor_temp_entity", default=self.config_entry.data.get("indoor_temp_entity")): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("real_outdoor_entity", default=self.config_entry.data.get("real_outdoor_entity")): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("electricity_price_entity", default=self.config_entry.data.get("electricity_price_entity")): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("hourly_forecast_temperatures_entity", default=self.config_entry.options.get("hourly_forecast_temperatures_entity")): selector({"entity": {"domain": "input_text"}}), # ÄNDRAD RAD
-                vol.Required("target_temp_entity", default=self.config_entry.data.get("target_temp_entity")): selector({"entity": {"domain": "input_number"}}),
-                vol.Required("summer_threshold_entity", default=self.config_entry.data.get("summer_threshold_entity")): selector({"entity": {"domain": "input_number"}}),
-                vol.Optional("aggressiveness_entity", default=self.config_entry.options.get("aggressiveness_entity")): selector({"entity": {"domain": "input_number"}}),
-                vol.Optional("house_inertia_entity", default=self.config_entry.options.get("house_inertia_entity")): selector({"entity": {"domain": "input_number"}}),
+                vol.Required("indoor_temp_entity", default=current_indoor_temp): selector({"entity": {"domain": "sensor"}}),
+                vol.Required("real_outdoor_entity", default=current_real_outdoor): selector({"entity": {"domain": "sensor"}}),
+                vol.Required("electricity_price_entity", default=current_electricity_price): selector({"entity": {"domain": "sensor"}}),
+                vol.Required("hourly_forecast_temperatures_entity", default=current_hourly_forecast): selector({"entity": {"domain": "input_text"}}),
+                vol.Required("target_temp_entity", default=current_target_temp): selector({"entity": {"domain": "input_number"}}),
+                vol.Required("summer_threshold_entity", default=current_summer_threshold): selector({"entity": {"domain": "input_number"}}),
+                vol.Optional("aggressiveness_entity", default=current_aggressiveness): selector({"entity": {"domain": "input_number"}}),
+                vol.Optional("house_inertia_entity", default=current_house_inertia): selector({"entity": {"domain": "input_number"}}),
             })
         )
