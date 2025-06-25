@@ -18,8 +18,10 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required("indoor_temp_entity", default=self.config_entry.data.get("indoor_temp_entity")): selector({"entity": {"domain": "sensor"}}),
                 vol.Required("real_outdoor_entity", default=self.config_entry.data.get("real_outdoor_entity")): selector({"entity": {"domain": "sensor"}}),
                 vol.Required("electricity_price_entity", default=self.config_entry.data.get("electricity_price_entity")): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("weather_entity", default=self.config_entry.options.get("weather_entity")): selector({"entity": {"domain": "input_text"}}),
+                vol.Required("hourly_forecast_temperatures_entity", default=self.config_entry.options.get("hourly_forecast_temperatures_entity")): selector({"entity": {"domain": "input_text"}}), # ÄNDRAD RAD
                 vol.Required("target_temp_entity", default=self.config_entry.data.get("target_temp_entity")): selector({"entity": {"domain": "input_number"}}),
-                vol.Required("summer_threshold_entity", default=self.config_entry.data.get("summer_threshold_entity")): selector({"entity": {"domain": "input_number"}}), # NY RAD
-            }),
+                vol.Required("summer_threshold_entity", default=self.config_entry.data.get("summer_threshold_entity")): selector({"entity": {"domain": "input_number"}}),
+                vol.Optional("aggressiveness_entity", default=self.config_entry.options.get("aggressiveness_entity")): selector({"entity": {"domain": "input_number"}}),
+                vol.Optional("house_inertia_entity", default=self.config_entry.options.get("house_inertia_entity")): selector({"entity": {"domain": "input_number"}}),
+            })
         )
