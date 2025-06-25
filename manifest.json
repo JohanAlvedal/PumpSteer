@@ -8,6 +8,6 @@
   "config_flow": true,
   "requirements": [],
   "dependencies": [],
-  "codeowners": ["@yourgithub"],
+  "codeowners": ["@yjohanalvedal"],
   "iot_class": "local_polling"
 }
