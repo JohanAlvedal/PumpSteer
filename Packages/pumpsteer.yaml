@@ -1,5 +1,5 @@
 input_number:
-  virtualoutdoortemp_aggressiveness:
+  pumpsteer_aggressiveness:
     name: VirtualOutdoorTemp Aggressiveness
     min: 0
     max: 5
@@ -7,7 +7,7 @@ input_number:
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
 
-  virtualoutdoortemp_summer_threshold:
+  pumpsteere_summer_threshold:
     name: Summer Mode Threshold
     min: 0
     max: 30
@@ -41,21 +41,21 @@ template:
   - sensor:
       - name: "Real Outdoor Temperature"
         state: >
-          {{ state_attr('sensor.virtualoutdoortemp', 'Ute (verklig)') }}
+          {{ state_attr('sensor.pumpsteer', 'Ute (verklig)') }}
         unit_of_measurement: "°C"
         device_class: temperature
 
       - name: "VirtualOutdoorTemp Tempdiff"
         state: >
-          {% set fake = states('sensor.virtualoutdoortemp') | float %}
-          {% set real = state_attr('sensor.virtualoutdoortemp', 'Ute (verklig)') | float %}
+          {% set fake = states('sensor.pumpsteer') | float %}
+          {% set real = state_attr('sensor.pumpsteer', 'Ute (verklig)') | float %}
           {{ (fake - real) | round(2) }}
         unit_of_measurement: "°C"
         device_class: temperature
 
       - name: "Heating Mood"
         state: >
-          {% set mode = state_attr('sensor.virtualoutdoortemp', 'Läge') %}
+          {% set mode = state_attr('sensor.pumpsteer', 'Läge') %}
           {% if mode == "preboost" %}
             ⚡ Preboost
           {% elif mode == "balance" %}
@@ -70,9 +70,9 @@ template:
 
       - name: "Current Heating Mode"
         state: >
-          {{ state_attr('sensor.virtualoutdoortemp', 'Läge') | title }}
+          {{ state_attr('sensor.pumpsteer', 'Läge') | title }}
         icon: >
-          {% set mode = state_attr('sensor.virtualoutdoortemp', 'Läge') %}
+          {% set mode = state_attr('sensor.pumpsteer', 'Läge') %}
           {% if mode == 'preboost' %}
             mdi:flash
           {% elif mode == 'balance' %}
