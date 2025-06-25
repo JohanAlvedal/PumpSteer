@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "Konfigurera PumpStyrning",
-        "description": "Välj de sensorer och enheter som ska användas för simulering av virtuell utomhustemperatur."
+        "description": "Välj de sensorer och enheter som ska användas för att optimera din värmepump baserat på inomhustemperatur, utomhustemperatur och elpriser."
       }
     }
   },
@@ -12,13 +12,13 @@
     "step": {
       "init": {
         "title": "Justera Alternativ",
-        "description": "Ändra sensorinmatningar eller måltemperatur-enhet"
+        "description": "Ändra sensorinmatningar eller andra inställningar för PumpStyrning."
       }
     }
   },
   "entity": {
     "sensor": {
-      "PumpStyrning": {
+      "PumpSteer": {
         "name": "PumpStyrning",
         "state": {
           "summer_mode": "Sommarläge",
@@ -27,6 +27,11 @@
           "balance": "Balans"
         }
       }
+    }
+  },
+  "selector": {
+    "entity": {
+      "hourly_forecast_temperatures_entity": "Timvis temperaturprognos (Input Text)"
     }
   }
 }
