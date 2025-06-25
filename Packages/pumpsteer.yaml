@@ -110,7 +110,7 @@ template:
 #       hourly_forecast: "{{ forecast_result['weather.openweathermap'].forecast }}"
 #       temperature_string: |-
 #         {{
-#           hourly_forecast[:24] | map(attribute='temperature') | join(', ')
+#           hourly_forecast[:24] | map(attribute='temperature') | join(', '). # Change this [?]for how many hours to get temperature forcast
 #         }}
 #   - alias: Spara till input_text
 #     target:
