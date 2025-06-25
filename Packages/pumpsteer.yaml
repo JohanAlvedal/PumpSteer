@@ -7,7 +7,7 @@ input_number:
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
 
-  pumpsteere_summer_threshold:
+  pumpsteer_summer_threshold:
     name: Summer Mode Threshold
     min: 0
     max: 30
