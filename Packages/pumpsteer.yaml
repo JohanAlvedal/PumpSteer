@@ -7,7 +7,7 @@ input_number:
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
 
-  pumpsteer_summer_threshold:
+  pumpsteer_summer_threshold: # TYPO KORRIGERAD HÄR
     name: Summer Mode Threshold
     min: 0
     max: 30
@@ -49,26 +49,19 @@ template:
         state: >
           {% set fake = states('sensor.pumpsteer') | float %}
           {% set real = state_attr('sensor.pumpsteer', 'Ute (verklig)') | float %}
-          {{ (fake - real) | round(2) }}
+          {{ (fake - real) | round(1) }}
         unit_of_measurement: "°C"
-        device_class: temperature
+        icon: mdi:thermometer-minus
 
-      - name: "Heating Mood"
+      - name: "VirtualOutdoorTemp Indoor Target Diff"
         state: >
-          {% set mode = state_attr('sensor.pumpsteer', 'Läge') %}
-          {% if mode == "preboost" %}
-            ⚡ Preboost
-          {% elif mode == "balance" %}
-            ↕ Active Control
-          {% elif mode == "neutral" %}
-            😐 Neutral
-          {% elif mode == "summer_mode" %}
-            ☀ Summer Mode
-          {% else %}
-            ❓ Unknown
-          {% endif %}
+          {% set actual = state_attr('sensor.pumpsteer', 'Inne (verklig)') | float %}
+          {% set target = state_attr('sensor.pumpsteer', 'Inne (mål)') | float %}
+          {{ (actual - target) | round(1) }}
+        unit_of_measurement: "°C"
+        icon: mdi:home-thermometer-outline
 
-      - name: "Current Heating Mode"
+      - name: "PumpSteer Operating Mode"
         state: >
           {{ state_attr('sensor.pumpsteer', 'Läge') | title }}
         icon: >
@@ -85,7 +78,7 @@ template:
             mdi:help-circle
           {% endif %}
 ##
-## This is the automation i use for pre-boost. 
+## This is the automation i use for pre-boost.
 ##
 ##
 # alias: Uppdatera Timvis Temperatur i Text
@@ -117,6 +110,3 @@ template:
 #       entity_id: input_text.hourly_forecast_temperatures
 #     data:
 #       value: "{{ temperature_string }}"
-#     action: input_text.set_value
-# mode: single
-
