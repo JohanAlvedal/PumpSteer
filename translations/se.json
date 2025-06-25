@@ -1,0 +1,32 @@
+{
+  "title": "PumpStyrning",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfigurera PumpStyrning",
+        "description": "Välj de sensorer och enheter som ska användas för simulering av virtuell utomhustemperatur."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Justera Alternativ",
+        "description": "Ändra sensorinmatningar eller måltemperatur-enhet"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "PumpStyrning": {
+        "name": "PumpStyrning",
+        "state": {
+          "summer_mode": "Sommarläge",
+          "preboost": "Förstärkning",
+          "neutral": "Neutral",
+          "balance": "Balans"
+        }
+      }
+    }
+  }
+}
