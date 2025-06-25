@@ -1,13 +1,13 @@
 input_number:
-  pumpsteer_aggressiveness:
-    name: PumpSteer Aggressiveness
+  virtualoutdoortemp_aggressiveness:
+    name: VirtualOutdoorTemp Aggressiveness
     min: 0
     max: 5
     step: 1
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
 
-  pumpsteer_summer_threshold:
+  virtualoutdoortemp_summer_threshold:
     name: Summer Mode Threshold
     min: 0
     max: 30
@@ -23,6 +23,15 @@ input_number:
     unit_of_measurement: "°C"
     icon: mdi:thermometer
 
+  house_inertia:
+    name: House Inertia
+    min: 0.1
+    max: 10.0
+    step: 0.1
+    mode: box
+    unit_of_measurement: "faktor"
+    icon: mdi:home-thermometer
+
 input_text:
   hourly_forecast_temperatures:
     name: Hourly Forecast Temperatures
@@ -32,20 +41,21 @@ template:
   - sensor:
       - name: "Real Outdoor Temperature"
         state: >
-          {{ state_attr('sensor.pumpsteer', 'real_outdoor_temperature') }}
+          {{ state_attr('sensor.virtualoutdoortemp', 'Ute (verklig)') }}
         unit_of_measurement: "°C"
         device_class: temperature
 
-      - name: "PumpSteer Tempdiff"
+      - name: "VirtualOutdoorTemp Tempdiff"
         state: >
-          {% set fake = states('sensor.pumpsteer') | float %}
-          {% set real = state_attr('sensor.pumpsteer', 'real_outdoor_temperature') | float %}
+          {% set fake = states('sensor.virtualoutdoortemp') | float %}
+          {% set real = state_attr('sensor.virtualoutdoortemp', 'Ute (verklig)') | float %}
           {{ (fake - real) | round(2) }}
         unit_of_measurement: "°C"
+        device_class: temperature
 
       - name: "Heating Mood"
         state: >
-          {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
+          {% set mode = state_attr('sensor.virtualoutdoortemp', 'Läge') %}
           {% if mode == "preboost" %}
             ⚡ Preboost
           {% elif mode == "balance" %}
@@ -60,9 +70,9 @@ template:
 
       - name: "Current Heating Mode"
         state: >
-          {{ state_attr('sensor.pumpsteer', 'mode') | title }}
+          {{ state_attr('sensor.virtualoutdoortemp', 'Läge') | title }}
         icon: >
-          {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
+          {% set mode = state_attr('sensor.virtualoutdoortemp', 'Läge') %}
           {% if mode == 'preboost' %}
             mdi:flash
           {% elif mode == 'balance' %}
@@ -74,3 +84,39 @@ template:
           {% else %}
             mdi:help-circle
           {% endif %}
+##
+## This is the automation i use for pre-boost. 
+##
+##
+# alias: Uppdatera Timvis Temperatur i Text
+# description: ""
+# triggers:
+#   - minutes: /30
+#     trigger: time_pattern
+#   - event: start
+#     trigger: homeassistant
+#   - event_type: event_template_reloaded
+#     trigger: event
+# actions:
+#   - alias: Hämta timvis väderprognos
+#     target:
+#       entity_id: weather.openweathermap
+#     data:
+#       type: hourly
+#     response_variable: forecast_result
+#     action: weather.get_forecasts
+#   - alias: Skapa temperatursträng
+#     variables:
+#       hourly_forecast: "{{ forecast_result['weather.openweathermap'].forecast }}"
+#       temperature_string: |-
+#         {{
+#           hourly_forecast[:24] | map(attribute='temperature') | join(', ')
+#         }}
+#   - alias: Spara till input_text
+#     target:
+#       entity_id: input_text.hourly_forecast_temperatures
+#     data:
+#       value: "{{ temperature_string }}"
+#     action: input_text.set_value
+# mode: single
+
