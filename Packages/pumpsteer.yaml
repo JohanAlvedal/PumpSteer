@@ -48,7 +48,7 @@ input_text:
 
 template:
   - sensor:
-      - name: "PumpSteer Tempdiff"
+      - name: "PumpSteer Outdoor Target Diff"
         state: >
           {% set fake = states('sensor.pumpsteer') | float %}
           {% set real = state_attr('sensor.pumpsteer', 'Ute (verklig)') | float %}
