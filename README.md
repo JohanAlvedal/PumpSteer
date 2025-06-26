@@ -12,7 +12,7 @@ PumpSteer is a custom Home Assistant integration for dynamically optimizing your
   - indoor temperature
   - target temperature
   - electricity price forecast
-  - weather forecast
+  - temperature forecast
 - 🌡️ Fake outdoor temperature is calculated to trick the heat pump into saving or buffering energy
 - 🚀 Pre-boost mode: build up heat buffer before price peaks
 - 🧊 Braking mode: avoid heating when it's cold and expensive
