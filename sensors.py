@@ -115,7 +115,7 @@ class PumpSteerSensor(Entity):
 
         # Initialisera preboost_active och hårdkodade temperaturgräns
         preboost_active = False
-        preboost_max_outdoor_temp = 13.0 # HÅRDKODAD TILL 13.0 GRADER
+        preboost_max_outdoor_temp = 10.0 # HÅRDKODAD TILL 10.0 GRADER
 
         # Hämta värden
         indoor_temp = safe_float(get_state(self.hass, indoor_temp_entity_id))
