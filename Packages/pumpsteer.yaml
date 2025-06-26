@@ -15,13 +15,13 @@ input_number:
     step: 0.5
     unit_of_measurement: "°C"
     mode: box
-    
+
   preboost_max_outdoor_temp:
     name: Preboost max outdoor temp
     min: -5
     max: 20
     unit_of_measurement: "°C"
-    mode: box 
+    mode: box
 
   indoor_target_temperature:
     name: Indoor Target Temperature
@@ -48,13 +48,7 @@ input_text:
 
 template:
   - sensor:
-      - name: "Real Outdoor Temperature"
-        state: >
-          {{ state_attr('sensor.pumpsteer', 'Ute (verklig)') }}
-        unit_of_measurement: "°C"
-        device_class: temperature
-
-      - name: "VirtualOutdoorTemp Tempdiff"
+      - name: "PumpSteer Tempdiff"
         state: >
           {% set fake = states('sensor.pumpsteer') | float %}
           {% set real = state_attr('sensor.pumpsteer', 'Ute (verklig)') | float %}
@@ -86,6 +80,7 @@ template:
           {% else %}
             mdi:help-circle
           {% endif %}
+
 ##
 ## This is the automation i use for pre-boost.
 ##
