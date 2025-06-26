@@ -123,7 +123,7 @@ PumpSteer calculates a "fake" outdoor temperature that nudges your heat pump to 
 
 ## 🧪 Developer Notes
 
-- Python logic is split into clear modules (`sensor.py`, `pre_boost.py`, `helpers.py`)
+- Python logic is split into clear modules (`sensor.py`, `pre_boost.py`)
 - Easily testable: key functions like `calculate_virtual_temperature` are pure
 - Logging is verbose to support debugging and optimization
 
