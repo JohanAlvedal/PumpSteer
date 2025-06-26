@@ -6,7 +6,7 @@ input_number:
     step: 1
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
-    mode: box
+    mode: slider
 
   pumpsteer_summer_threshold:
     name: Summer Mode Threshold
@@ -16,12 +16,12 @@ input_number:
     unit_of_measurement: "°C"
     mode: box
 
-  preboost_max_outdoor_temp:
-    name: Preboost max outdoor temp
-    min: -5
-    max: 20
-    unit_of_measurement: "°C"
-    mode: box
+#   preboost_max_outdoor_temp:
+#     name: Preboost max outdoor temp
+#     min: -5
+#     max: 20
+#     unit_of_measurement: "°C"
+#     mode: box
 
   indoor_target_temperature:
     name: Indoor Target Temperature
