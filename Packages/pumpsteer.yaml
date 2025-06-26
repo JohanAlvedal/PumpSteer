@@ -6,6 +6,7 @@ input_number:
     step: 1
     unit_of_measurement: "level"
     icon: mdi:lightning-bolt-circle
+    mode: box
 
   pumpsteer_summer_threshold:
     name: Summer Mode Threshold
@@ -14,6 +15,13 @@ input_number:
     step: 0.5
     unit_of_measurement: "°C"
     mode: box
+    
+  preboost_max_outdoor_temp:
+    name: Preboost max outdoor temp
+    min: -5
+    max: 20
+    unit_of_measurement: "°C"
+    mode: box 
 
   indoor_target_temperature:
     name: Indoor Target Temperature
@@ -22,15 +30,16 @@ input_number:
     step: 0.5
     unit_of_measurement: "°C"
     icon: mdi:thermometer
+    mode: box
 
   house_inertia:
     name: House Inertia
     min: 0.1
     max: 10.0
     step: 0.1
-    mode: box
     unit_of_measurement: "faktor"
     icon: mdi:home-thermometer
+    mode: box
 
 input_text:
   hourly_forecast_temperatures:
@@ -53,7 +62,7 @@ template:
         unit_of_measurement: "°C"
         icon: mdi:thermometer-minus
 
-      - name: "VirtualOutdoorTemp Indoor Target Diff"
+      - name: "PumpSteer Indoor Target Diff"
         state: >
           {% set actual = state_attr('sensor.pumpsteer', 'Inne (verklig)') | float %}
           {% set target = state_attr('sensor.pumpsteer', 'Inne (mål)') | float %}
@@ -103,7 +112,7 @@ template:
 #       hourly_forecast: "{{ forecast_result['weather.openweathermap'].forecast }}"
 #       temperature_string: |-
 #         {{
-#           hourly_forecast[:24] | map(attribute='temperature') | join(', '). # Change this [?]for how many hours to get temperature forcast
+#           hourly_forecast[:24] | map(attribute='temperature') | join(','). # Change this [?]for how many hours to get temperature forcast
 #         }}
 #   - alias: Spara till input_text
 #     target:
