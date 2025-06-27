@@ -25,6 +25,24 @@ PumpSteer is a custom Home Assistant integration for dynamically optimizing your
 
 -----
 
+Add PumpSteer to HACS as a Custom Repository
+If PumpSteer is not yet available in the default HACS store, you can add it manually as a custom repository:
+
+In Home Assistant, go to HACS in the sidebar.
+Click the three dots menu (⋮) in the top right corner, and select Custom repositories.
+In the "Repository" field, enter:
+Code
+https://github.com/JohanAlvedal/PumpSteer
+Set the category to Integration.
+Click Add.
+PumpSteer will now appear under HACS > Integrations. Click Install to add it.
+Restart Home Assistant after installation.
+Continue with the configuration steps as described above.
+Note:
+As long as PumpSteer is not in the official HACS store, you need to repeat these steps if you reinstall HACS or clear its configuration.
+
+-----
+
 ## 🔧 Installation & Configuration
 
 Follow these three steps to get PumpSteer up and running.
