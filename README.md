@@ -185,9 +185,11 @@ series:
 
 ## 💬 A Note from the Developer
 
-> This project was created by an amateur developer with a passion for smart homes, assisted by OpenAI's ChatGPT. Expect a few quirks – but lots of love.
+> This integration was built by an amateur developer with the powerful assistance of Google's Gemini. It is the result of a passion for smart homes, a lot of trial and error, and many, many Home Assistant restarts.
 
-I welcome contributions, ideas, and issue reports. If you’re knowledgeable in this space, please share your insights!
+Please consider this a beta product in the truest sense.
+
+If you are knowledgeable in this area, constructive feedback, suggestions, and contributions are warmly welcomed. Please be patient, as this is a learning project.
 
 ---
 
