@@ -1,0 +1,33 @@
+##
+## This is the automation i use for pre-boost. 
+## And for forcast temperatures in input_text.hourly_forecast_temperatures sensor
+##
+alias: Uppdatera Timvis Temperatur i Text
+description: ""
+triggers:
+  - minutes: /30
+    trigger: time_pattern
+  - event: start
+    trigger: homeassistant
+  - event_type: event_template_reloaded
+    trigger: event
+actions:
+  - alias: Hämta timvis väderprognos
+    target:
+      entity_id: weather.openweathermap
+    data:
+      type: hourly
+    response_variable: forecast_result
+    action: weather.get_forecasts
+  - alias: Skapa temperatursträng
+    variables:
+      hourly_forecast: "{{ forecast_result['weather.openweathermap'].forecast }}"
+      temperature_string: |-
+        {{
+          hourly_forecast[:24] | map(attribute='temperature') | join(','). # Change this [?]for how many hours to get temperature forcast
+        }}
+  - alias: Spara till input_text
+    target:
+      entity_id: input_text.hourly_forecast_temperatures
+    data:
+      value: "{{ temperature_string }}"
