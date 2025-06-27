@@ -80,7 +80,7 @@ Using the provided `pumpsteer_package.yaml` file will create the following entit
 
 ## 🧪 Forecast Format
 
-The `input_text` entity for the temperature forecast must contain **24 comma-separated values** representing the hourly forecasted outdoor temperatures for the next 24 hours:
+The `input_text` entity for the temperature forecast must contain **of max 24 comma-separated values** representing the hourly forecasted outdoor temperatures for the next 24 hours:
 
 ```text
 -3.5,-4.2,-5.0,-4.8,... (24 values total)
