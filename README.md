@@ -83,6 +83,20 @@ The fake outdoor temperature (`°C`) sent to your heat pump.
 
 ---
 
+## Aggressiveness – What Does It Do?
+
+Aggressiveness controls how sensitive the system is to electricity prices. It affects both when heating is reduced (braking) and when extra heating is added (pre-boost).
+
+| Setting | Braking behavior     | Pre-boost behavior         |
+|---------|----------------------|----------------------------|
+| Low     | Rarely brakes        | Boosts more easily         |
+| High    | Brakes early         | Boosts only in extreme cases |
+
+**Higher aggressiveness saves energy more aggressively, but may reduce indoor comfort.**
+
+---
+
+
 ## 📈 ApexCharts Example
 
 ```yaml
