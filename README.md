@@ -185,7 +185,7 @@ series:
 
 ## 💬 A Note from the Developer
 
-> This integration was built by an amateur developer with the powerful assistance of Google's Gemini. It is the result of a passion for smart homes, a lot of trial and error, and many, many Home Assistant restarts.
+This integration was built by an amateur developer with the powerful assistance of Google's Gemini. It is the result of a passion for smart homes, a lot of trial and error, and many, many Home Assistant restarts.
 
 Please consider this a beta product in the truest sense.
 
