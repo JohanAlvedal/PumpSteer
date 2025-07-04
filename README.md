@@ -222,6 +222,15 @@ PumpSteer calculates a "fake" outdoor temperature to nudge your heat pump to eit
   - **Normal:** Gently adjust heating to maintain comfort with minimal cost.
   - **Summer Mode:** Stand down when it's warm outside.
 
+---- 
+
+> 💡 **Example setup:**  
+> In my setup, a [Ohmigo Ohm On WiFi](https://www.ohmigo.io/product-page/ohmigo-ohm-on-wifi) device is used to control the boiler. It acts as a simple WiFi-connected relay that is switched via Home Assistant, allowing PumpSteer to influence the heating system indirectly by controlling when the boiler is allowed to run.
+
+<p align="center">
+  <img src="https://static.wixstatic.com/media/3d2222_5871cfe3e10e41aab0d7e43b83b740cb~mv2.jpg/v1/fill/w_980,h_980,al_c,q_85,enc_auto/3d2222_5871cfe3e10e41aab0d7e43b83b740cb~mv2.jpg" alt="Ohmigo Ohm On WiFi device" width="300"/>
+</p>
+
 -----
 
 ## 💬 Logging and Troubleshooting
