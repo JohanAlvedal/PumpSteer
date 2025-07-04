@@ -1,15 +1,19 @@
 type: entities
-title: PumpSteer Controls
-show_header_toggle: false
 entities:
+  - entity: input_number.indoor_target_temperature
+  - entity: input_number.pumpsteer_summer_threshold
+  - entity: sensor.shelly_h_t_temp_temperature
+  - entity: input_number.pumpsteer_aggressiveness
+  - entity: sensor.pumpsteer
+    secondary_info: last-changed
+  - entity: sensor.pumpsteer_future_strategy
+    secondary_info: last-changed
+  - entity: input_number.house_inertia
+    secondary_info: last-changed
   - entity: input_number.pumpsteer_aggressiveness
     name: Aggressiveness (0–5)
   - entity: input_number.indoor_target_temperature
     name: Target Temperature
-  - entity: input_number.pumpsteer_summer_threshold
-    name: Summer Mode Threshold
-  - entity: number.ohmigohass_temperature
-    secondary_info: last-changed
   - entity: input_number.house_inertia
     secondary_info: last-changed
   - entity: input_text.hourly_forecast_temperatures
@@ -17,13 +21,9 @@ entities:
     secondary_info: last-updated
   - entity: sensor.pumpsteer
     secondary_info: last-changed
-  - entity: sensor.temperatur_nu
-    secondary_info: last-changed
-  - entity: sensor.temp_hall_nere_temperature
-    secondary_info: last-changed
   - entity: sensor.pumpsteer_operating_mode
   - entity: sensor.pumpsteer_indoor_target_diff
-  - entity: sensor.pumpsteer_outdoor_target_diff
+state_color: true
 
   ###############################################
 
@@ -51,118 +51,9 @@ content: |2
 
 ##################################################
 
-type: markdown
-title: 🔮 PumpSteer – Forecast Strategy
-content: >
-  **Strategy Status:** `{{ states('sensor.pumpsteer_future_strategy') }}`
-
-  **Preboost in:** `{{ state_attr('sensor.pumpsteer_future_strategy',
-  'preboost_expected_in_hours') }}h`
-
-  **First preboost hour:** `{{ state_attr('sensor.pumpsteer_future_strategy',
-  'first_preboost_hour') or '–' }}`
-
-  **Cold + expensive hours (next 6h):** `{{
-  state_attr('sensor.pumpsteer_future_strategy',
-  'cold_and_expensive_hours_next_6h') }}`
-
-  **Expensive hours (next 6h):** `{{
-  state_attr('sensor.pumpsteer_future_strategy', 'expensive_hours_next_6h') }}`
-
-  **Braking threshold:** `{{ state_attr('sensor.pumpsteer_future_strategy',
-  'braking_price_threshold_percent') }}%`
-
-  **Preboost threshold:** `{{ state_attr('sensor.pumpsteer_future_strategy',
-  'preboost_price_threshold_percent') }}%`
-
-
-  ---
-
-  🧠 **Inertia:** `{{ state_attr('sensor.pumpsteer_future_strategy', 'inertia')
-  }}`
-
-  🎯 **Lead time:** `{{ state_attr('sensor.pumpsteer_future_strategy',
-  'lead_time_hours') }}h`
-
-  🚀 **Aggressiveness:** `{{ state_attr('sensor.pumpsteer_future_strategy',
-  'aggressiveness') }}`
-
-
-#######################################################
-
 type: history-graph
 entities:
   - entity: sensor.pumpsteer
   - entity: sensor.temperatur_nu ## Ändra till din utetemperatur 
 
-  #####################################################
-
-  type: custom:apexcharts-card
-card_mod:
-  style: |
-    ha-card {
-      width: 100%;
-    }
-graph_span: 12h
-header:
-  show: true
-  title: Temperaturer - Översikt
-  show_states: true
-  colorize_states: true
-span:
-  end: day
-update_interval: 1min
-cache: true
-series:
-  - entity: sensor.pumpsteer
-    name: Virtuell UteTemp
-    color: "#FF6347"
-    stroke_width: 3
-    opacity: 1
-    type: line
-    show:
-      legend_value: false
-      in_header: true
-      in_chart: true
-      in_legend: true
-  - entity: sensor.temperatur_nu
-    name: UteTemp (Verklig)
-    color: "#4682B4"
-    stroke_width: 2
-    opacity: 0.7
-    type: line
-    show:
-      legend_value: false
-      in_header: true
-      in_chart: true
-      in_legend: true
-  - entity: sensor.temp_hall_nere_temperature
-    name: InneTemp (Verklig)
-    color: "#32CD32"
-    stroke_width: 2
-    opacity: 0.8
-    type: line
-    show:
-      legend_value: false
-      in_header: true
-      in_chart: true
-      in_legend: true
-  - entity: input_number.indoor_target_temperature
-    name: Måltemp
-    stroke_width: 2
-    opacity: 0.9
-    type: line
-    curve: stepline
-    show:
-      in_header: false
-      legend_value: false
-      in_chart: true
-      in_legend: true
-now:
-  show: true
-  label: Nu
-yaxis:
-  - id: temp
-    min: auto
-    max: auto
-    decimals: 1
+#####################################################
