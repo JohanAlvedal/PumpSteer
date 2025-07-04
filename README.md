@@ -25,7 +25,11 @@ PumpSteer is a custom Home Assistant integration for dynamically optimizing your
   - 📈 ApexCharts examples included for visualization
 
 -----
-
+> **Note:**  
+> Holiday mode is only active when Summer mode is *not* active.  
+> If the outdoor temperature is above the summer threshold, Summer mode will always take priority over Holiday mode.  
+> This means that heating will be minimized during warm periods, even if Holiday mode is enabled.
+----
 ## Add PumpSteer to HACS as a Custom Repository
 
 If PumpSteer is not yet available in the default HACS store, you can add it manually as a custom repository:
