@@ -7,7 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.helpers.typing import StateType # För typning av tillstånd
+from homeassistant.helpers.typing import StateType  # For state type hinting
 
 # Import async_call_later to schedule updates
 from homeassistant.helpers.event import async_call_later
@@ -19,9 +19,9 @@ from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
 _LOGGER = logging.getLogger(__name__)
 
 # Constants for inertia calculation
-INERTIA_UPDATE_INTERVAL = timedelta(minutes=10) # How often we check delta
-INERTIA_WEIGHT_FACTOR = 4 # How much old inertia should weigh
-INERTIA_DIVISOR = 5 # (INERTIA_WEIGHT_FACTOR + 1)
+INERTIA_UPDATE_INTERVAL = timedelta(minutes=10)  # How often to check delta
+INERTIA_WEIGHT_FACTOR = 4  # How much old inertia should weigh
+INERTIA_DIVISOR = 5  # (INERTIA_WEIGHT_FACTOR + 1)
 MAX_INERTIA_VALUE = 5.0
 MIN_INERTIA_VALUE = 0.0
 DEFAULT_INERTIA_VALUE = 1.0
@@ -30,7 +30,7 @@ PREBOOST_MAX_OUTDOOR_TEMP = 10.0
 def safe_float(val: StateType) -> float | None:
     """Safely converts a value to float, returns None on error."""
     try:
-        if val is None: # Explicitly handle None
+        if val is None:  # Explicitly handle None
             return None
         return float(val)
     except (TypeError, ValueError):
@@ -85,7 +85,7 @@ class PumpSteerSensor(Entity):
             "Status": "Initializing",
             "Mode": "initializing",
             "Outdoor (actual)": None,
-            "Indoor (target)": None, # Kommer att uppdateras med actual_target_temp_for_logic
+            "Indoor (target)": None,  # Will be updated with actual_target_temp_for_logic
             "Indoor (actual)": None,
             "Inertia": self._inertia_value,
             "Aggressiveness": None,
@@ -142,15 +142,15 @@ class PumpSteerSensor(Entity):
     async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Handles option updates."""
         _LOGGER.debug("PumpSteer: Options updated, reloading sensor.")
-        self._config_entry = entry # Uppdatera config_entry för att få de senaste optionerna
-        await self.async_update() # Anropa update direkt för att tillämpa nya inställningar
+        self._config_entry = entry  # Update config_entry to get the latest options
+        await self.async_update()  # Call update directly to apply new settings
 
     async def async_update(self) -> None:
         """Updates the sensor's state."""
-        # Kombinera data och options för att få den fullständiga konfigurationen
+        # Combine data and options to get the full configuration
         config = {**self._config_entry.data, **self._config_entry.options}
         
-        # Hämta alla entitets-ID:n från den kombinerade konfigurationen
+        # Get all entity IDs from the combined configuration
         indoor_temp_entity_id = config.get("indoor_temp_entity")
         real_outdoor_temp_entity_id = config.get("real_outdoor_entity")
         electricity_price_entity_id = config.get("electricity_price_entity")
@@ -158,31 +158,31 @@ class PumpSteerSensor(Entity):
         target_temp_entity_id = config.get("target_temp_entity")
         summer_threshold_entity_id = config.get("summer_threshold_entity")
         
-        # Hämta ID för semesterläges-hjälparna (de kan vara None om de är valfria och inte konfigurerade)
+        # Get IDs for holiday mode helpers (they may be None if optional and not configured)
         holiday_mode_boolean_entity_id = self._config_entry.options.get("holiday_mode_boolean_entity") or config.get("holiday_mode_boolean_entity")
         holiday_start_datetime_entity_id = self._config_entry.options.get("holiday_start_datetime_entity") or config.get("holiday_start_datetime_entity")
         holiday_end_datetime_entity_id = self._config_entry.options.get("holiday_end_datetime_entity") or config.get("holiday_end_datetime_entity")
 
-        # Hämta tillstånd för entiteter
+        # Get states for entities
         indoor_temp = safe_float(get_state(self.hass, indoor_temp_entity_id))
         real_outdoor_temp = safe_float(get_state(self.hass, real_outdoor_temp_entity_id))
         electricity_prices = get_attr(self.hass, electricity_price_entity_id, "today") 
         hourly_temps_csv = get_state(self.hass, hourly_forecast_temperatures_entity_id)
         
-        # Hämta måltemperatur och sommar-tröskel från input_number hjälpare
+        # Get target temperature and summer threshold from input_number helpers
         configured_target_temp = safe_float(get_state(self.hass, target_temp_entity_id))
         summer_threshold_temp = safe_float(get_state(self.hass, summer_threshold_entity_id))
         
-        # Aggressiveness och inertia från hjälpare (antar att de alltid finns)
+        # Aggressiveness and inertia from helpers (assumed to always exist)
         aggressiveness = safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or 0.0
         user_defined_inertia = safe_float(get_state(self.hass, "input_number.house_inertia")) 
         inertia = user_defined_inertia if user_defined_inertia is not None else self._inertia_value
 
-        # Samla kritisk data för att kontrollera om något saknas
+        # Collect critical data to check if anything is missing
         critical_entities_data = {
             "Indoor (actual)": indoor_temp,
             "Outdoor (actual)": real_outdoor_temp,
-            "Target Temp": configured_target_temp, # Använder det konfigurerade värdet här
+            "Target Temp": configured_target_temp,  # Uses the configured value here
             "Summer Threshold": summer_threshold_temp,
             "Electricity Prices (forecast)": electricity_prices,
             "Temperature Forecast": hourly_temps_csv,
@@ -202,8 +202,8 @@ class PumpSteerSensor(Entity):
 
         self._attributes["Status"] = "OK"
         
-        # --- LOGIK FÖR SEMESTERLÄGE ---
-        # Kontrollera om semesterläget är aktivt
+        # --- HOLIDAY MODE LOGIC ---
+        # Check if holiday mode is active
         holiday_mode_active = False
         if holiday_mode_boolean_entity_id and holiday_start_datetime_entity_id and holiday_end_datetime_entity_id:
             holiday_mode_active = is_holiday_mode_active(
@@ -213,32 +213,38 @@ class PumpSteerSensor(Entity):
                 holiday_end_datetime_entity_id
             )
         
-        # Bestäm den faktiska måltemperaturen att använda i beräkningarna
-        # Standard är den konfigurerade temperaturen
+        self._attributes["Holiday Status"] = "Active" if holiday_mode_active else "Inactive"
+        # NOTE:
+        # Holiday mode is only active when Summer mode is NOT active.
+        # If the outdoor temperature is above the summer threshold, Summer mode will always take priority over Holiday mode.
+        # This is to ensure that heating is minimized during warm periods, regardless of holiday settings.
+
+        # Determine the actual target temperature to use in calculations
+        # Default is the configured temperature
         actual_target_temp_for_logic = configured_target_temp
 
         if holiday_mode_active:
             actual_target_temp_for_logic = HOLIDAY_TARGET_TEMPERATURE
             self._attributes["Mode"] = "Holiday"
+            self._attributes["Holiday Active"] = holiday_mode_active
             _LOGGER.info(f"[PumpSteer] Overriding target temperature to {HOLIDAY_TARGET_TEMPERATURE}°C due to Holiday Mode.")
-        elif self._attributes.get("Mode") == "Holiday": # Om vi precis lämnat semesterläge
-             self._attributes["Mode"] = "Normal" # Återställ till Normal (eller vad standard är)
+        elif self._attributes.get("Mode") == "Holiday":  # If we just left holiday mode
+            self._attributes["Mode"] = "Normal"  # Reset to Normal (or whatever the default is)
 
-        # --- SLUT LOGIK FÖR SEMESTERLÄGE ---
-
+        # --- END HOLIDAY MODE LOGIC ---
 
         # --- CHECK MODE AND SET OUTPUT VALUE ---
         
         # 1. Summer Mode - highest priority (still uses actual_target_temp_for_logic for logic)
         if real_outdoor_temp >= summer_threshold_temp:
-            self._state = round(25.0, 1) # Högt värde för att stänga av/minimera värmen
+            self._state = round(25.0, 1)  # High value to turn off/minimize heating
             self._attributes["Mode"] = "summer_mode" + (" + holiday" if holiday_mode_active else "")
             self._attributes["Pre-boost Active"] = False
             _LOGGER.info("PumpSteer: Summer Mode activated (Outdoor temp: %.1f >= %.1f)", real_outdoor_temp, summer_threshold_temp)
-        elif holiday_mode_active: # Semesterläge har redan hanterats ovan och satt Mode till "Holiday"
-            # Ingen ytterligare logik här, state sätts i slutet baserat på actual_target_temp_for_logic
+        elif holiday_mode_active:  # Holiday mode has already been handled above and set Mode to "Holiday"
+            # No further logic here, state is set at the end based on actual_target_temp_for_logic
             pass
-        else: # Endast om inte sommarläge eller semesterläge är aktivt
+        else:  # Only if neither summer mode nor holiday mode is active
             # 2. Braking Mode (based on price) - prioritized over pre-boost
             max_price_in_forecast = max(electricity_prices) if electricity_prices else 0.0
             current_price = electricity_prices[0] if electricity_prices and electricity_prices[0] is not None else 0.0
@@ -251,21 +257,20 @@ class PumpSteerSensor(Entity):
             braking_threshold_ratio = 1.0 - (aggressiveness / 5.0) * 0.4 
             
             if price_factor >= braking_threshold_ratio:
-                self._state = round(25.0, 1) # Sets the virtual outdoor temperature to a high level
+                self._state = round(25.0, 1)  # Sets the virtual outdoor temperature to a high level
                 self._attributes["Mode"] = "braking_mode"
-                self._attributes["Pre-boost Active"] = True # Use this to pause inertia calculation
+                self._attributes["Pre-boost Active"] = True  # Use this to pause inertia calculation
                 _LOGGER.info("PumpSteer: Braking mode activated due to high price (Aggressiveness: %.1f, Price Factor: %.2f)", aggressiveness, price_factor)
             else:
                 # 3. Pre-boost Mode (based on forecast)
                 boost_mode = None
                 if real_outdoor_temp <= PREBOOST_MAX_OUTDOOR_TEMP:
-                    # Använd actual_target_temp_for_logic för cold_threshold om det behövs i check_combined_preboost
-                    # (cold_threshold i pre_boost.py är just nu en fast parameter, men om den ska vara dynamisk)
+                    # Use actual_target_temp_for_logic for cold_threshold if needed in check_combined_preboost
                     boost_mode = check_combined_preboost(
                         hourly_temps_csv,
                         electricity_prices,
                         lookahead_hours=6,
-                        cold_threshold=actual_target_temp_for_logic - 2.0, # Exempel: 2 grader under måltemperaturen
+                        cold_threshold=actual_target_temp_for_logic - 2.0,  # Example: 2 degrees below target temperature
                         price_threshold_ratio=0.8,
                         aggressiveness=aggressiveness, 
                         inertia=inertia
@@ -274,14 +279,14 @@ class PumpSteerSensor(Entity):
                     _LOGGER.info(f"PumpSteer: Pre-boost deactivated as outdoor temperature ({real_outdoor_temp}°C) is above max threshold ({PREBOOST_MAX_OUTDOOR_TEMP}°C).")
                 
                 if boost_mode == "preboost":
-                    self._state = -15.0 # Very low virtual outdoor temp to accelerate
+                    self._state = -15.0  # Very low virtual outdoor temp to accelerate
                     self._attributes["Mode"] = "preboost"
                     self._attributes["Pre-boost Active"] = True
                     _LOGGER.info("PumpSteer: Preboost (accelerate) activated to build heat buffer.")
                 else:
                     # 4. Normal operation (heating/neutral)
-                    # Denna logik MÅSTE använda actual_target_temp_for_logic
-                    diff = indoor_temp - actual_target_temp_for_logic # <--- ANVÄND actual_target_temp_for_logic
+                    # This logic MUST use actual_target_temp_for_logic
+                    diff = indoor_temp - actual_target_temp_for_logic
                     
                     scaling_factor = aggressiveness * 0.5 
                     fake_temp = real_outdoor_temp + (diff * scaling_factor)
@@ -302,11 +307,11 @@ class PumpSteerSensor(Entity):
         # --- INERTIA CALCULATION ---
         current_time = datetime.now()
         
-        # Tröghetsberäkningen pausas om Pre-boost eller Braking är aktivt.
-        # Vi använder attributet "Pre-boost Active" som ett generellt flagga för detta.
+        # Inertia calculation is paused if Pre-boost or Braking is active.
+        # We use the attribute "Pre-boost Active" as a general flag for this.
         if self._last_update_time and (current_time - self._last_update_time) >= INERTIA_UPDATE_INTERVAL:
             if not self._attributes.get("Pre-boost Active") and not self._attributes.get("Mode") == "braking_mode" and not self._attributes.get("Mode") == "summer_mode" and not self._attributes.get("Mode") == "Holiday":
-                 # Endast utför tröghetsberäkning i "Normal" eller "heating/neutral" läge
+                # Only perform inertia calculation in "Normal" or "heating/neutral" mode
                 if self._previous_indoor_temp is not None and self._last_outdoor_temp is not None:
                     delta_indoor = indoor_temp - self._previous_indoor_temp
                     delta_outdoor = real_outdoor_temp - self._last_outdoor_temp
@@ -342,111 +347,16 @@ class PumpSteerSensor(Entity):
 
         current_inertia = user_defined_inertia if user_defined_inertia is not None else self._inertia_value
 
-        # Uppdatera attributen
+        # Update attributes
         self._attributes.update({
             "Outdoor (actual)": real_outdoor_temp,
-            "Indoor (target)": actual_target_temp_for_logic, # <--- Visar den faktiska måltempen som används
+            "Indoor (target)": actual_target_temp_for_logic,  # Shows the actual target temp used
             "Indoor (actual)": indoor_temp,
             "Inertia": round(current_inertia, 2),
             "Aggressiveness": aggressiveness,
             "Summer Threshold": summer_threshold_temp,
             "Electricity Prices (forecast)": electricity_prices,
             "Pre-boost Active": self._attributes.get("Pre-boost Active", False),
-            # "Mode" sätts redan i if/elif-satserna ovan
+            # "Mode" is already set in the if/elif statements above
         })
         _LOGGER.debug(f"PumpSteer: Final state: {self._state}°C, Mode: {self._attributes['Mode']}")
-
-
-class PumpSteerFutureStrategySensor(Entity):
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
-        self.hass = hass
-        self._config_entry = config_entry
-        self._state = 0
-        self._attributes = {}
-        self._name = "PumpSteer Future Strategy"
-        self._attr_unique_id = f"{config_entry.entry_id}_future_strategy"
-
-    @property
-    def name(self): return self._name
-    @property
-    def unique_id(self): return self._attr_unique_id
-
-    @property
-    def state(self):
-        return self._state if self._state is not None else 0
-
-    @property
-    def extra_state_attributes(self):
-        return {
-            **self._attributes,
-            "friendly_name": "PumpSteer – Forecast Strategy"
-        }
-
-    @property
-    def icon(self): return "mdi:timeline-clock"
-
-    async def async_update(self):
-        config = {**self._config_entry.data, **self._config_entry.options}
-        temps_csv = get_state(self.hass, config.get("hourly_forecast_temperatures_entity"))
-        prices = get_attr(self.hass, config.get("electricity_price_entity"), "today") 
-        aggressiveness = safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or 0.0
-        inertia = safe_float(get_state(self.hass, "input_number.house_inertia")) or 1.0
-        
-        lookahead_hours = 6
-
-        if not temps_csv or not prices or len(prices) < lookahead_hours:
-            self._attributes = {"strategy_status": "forecast data missing or incomplete"}
-            self._state = None
-            return
-
-        try:
-            temps = [float(t.strip()) for t in temps_csv.split(",") if t.strip()]
-            if len(temps) < lookahead_hours:
-                self._attributes = {"strategy_status": "incomplete temperature forecast data"}
-                self._state = None
-                return
-        except Exception:
-            self._attributes = {"strategy_status": "invalid temperature format"}
-            self._state = None
-            return
-
-        # --- FUTURE STRATEGY CALCULATION ---
-        
-        # 1. Pre-boost logic (cold + expensive)
-        cold_threshold = 2.0 # Denna kan vara fast eller dynamisk baserat på actual_target_temp_for_logic om du vill
-        adjusted_price_threshold_ratio = max(0.5, min(0.9, 0.9 - aggressiveness * 0.04))
-        max_price = max(prices[:lookahead_hours]) if prices else 0.0
-        preboost_price_threshold = max_price * adjusted_price_threshold_ratio
-        
-        lead_time = min(3.0, max(0.5, inertia * 0.75))
-        next_preboost_hour = None
-        cold_expensive_matches = 0
-
-        for i in range(1, lookahead_hours):
-            if temps[i] < cold_threshold and prices[i] >= preboost_price_threshold:
-                cold_expensive_matches += 1
-                if i <= round(lead_time) and not next_preboost_hour:
-                    future_hour = datetime.now() + timedelta(hours=i)
-                    next_preboost_hour = future_hour.strftime("%H:00")
-        
-        # 2. Braking logic (just expensive)
-        braking_threshold_ratio = 1.0 - (aggressiveness / 5.0) * 0.4
-        braking_price_threshold = max_price * braking_threshold_ratio
-        
-        expensive_hours_count = 0
-        
-        for i in range(lookahead_hours):
-            if prices[i] >= braking_price_threshold:
-                expensive_hours_count += 1
-
-        # Update sensor state and attributes
-        self._state = cold_expensive_matches
-        self._attributes = {
-            "strategy_status": "ok",
-            "preboost_expected_in_hours": round(lead_time),
-            "first_preboost_hour": next_preboost_hour,
-            "cold_and_expensive_hours_next_6h": cold_expensive_matches,
-            "expensive_hours_next_6h": expensive_hours_count,
-            "braking_price_threshold_percent": round(braking_threshold_ratio * 100),
-            "preboost_active": False 
-        }
