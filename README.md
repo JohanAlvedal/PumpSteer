@@ -17,7 +17,7 @@ PumpSteer is a custom Home Assistant integration for dynamically optimizing your
   - 🚀 **Pre-boost mode:** build up a heat buffer before cold and expensive price peaks
   - 🧊 **Braking mode:** avoid heating during the most expensive hours
   - 🏖️ **Summer mode:** disables fake temperature when the outdoor temp is above the threshold
-  - 🏝️ **Holiday Mode:** When Holiday Mode is on and the current time is within the selected dates, it will lower temp to 16 degrees until you’re back.
+  - 🏝️ **Holiday Mode:** When Holiday Mode is on and the current time is within the selected dates, it will lower indoor temp to 16 degrees until you’re back.
   - 📦 **Easy setup** with a provided `packages` file for helper entities
   - 📊 Fully local (no cloud dependencies)
   - 🧠 Self-adjusting house inertia calculation
