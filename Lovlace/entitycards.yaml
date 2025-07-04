@@ -25,9 +25,9 @@ entities:
   - entity: sensor.pumpsteer_indoor_target_diff
 state_color: true
 
-  ###############################################
+###############################################
 
-  type: entities
+type: entities
 title: PumpSteer Controls
 show_header_toggle: false
 entities:
