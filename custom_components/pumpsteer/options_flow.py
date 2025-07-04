@@ -22,7 +22,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         current_target_temp = self.config_entry.data.get("target_temp_entity")
         current_summer_threshold = self.config_entry.data.get("summer_threshold_entity")
 
-        # Hämta nuvarande värden för semesterläge (nya fält)
+        # Get current Holiday Mode values (new fields)
         current_holiday_mode_boolean = self.config_entry.data.get("holiday_mode_boolean_entity")
         current_holiday_start_datetime = self.config_entry.data.get("holiday_start_datetime_entity")
         current_holiday_end_datetime = self.config_entry.data.get("holiday_end_datetime_entity")
@@ -38,15 +38,15 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required("target_temp_entity", default=current_target_temp): selector({"entity": {"domain": "input_number"}}),
                 vol.Required("summer_threshold_entity", default=current_summer_threshold): selector({"entity": {"domain": "input_number"}}),
                 vol.Optional(
-                    "holiday_mode_boolean_entity", # Ändrat från _id till _entity
+                    "holiday_mode_boolean_entity", 
                     default=current_holiday_mode_boolean
                 ): selector({"entity": {"domain": "input_boolean"}}),
                 vol.Optional(
-                    "holiday_start_datetime_entity", # Ändrat från _id till _entity
+                    "holiday_start_datetime_entity", 
                     default=current_holiday_start_datetime
                 ): selector({"entity": {"domain": "input_datetime"}}),
                 vol.Optional(
-                    "holiday_end_datetime_entity", # Ändrat från _id till _entity
+                    "holiday_end_datetime_entity", 
                     default=current_holiday_end_datetime
                 ): selector({"entity": {"domain": "input_datetime"}}),
             })

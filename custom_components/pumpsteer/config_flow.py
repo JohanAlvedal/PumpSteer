@@ -23,7 +23,7 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("hourly_forecast_temperatures_entity"): selector({"entity": {"domain": "input_text"}}),
                 vol.Required("target_temp_entity"): selector({"entity": {"domain": "input_number"}}),
                 vol.Required("summer_threshold_entity"): selector({"entity": {"domain": "input_number"}}),
-                vol.Optional("aggressiveness_entity"): selector({"entity": {"domain": "input_number"}}),
-                vol.Optional("house_inertia_entity"): selector({"entity": {"domain": "input_number"}}),
+                # vol.Optional("aggressiveness_entity"): selector({"entity": {"domain": "input_number"}}),
+                # vol.Optional("house_inertia_entity"): selector({"entity": {"domain": "input_number"}}),
             })
         )
