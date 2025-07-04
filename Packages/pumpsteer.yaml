@@ -16,14 +16,6 @@ input_number:
     unit_of_measurement: "°C"
     mode: box
 
-  preboost_max_outdoor_temp:
-    name: Preboost max outdoor temp
-    min: -5
-    max: 20
-    step: 0.5
-    unit_of_measurement: "°C"
-    mode: box
-
   indoor_target_temperature:
     name: Indoor Target Temperature
     min: 0
@@ -38,7 +30,7 @@ input_number:
     min: 0.1
     max: 10.0
     step: 0.1
-#    unit_of_measurement: "x" 
+    # unit_of_measurement: "x"  # eller ta bort om du föredrar helt utan
     icon: mdi:home-thermometer
     mode: box
 
@@ -48,17 +40,17 @@ input_text:
     max: 255
 
 input_boolean:
-  pumpsteer_vacation_mode:
+  holiday_mode:
     name: Semestermode aktivt
     icon: mdi:beach
 
 input_datetime:
-  pumpsteer_vacation_start:
+  holiday_start:
     name: Semester börjar
     has_date: true
     has_time: true
 
-  pumpsteer_vacation_end:
+  holiday_end:
     name: Semester slutar
     has_date: true
     has_time: true
@@ -68,44 +60,59 @@ template:
       # Temperatur & inomhuslogik
       - name: "Real Outdoor Temperature"
         state: >
-          {{ state_attr('sensor.pumpsteer', 'Ute (verklig)') }}
+          {{ state_attr('sensor.pumpsteer', 'Outdoor (actual)') }}
         unit_of_measurement: "°C"
         device_class: temperature
 
       - name: "VirtualOutdoorTemp Tempdiff"
         state: >
-          {% set fake = states('sensor.pumpsteer') | float %}
-          {% set real = state_attr('sensor.pumpsteer', 'Ute (verklig)') | float %}
+          {% set fake = states('sensor.pumpsteer') | float(0) %}
+          {% set real = state_attr('sensor.pumpsteer', 'Outdoor (actual)') | float(0) %}
           {{ (fake - real) | round(1) }}
         unit_of_measurement: "°C"
         icon: mdi:thermometer-minus
 
       - name: "PumpSteer Indoor Target Diff"
         state: >
-          {% set actual = state_attr('sensor.pumpsteer', 'Inne (verklig)') | float %}
-          {% set target = state_attr('sensor.pumpsteer', 'Inne (mål)') | float %}
+          {% set actual = state_attr('sensor.pumpsteer', 'Indoor (actual)') | float(0) %}
+          {% set target = state_attr('sensor.pumpsteer', 'Indoor (target)') | float(0) %}
           {{ (actual - target) | round(1) }}
         unit_of_measurement: "°C"
         icon: mdi:home-thermometer-outline
 
       - name: "PumpSteer Operating Mode"
         state: >
-          {{ state_attr('sensor.pumpsteer', 'Läge') | title }}
+          {{ state_attr('sensor.pumpsteer', 'Mode') | title }}
         icon: >
-          {% set mode = state_attr('sensor.pumpsteer', 'Läge') %}
+          {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
           {% if mode == 'preboost' %}
             mdi:flash
-          {% elif mode == 'balance' %}
-            mdi:swap-vertical
+          {% elif mode == 'heating' %}
+            mdi:fire
           {% elif mode == 'neutral' %}
             mdi:pause-circle
           {% elif mode == 'summer_mode' %}
             mdi:weather-sunny
+          {% elif mode == 'braking_mode' or mode == 'braking_by_temp' %}
+            mdi:car-brake-alert
           {% else %}
             mdi:help-circle
           {% endif %}
 
-      # Forecast / strategi-attribut från PumpSteer
+      # Dessa sensorer läser attribut från 'sensor.pumpsteer' (huvudsensorn)
+      - name: "PumpSteer Inertia"
+        # Läser 'Inertia' från huvudsensorn
+        state: "{{ state_attr('sensor.pumpsteer', 'Inertia') | default(0) }}"
+        icon: mdi:speedometer
+        state_class: measurement
+
+      - name: "PumpSteer Aggressiveness"
+        # Läser 'Aggressiveness' från huvudsensorn
+        state: "{{ state_attr('sensor.pumpsteer', 'Aggressiveness') | default(0) }}"
+        icon: mdi:target
+        state_class: measurement
+
+      # Dessa sensorer läser attribut från 'sensor.pumpsteer_future_strategy'
       - name: "PumpSteer Preboost Expected"
         unit_of_measurement: "hours"
         state: "{{ state_attr('sensor.pumpsteer_future_strategy', 'preboost_expected_in_hours') }}"
@@ -128,28 +135,6 @@ template:
         unit_of_measurement: "%"
         state: "{{ state_attr('sensor.pumpsteer_future_strategy', 'braking_price_threshold_percent') }}"
         icon: mdi:line-scan
-        state_class: measurement
-
-      - name: "PumpSteer Preboost Price Threshold"
-        unit_of_measurement: "%"
-        state: "{{ state_attr('sensor.pumpsteer_future_strategy', 'preboost_price_threshold_percent') }}"
-        icon: mdi:line-scan
-        state_class: measurement
-
-      - name: "PumpSteer Inertia"
-        state: "{{ state_attr('sensor.pumpsteer_future_strategy', 'inertia') }}"
-        icon: mdi:speedometer
-        state_class: measurement
-
-      - name: "PumpSteer Lead Time"
-        unit_of_measurement: "hours"
-        state: "{{ state_attr('sensor.pumpsteer_future_strategy', 'lead_time_hours') }}"
-        icon: mdi:timer-sand
-        state_class: measurement
-
-      - name: "PumpSteer Aggressiveness"
-        state: "{{ state_attr('sensor.pumpsteer_future_strategy', 'aggressiveness') }}"
-        icon: mdi:target
         state_class: measurement
 
       - name: "PumpSteer Strategy Status"
