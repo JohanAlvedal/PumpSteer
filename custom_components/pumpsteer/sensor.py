@@ -14,7 +14,7 @@ from homeassistant.helpers.event import async_call_later
 
 # Custom imports for PumpSteer
 from .pre_boost import check_combined_preboost
-from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE # <--- NY IMPORT
+from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
 
 _LOGGER = logging.getLogger(__name__)
 
