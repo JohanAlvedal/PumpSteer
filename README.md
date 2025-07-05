@@ -9,28 +9,25 @@ PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera
 Jag är inte expert på programmering, energihantering eller automation. Denna setup är baserad på mina personliga erfarenheter och experiment. Jag kan inte garantera att den fungerar för alla, och jag tar inget ansvar för problem eller skador som kan uppstå vid användning av denna konfiguration eller kod.
 Använd den på egen risk och testa noggrant i din egen miljö.
 
----
-
 ## ✅ Funktioner
 
-  - 🔧 **Smart virtuell styrning av utomhustemperatur**
-  - ⚡ Anpassar uppvärmningsstrategin baserat på:
-      - Inomhustemperatur
-      - Måltemperatur
-      - Prognos för elpris
-      - Temperaturprognos
-  - 🌡️ Fejkat utomhustemperatur beräknas för att lura värmepumpen att spara eller buffra energi
-  - 🚀 **Pre-boost-läge:** bygg upp en värmebuffert före kalla och dyra pristoppar
-  - 🧊 **Bromsläge:** undvik uppvärmning under de dyraste timmarna
-  - 🏖️ **Sommarläge:** inaktiverar fejkad temperatur när utomhustemperaturen är över tröskelvärdet
-  - 🏝️ **Semesterläge:** När semesterläget är aktiverat och aktuell tid ligger inom de valda datumen, sänks inomhustemperaturen till 16 grader tills du är tillbaka.
-  - 📦 **Enkel installation** med medföljande `packages`-fil för hjälpentiteter
-  - 📊 Helt lokalt (inga molnberoenden)
-  - 🧠 Självjusterande beräkning av husets tröghet
-  - 🔄 Stöder komfortprofiler via en aggressivitetsinställning
-  - 📈 ApexCharts-exempel ingår för visualisering
+- 🔧 **Smart virtuell styrning av utomhustemperatur**
+- ⚡ Anpassar uppvärmningsstrategin baserat på:  
+  - Inomhustemperatur  
+  - Måltemperatur  
+  - Prognos för elpris  
+  - Temperaturprognos
+- 🌡️ Fejkat utomhustemperatur beräknas för att lura värmepumpen att spara eller buffra energi
+- 🚀 **Pre-boost-läge:** bygg upp en värmebuffert före kalla och dyra pristoppar
+- 🧊 **Bromsläge:** undvik uppvärmning under de dyraste timmarna
+- 🏖️ **Sommarläge:** inaktiverar fejkad temperatur när utomhustemperaturen är över tröskelvärdet
+- 🏝️ **Semesterläge:** När semesterläget är aktiverat och aktuell tid ligger inom de valda datumen, sänks inomhustemperaturen till 16 grader tills du är tillbaka.
+- 📦 **Enkel installation** med medföljande `packages`-fil för hjälpentiteter
+- 📊 Helt lokalt (inga molnberoenden)
+- 🧠 Självjusterande beräkning av husets tröghet
+- 🔄 Stöder komfortprofiler via en aggressivitetsinställning
+- 📈 ApexCharts-exempel ingår för visualisering
 
------
 
 > **Obs\!**
 > Semesterläge är endast aktivt när sommarläge *inte* är aktivt.
