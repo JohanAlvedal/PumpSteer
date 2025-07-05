@@ -4,7 +4,7 @@ PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera
 
 -----
 
-**[Read in English here..](#pumpsteer-engelska-versionen)**
+**[Read in English here..](#pumpsteer-english-version)**
 
 -----
 
