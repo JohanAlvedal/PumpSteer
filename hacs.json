@@ -6,7 +6,7 @@
     "sensor"
   ],
   "country": "SE",
-  "homeassistant": "2026.06.1",
+  "homeassistant": "2025.01.1",
   "iot_class": "local_polling",
   "filename": "pumpsteer",
   "zip_release": false
