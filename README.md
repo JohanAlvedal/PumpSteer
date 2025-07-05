@@ -11,7 +11,6 @@ Använd den på egen risk och testa noggrant i din egen miljö.
 
 ---
 
-
 ## ✅ Funktioner
 
   - 🔧 **Smart virtuell styrning av utomhustemperatur**
