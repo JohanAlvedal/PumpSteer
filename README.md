@@ -4,6 +4,10 @@ PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera
 
 -----
 
+**[Read in English here..](#pumpsteer-engelska-versionen)**
+
+-----
+
 # Ansvarsfriskrivning
 
 Jag är inte expert på programmering, energihantering eller automation. Denna setup är baserad på mina personliga erfarenheter och experiment. Jag kan inte garantera att den fungerar för alla, och jag tar inget ansvar för problem eller skador som kan uppstå vid användning av denna konfiguration eller kod.
@@ -14,22 +18,22 @@ Använd den på egen risk och testa noggrant i din egen miljö.
 
 ## ✅ Funktioner
 
-  - 🔧 **Smart virtuell styrning av utomhustemperatur**
-  - ⚡ Anpassar uppvärmningsstrategin baserat på:
-      - Inomhustemperatur
-      - Måltemperatur
-      - Prognos för elpris
-      - Temperaturprognos
-  - 🌡️ Fejkat utomhustemperatur beräknas för att lura värmepumpen att spara eller buffra energi
-  - 🚀 **Pre-boost-läge:** bygg upp en värmebuffert före kalla och dyra pristoppar
-  - 🧊 **Bromsläge:** undvik uppvärmning under de dyraste timmarna
-  - 🏖️ **Sommarläge:** inaktiverar fejkad temperatur när utomhustemperaturen är över tröskelvärdet
-  - 🏝️ **Semesterläge:** När semesterläget är aktiverat och aktuell tid ligger inom de valda datumen, sänks inomhustemperaturen till 16 grader tills du är tillbaka.
-  - 📦 **Enkel installation** med medföljande `packages`-fil för hjälpentiteter
-  - 📊 Helt lokalt (inga molnberoenden)
-  - 🧠 Självjusterande beräkning av husets tröghet
-  - 🔄 Stöder komfortprofiler via en aggressivitetsinställning
-  - 📈 ApexCharts-exempel ingår för visualisering
+  - 🔧 **Smart virtuell styrning av utomhustemperatur**
+  - ⚡ Anpassar uppvärmningsstrategin baserat på:
+      - Inomhustemperatur
+      - Måltemperatur
+      - Prognos för elpris
+      - Temperaturprognos
+  - 🌡️ Fejkat utomhustemperatur beräknas för att lura värmepumpen att spara eller buffra energi
+  - 🚀 **Pre-boost-läge:** bygg upp en värmebuffert före kalla och dyra pristoppar
+  - 🧊 **Bromsläge:** undvik uppvärmning under de dyraste timmarna
+  - 🏖️ **Sommarläge:** inaktiverar fejkad temperatur när utomhustemperaturen är över tröskelvärdet
+  - 🏝️ **Semesterläge:** När semesterläget är aktiverat och aktuell tid ligger inom de valda datumen, sänks inomhustemperaturen till 16 grader tills du är tillbaka.
+  - 📦 **Enkel installation** med medföljande `packages`-fil för hjälpentiteter
+  - 📊 Helt lokalt (inga molnberoenden)
+  - 🧠 Självjusterande beräkning av husets tröghet
+  - 🔄 Stöder komfortprofiler via en aggressivitetsinställning
+  - 📈 ApexCharts-exempel ingår för visualisering
 
 -----
 
@@ -49,8 +53,10 @@ Klicka på menyn med tre punkter (⋮) i det övre högra hörnet och välj "Cus
 I fältet "Repository" (Arkiv), ange:
 
 ```
-https://github.com/JohanAlvedal/PumpSteer
-```
+
+[https://github.com/JohanAlvedal/PumpSteer](https://github.com/JohanAlvedal/PumpSteer)
+
+````
 
 Ställ in kategorin till "Integration".
 Klicka på "Add" (Lägg till).
@@ -68,33 +74,33 @@ Följ dessa tre steg för att få PumpSteer igång.
 
 ### Steg 1: Skapa hjälpentiteter (via Packages)
 
-För att göra installationen så enkel som möjligt, innehåller detta projekt en paketfil som skapar alla nödvändiga `input_number`- och `input_text`-hjälpare åt dig.
+För att göra setup så enkel som möjligt, innehåller detta projekt en paketfil som skapar alla nödvändiga `input_number`- och `input_text`-hjälpare åt dig.
 
-1.  **Ladda ner filen `pumpsteer_package.yaml`** från arkivet.
+1.  **Ladda ner filen `pumpsteer_package.yaml`** från arkivet.
 
-2.  Placera filen i din `/config/packages/` katalog. Om `packages`-katalogen inte finns i roten av din `/config`-mapp, måste du skapa den.
+2.  Placera filen i din `/config/packages/` katalog. Om `packages`-katalogen inte finns i roten av din `/config`-mapp, måste du skapa den.
 
-3.  **Aktivera packages** i din huvudsakliga `configuration.yaml`-fil. Om du inte redan har gjort det, lägg till följande rader. Om du redan har en `homeassistant:`-sektion, lägg bara till `packages:`-raden till den.
+3.  **Aktivera packages** i din huvudsakliga `configuration.yaml`-fil. Om du inte redan har gjort det, lägg till följande rader. Om du redan har en `homeassistant:`-sektion, lägg bara till `packages:`-raden till den.
 
-    ```yaml
-    homeassistant:
-      packages: !include_dir_named packages
-    ```
+    ```yaml
+    homeassistant:
+      packages: !include_dir_named packages
+    ```
 
-4.  **Starta om Home Assistant.** Efter omstart kommer alla nödvändiga hjälpare (listade i avsnittet "Referens för hjälpentiteter" nedan) att vara tillgängliga.
+4.  **Starta om Home Assistant.** Efter omstart kommer alla nödvändiga hjälpare (listade i avsnittet "Referens för hjälpentiteter" nedan) att vara tillgängliga.
 
 ### Steg 2: Installera den anpassade komponenten
 
 Detta är standardproceduren för att installera en anpassad komponent.
 
-1.  Placera katalogen `pumpsteer` (som innehåller `sensor.py`, `pre_boost.py`, etc.) i din Home Assistant-mapp `custom_components`.
-2.  Starta om Home Assistant igen.
+1.  Placera katalogen `pumpsteer` (som innehåller `sensor.py`, `pre_boost.py`, etc.) i din Home Assistant-mapp `custom_components`.
+2.  Starta om Home Assistant igen.
 
 ### Steg 3: Lägg till integrationen
 
-1.  Navigera till **Inställningar \> Enheter och Tjänster \> Lägg till Integration**.
-2.  Sök efter och välj **PumpSteer**.
-3.  I konfigurationsdialogen, välj de hjälpentiteter som skapades av paketfilen.
+1.  Navigera till **Inställningar \> Enheter och Tjänster \> Lägg till Integration**.
+2.  Sök efter och välj **PumpSteer**.
+3.  I konfigurationsdialogen, välj de hjälpentiteter som skapades av paketfilen.
 
 -----
 
@@ -121,7 +127,7 @@ Genom att använda den medföljande filen `pumpsteer_package.yaml` kommer följa
 
 ```text
 -3.5,-4.2,-5.0,-4.8,... (totalt 24 värden)
-```
+````
 
 Om strängen är ogiltig eller ofullständig, kommer sensorn att logga en varning och tillfälligt avbryta beräkningarna tills giltig data är tillgänglig.
 
@@ -190,21 +196,21 @@ Aggressivitet (0,0 till 5,0) styr avvägningen mellan energibesparingar och inom
 ```yaml
 type: custom:apexcharts-card
 header:
-  title: PumpSteer Temperaturkontroll
+  title: PumpSteer Temperaturkontroll
 graph_span: 24h
 span:
-  start: day
+  start: day
 series:
-  - entity: sensor.pumpsteer
-    name: Fejkad utomhustemp
-  - entity: sensor.ute_verklig_temp
-    name: Verklig utomhustemp
-  - entity: sensor.inne_verklig_temp
-    name: Inomhustemp
-  - entity: input_number.varmepump_target_temp
-    name: Måltemp
-    stroke_width: 2
-    curve: stepline
+  - entity: sensor.pumpsteer
+    name: Fejkad utomhustemp
+  - entity: sensor.ute_verklig_temp
+    name: Real Outdoor Temp
+  - entity: sensor.inne_verklig_temp
+    name: Inomhustemp
+  - entity: input_number.varmepump_target_temp
+    name: Måltemp
+    stroke_width: 2
+    curve: stepline
 ```
 
 ### Visualisera framtida strategi
@@ -212,16 +218,16 @@ series:
 ```yaml
 type: custom:apexcharts-card
 header:
-  title: PumpSteer - Framtida hot
+  title: PumpSteer - Framtida hot
 chart_type: bar
 graph_span: 24h
 series:
-  - entity: sensor.pumpsteer_future_strategy
-    name: Kalla & dyra timmar
-    attribute: cold_and_expensive_hours_next_6h
-  - entity: sensor.pumpsteer_future_strategy
-    name: Dyra timmar
-    attribute: expensive_hours_next_6h
+  - entity: sensor.pumpsteer_future_strategy
+    name: Kalla & dyra timmar
+    attribute: cold_and_expensive_hours_next_6h
+  - entity: sensor.pumpsteer_future_strategy
+    name: Expensive Hours
+    attribute: expensive_hours_next_6h
 ```
 
 -----
@@ -230,24 +236,24 @@ series:
 
 PumpSteer beräknar en "fejkad" utomhustemperatur för att knuffa din värmepump till att antingen:
 
-  - **Pre-boosta:** Värma mer när priser och temperaturer är låga, före en kommande kall och dyr pristopp.
-  - **Bromsa:** Undvika uppvärmning när priserna är som högst.
-  - **Normalt:** Justera försiktigt uppvärmningen för att bibehålla komfort med minimal kostnad.
-  - **Sommarläge:** Stå ner när det är varmt ute.
+  - **Pre-boosta:** Värma mer när priser och temperaturer är låga, före en kommande kall och dyr pristopp.
+  - **Bromsa:** Undvika uppvärmning när priserna är som högst.
+  - **Normalt:** Justera försiktigt uppvärmningen för att bibehålla komfort med minimal kostnad.
+  - **Sommarläge:** Stå ner när det är varmt ute.
 
 -----
 
 ## 💬 Loggning och Felsökning
 
-  - Varningar och fel loggas i standardloggen för Home Assistant.
-  - Om nödvändig sensordata inte är tillgänglig, kommer PumpSteer att visa `unavailable` och försöka igen automatiskt.
-  - Husets tröghetsvärde beräknas och uppdateras automatiskt om du inte anger en manuell åsidosättning via ett `input_number`.
+  - Varningar och fel loggas i standardloggen för Home Assistant.
+  - Om nödvändig sensordata inte är tillgänglig, kommer PumpSteer att visa `unavailable` och försöka igen automatiskt.
+  - Husets tröghetsvärde beräknas och uppdateras automatiskt om du inte anger en manuell åsidosättning via ett `input_number`.
 
 -----
 
 ## En notering från utvecklaren
 
-Denna integration har byggts av en amatörutvecklare med kraftfull assistans av Googles Gemini och Copilot. Det är resultatet av en passion för smarta hem, mycket trial and error, och många, många omstarter av Home Assistant.
+Denna integration har byggts av en amatörutvecklare med kraftfull assistans av Googles Gemini och Copilot. Det är resultatet av en passion för smarta hem, mycket trial and error, och många, många Home Assistant restarts.
 
 Vänligen betrakta detta som en **betaprodukt** i ordets sannaste bemärkelse.
 
@@ -257,7 +263,7 @@ Om du är kunnig inom detta område välkomnas konstruktiv feedback, förslag oc
 
 ## 🔗 Länkar
 
-  - [Ärendehanterare](https://github.com/JohanAlvedal/pumpsteer/issues)
+  - [Ärendehanterare](https://github.com/JohanAlvedal/pumpsteer/issues)
 
 -----
 
@@ -265,43 +271,55 @@ Om du är kunnig inom detta område välkomnas konstruktiv feedback, förslag oc
 
 © Johan Älvedal
 
-# PumpSteer
+-----
+
+-----
+
+-----
+
+**Här börjar den engelska versionen av din text.**
+
+# PumpSteer - English Version
 
 PumpSteer is a custom Home Assistant integration for dynamically optimizing your heat pump by manipulating the outdoor temperature sensor input. It allows you to save energy and money by adapting your heating strategy based on electricity prices, indoor temperature, and weather forecasts.
 
----
+-----
 
 # Disclaimer
-I am not an expert in programming, energy management, or automation. This setup is based on my personal experience and experimentation. I cannot guarantee that it will work for everyone, and I do not take any responsibility for issues or damages caused by using this configuration or code.  
-Please use it at your own risk and test thoroughly in your environment.  
 
----
+I am not an expert in programming, energy management, or automation. This setup is based on my personal experience and experimentation. I cannot guarantee that it will work for everyone, and I do not take any responsibility for issues or damages caused by using this configuration or code.  
+Please use it at your own risk and test thoroughly in your environment.  
+
+-----
 
 ## ✅ Features
 
-  - 🔧 **Smart virtual outdoor temperature control**
-  - ⚡ Adjusts heating strategy based on:
-      - Indoor temperature
-      - Target temperature
-      - Electricity price forecast
-      - Temperature forecast
-  - 🌡️ Fake outdoor temperature is calculated to trick the heat pump into saving or buffering energy
-  - 🚀 **Pre-boost mode:** build up a heat buffer before cold and expensive price peaks
-  - 🧊 **Braking mode:** avoid heating during the most expensive hours
-  - 🏖️ **Summer mode:** disables fake temperature when the outdoor temp is above the threshold
-  - 🏝️ **Holiday Mode:** When Holiday Mode is on and the current time is within the selected dates, it will lower indoor temp to 16 degrees until you’re back.
-  - 📦 **Easy setup** with a provided `packages` file for helper entities
-  - 📊 Fully local (no cloud dependencies)
-  - 🧠 Self-adjusting house inertia calculation
-  - 🔄 Supports comfort profiles via an aggressiveness setting
-  - 📈 ApexCharts examples included for visualization
+  - 🔧 **Smart virtual outdoor temperature control**
+  - ⚡ Adjusts heating strategy based on:
+      - Indoor temperature
+      - Target temperature
+      - Electricity price forecast
+      - Temperature forecast
+  - 🌡️ Fake outdoor temperature is calculated to trick the heat pump into saving or buffering energy
+  - 🚀 **Pre-boost mode:** build up a heat buffer before cold and expensive price peaks
+  - 🧊 **Braking mode:** avoid heating during the most expensive hours
+  - 🏖️ **Summer mode:** disables fake temperature when the outdoor temp is above the threshold
+  - 🏝️ **Holiday Mode:** When Holiday Mode is on and the current time is within the selected dates, it will lower indoor temp to 16 degrees until you’re back.
+  - 📦 **Easy setup** with a provided `packages` file for helper entities
+  - 📊 Fully local (no cloud dependencies)
+  - 🧠 Self-adjusting house inertia calculation
+  - 🔄 Supports comfort profiles via an aggressiveness setting
+  - 📈 ApexCharts examples included for visualization
 
 -----
-> **Note:**  
-> Holiday mode is only active when Summer mode is *not* active.  
-> If the outdoor temperature is above the summer threshold, Summer mode will always take priority over Holiday mode.  
+
+> **Note:**  
+> Holiday mode is only active when Summer mode is *not* active.  
+> If the outdoor temperature is above the summer threshold, Summer mode will always take priority over Holiday mode.  
 > This means that heating will be minimized during warm periods, even if Holiday mode is enabled.
-----
+
+-----
+
 ## Add PumpSteer to HACS as a Custom Repository
 
 If PumpSteer is not yet available in the default HACS store, you can add it manually as a custom repository:
@@ -313,7 +331,7 @@ Code
 https://github.com/JohanAlvedal/PumpSteer
 Set the category to Integration.
 Click Add.
-PumpSteer will now appear under HACS > Integrations. Click Install to add it.
+PumpSteer will now appear under HACS \> Integrations. Click Install to add it.
 Restart Home Assistant after installation.
 Continue with the configuration steps as described above.
 Note:
@@ -329,31 +347,28 @@ Follow these three steps to get PumpSteer up and running.
 
 To make setup as easy as possible, this project includes a package file that creates all the necessary `input_number` and `input_text` helpers for you.
 
-1.  **Download the `pumpsteer_package.yaml` file** from the repository.
+1.  **Download the `pumpsteer_package.yaml` file** from the repository.
 
-2.  Place this file in your `/config/packages/` directory. If the `packages` directory does not exist at the root of your `/config` folder, you will need to create it.
+2.  Place this file in your `/config/packages/` directory. If the `packages` directory does not exist at the root of your `/config` folder, you will need to create it.
 
-3.  **Enable packages** in your main `configuration.yaml` file. If you haven't already, add the following lines. If you already have a `homeassistant:` section, just add the `packages:` line to it.
+3.  **Enable packages** in your main `configuration.yaml` file. If you haven't already, add the following lines. If you already have a `homeassistant:` section, just add the `packages:` line to it.
 
-    ```yaml
-    homeassistant:
-      packages: !include_dir_named packages
-    ```
+    ` yaml     homeassistant:       packages: !include_dir_named packages      `
 
-4.  **Restart Home Assistant.** After restarting, all the required helpers (listed in the "Helper Entities Reference" section below) will be available.
+4.  **Restart Home Assistant.** After restarting, all the required helpers (listed in the "Helper Entities Reference" section below) will be available.
 
 ### Step 2: Install the Custom Component
 
 This is the standard procedure for installing a custom component.
 
-1.  Place the `pumpsteer` directory (which contains `sensor.py`, `pre_boost.py`, etc.) in your Home Assistant `custom_components` folder.
-2.  Restart Home Assistant again.
+1.  Place the `pumpsteer` directory (which contains `sensor.py`, `pre_boost.py`, etc.) in your Home Assistant `custom_components` folder.
+2.  Restart Home Assistant again.
 
 ### Step 3: Add the Integration
 
-1.  Navigate to **Settings \> Devices & Services \> Add Integration**.
-2.  Search for and select **PumpSteer**.
-3.  In the configuration dialog, select the helper entities that were created by the package file.
+1.  Navigate to **Settings \> Devices & Services \> Add Integration**.
+2.  Search for and select **PumpSteer**.
+3.  In the configuration dialog, select the helper entities that were created by the package file.
 
 -----
 
@@ -449,21 +464,21 @@ Aggressiveness (0.0 to 5.0) controls the trade-off between energy savings and in
 ```yaml
 type: custom:apexcharts-card
 header:
-  title: PumpSteer Temperature Control
+  title: PumpSteer Temperature Control
 graph_span: 24h
 span:
-  start: day
+  start: day
 series:
-  - entity: sensor.pumpsteer
-    name: Fake Outdoor Temp
-  - entity: sensor.ute_verklig_temp
-    name: Real Outdoor Temp
-  - entity: sensor.inne_verklig_temp
-    name: Indoor Temp
-  - entity: input_number.varmepump_target_temp
-    name: Target Temp
-    stroke_width: 2
-    curve: stepline
+  - entity: sensor.pumpsteer
+    name: Fake Outdoor Temp
+  - entity: sensor.ute_verklig_temp
+    name: Real Outdoor Temp
+  - entity: sensor.inne_verklig_temp
+    name: Indoor Temp
+  - entity: input_number.varmepump_target_temp
+    name: Target Temp
+    stroke_width: 2
+    curve: stepline
 ```
 
 ### Visualizing Future Strategy
@@ -471,16 +486,16 @@ series:
 ```yaml
 type: custom:apexcharts-card
 header:
-  title: PumpSteer - Future Threats
+  title: PumpSteer - Future Threats
 chart_type: bar
 graph_span: 24h
 series:
-  - entity: sensor.pumpsteer_future_strategy
-    name: Cold & Expensive Hours
-    attribute: cold_and_expensive_hours_next_6h
-  - entity: sensor.pumpsteer_future_strategy
-    name: Expensive Hours
-    attribute: expensive_hours_next_6h
+  - entity: sensor.pumpsteer_future_strategy
+    name: Cold & Expensive Hours
+    attribute: cold_and_expensive_hours_next_6h
+  - entity: sensor.pumpsteer_future_strategy
+    name: Expensive Hours
+    attribute: expensive_hours_next_6h
 ```
 
 -----
@@ -489,23 +504,23 @@ series:
 
 PumpSteer calculates a "fake" outdoor temperature to nudge your heat pump to either:
 
-  - **Pre-boost:** Heat more when prices and temperatures are low, before an upcoming cold and expensive peak.
-  - **Brake:** Avoid heating when prices are at their highest.
-  - **Normal:** Gently adjust heating to maintain comfort with minimal cost.
-  - **Summer Mode:** Stand down when it's warm outside.
+  - **Pre-boost:** Heat more when prices and temperatures are low, before an upcoming cold and expensive peak.
+  - **Brake:** Avoid heating when prices are at their highest.
+  - **Normal:** Gently adjust heating to maintain comfort with minimal cost.
+  - **Summer Mode:** Stand down when it's warm outside.
 
----
+-----
 
-> 💡 **Example setup:**  
+> 💡 **Example setup:**  
 > In my setup, a [Ohmigo Ohm On WiFi](https://www.ohmigo.io/product-page/ohmigo-ohm-on-wifi) device is used to control the boiler. It acts as a simple WiFi-connected relay that is switched via Home Assistant, allowing PumpSteer to influence the heating system indirectly by controlling when the boiler is allowed to run.
 
 -----
 
 ## 💬 Logging and Troubleshooting
 
-  - Warnings and errors are logged to the standard Home Assistant log.
-  - If required sensor data is unavailable, PumpSteer will show `unavailable` and retry automatically.
-  - The house inertia value is calculated and updated automatically unless you provide a manual override via an `input_number`.
+  - Warnings and errors are logged to the standard Home Assistant log.
+  - If required sensor data is unavailable, PumpSteer will show `unavailable` and retry automatically.
+  - The house inertia value is calculated and updated automatically unless you provide a manual override via an `input_number`.
 
 -----
 
@@ -521,10 +536,12 @@ If you are knowledgeable in this area, constructive feedback, suggestions, and c
 
 ## 🔗 Links
 
-  - [Issue Tracker](https://github.com/JohanAlvedal/pumpsteer/issues)
+  - [Issue Tracker](https://github.com/JohanAlvedal/pumpsteer/issues)
 
 -----
 
 ## 📄 License
 
 © Johan Älvedal
+
+```
