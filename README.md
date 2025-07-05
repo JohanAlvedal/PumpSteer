@@ -269,8 +269,6 @@ Om du är kunnig inom detta område välkomnas konstruktiv feedback, förslag oc
 
 -----
 
-**Här börjar den engelska versionen av din text.**
-
 # PumpSteer - English Version
 
 PumpSteer is a custom Home Assistant integration for dynamically optimizing your heat pump by manipulating the outdoor temperature sensor input. It allows you to save energy and money by adapting your heating strategy based on electricity prices, indoor temperature, and weather forecasts.
