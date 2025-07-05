@@ -8,7 +8,7 @@
   "config_flow": true,
   "requirements": [],
   "dependencies": [],
-  "codeowners": ["@yjohanalvedal"],
+  "codeowners": ["@johanalvedal"],
   "iot_class": "local_polling",
   "homeassistant": "2025.1.0"
 }
