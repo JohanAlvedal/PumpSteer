@@ -10,5 +10,5 @@
   "dependencies": [],
   "codeowners": ["@yjohanalvedal"],
   "iot_class": "local_polling",
-  "homeassistant": "2025.5.1"
+  "homeassistant": "2025.1.0"
 }
