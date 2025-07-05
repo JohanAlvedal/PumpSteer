@@ -1,3 +1,18 @@
+#####################################################
+## Start with these after the first reboot ##############
+
+type: entities
+entities:
+  - entity: input_number.pumpsteer_aggressiveness
+  - entity: input_number.pumpsteer_summer_threshold
+  - entity: input_number.indoor_target_temperature
+  - entity: input_number.house_inertia
+  - entity: input_text.hourly_forecast_temperatures_2
+  - entity: input_boolean.holiday_mode
+  - entity: input_datetime.holiday_start
+  - entity: input_datetime.holiday_end
+  
+#####################################################
 type: entities
 entities:
   - entity: input_number.indoor_target_temperature
