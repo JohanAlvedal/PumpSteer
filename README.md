@@ -3,6 +3,12 @@
 PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera din värmepump genom att manipulera insignalen från utomhustemperatursensorn. Den låter dig spara energi och pengar genom att anpassa din uppvärmningsstrategi baserat på elpriser, inomhustemperatur och väderprognoser.
 
 -----
+## **Ansvarsfriskrivning**
+
+Jag är inte expert på programmering, energihantering eller automation. Denna setup är baserad på mina personliga erfarenheter och experiment. Jag kan inte garantera att den fungerar för alla, och jag tar inget ansvar för problem eller skador som kan uppstå vid användning av denna konfiguration eller kod.
+Använd den på egen risk och testa noggrant i din egen miljö.
+---
+
 
 ## ✅ Funktioner
 
@@ -261,7 +267,13 @@ Om du är kunnig inom detta område välkomnas konstruktiv feedback, förslag oc
 
 PumpSteer is a custom Home Assistant integration for dynamically optimizing your heat pump by manipulating the outdoor temperature sensor input. It allows you to save energy and money by adapting your heating strategy based on electricity prices, indoor temperature, and weather forecasts.
 
------
+---
+
+## **Disclaimer**  
+I am not an expert in programming, energy management, or automation. This setup is based on my personal experience and experimentation. I cannot guarantee that it will work for everyone, and I do not take any responsibility for issues or damages caused by using this configuration or code.  
+Please use it at your own risk and test thoroughly in your environment.  
+
+---
 
 ## ✅ Features
 
