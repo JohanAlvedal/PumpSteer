@@ -3,11 +3,14 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import as_datetime
 from homeassistant.const import STATE_ON # Import STATE_ON
+from .settings import (
+    HOLIDAY_TEMP
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 # Constants
-HOLIDAY_TARGET_TEMPERATURE = 16.0 # Celsius - This is the target temperature when Holiday Mode is active.
+HOLIDAY_TARGET_TEMPERATURE = HOLIDAY_TEMP # Celsius - This is the target temperature when Holiday Mode is active.
 
 def is_holiday_mode_active(
     hass: HomeAssistant,
