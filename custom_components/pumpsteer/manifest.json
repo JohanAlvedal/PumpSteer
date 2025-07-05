@@ -1,14 +1,14 @@
 {
   "domain": "pumpsteer",
   "name": "PumpSteer",
-  "version": "0.1.3b",
+  "version": "0.1.3c",
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "issue_tracker": "https://github.com/JohanAlvedal/pumpsteer/issues",
   "logo": "custom_components/pumpsteer/icon.png",
   "config_flow": true,
   "requirements": [],
   "dependencies": [],
-  "codeowners": ["@yjohanalvedal"],
+  "codeowners": ["@johanalvedal"],
   "iot_class": "local_polling",
   "homeassistant": "2025.5.1"
 }
