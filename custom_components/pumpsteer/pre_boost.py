@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta
-from .settings import (
-    HIGH_PRICE_THRESHOLD,
-    DEFAULT_HOUSE_INERTIA,
-)
+import logging
+from .settings import HIGH_PRICE_THRESHOLD, DEFAULT_HOUSE_INERTIA
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,7 +17,8 @@ def get_preboost_strategy(price_forecast, temp_forecast, current_hour, house_ine
         if price is None or temp is None:
             continue
 
-        if price >= HIGH_PRICE_THRESHOLD and temp < 18:  # <– 18 är fortfarande hårdkodad, kan flyttas till settings
+        # Hårdkodat värde '18' finns kvar — kan flyttas till settings om du vill
+        if price >= HIGH_PRICE_THRESHOLD and temp < 18:
             cold_and_expensive_hours.append(forecast_hour)
 
     first_preboost_hour = (
@@ -39,5 +38,5 @@ def get_preboost_strategy(price_forecast, temp_forecast, current_hour, house_ine
         ),
     }
 
-    _LOGGER.debug("Preboost-strategi beräknad: %s", strategy)
+    _LOGGER.debug("Preboost-strategi: %s", strategy)
     return strategy
