@@ -1,29 +1,20 @@
-# Temperaturinställningar
-COMFORT_TEMP_TARGET = 21.0
-SUMMER_TEMP_THRESHOLD = 17.5
-HOLIDAY_TEMP = 16.0
+# Default house inertia (used if input_number.house_inertia is not set)
+DEFAULT_HOUSE_INERTIA = 1.0
 
-# Elprisinställningar
-HIGH_PRICE_THRESHOLD = 2.00  # kronor/kWh
-LOW_PRICE_THRESHOLD = 0.80
+# Holiday mode settings
+HOLIDAY_TEMP = 17.0  # Target temperature when holiday mode is active
 
-# Tröghetsvärden (husets respons på tempförändringar)
-DEFAULT_HOUSE_INERTIA = 3  # timmar
-MAX_PREBOOST_HOURS = 6
+# Pre-boost settings
+PREBOOST_MAX_OUTDOOR_TEMP = 10.0  # Max outdoor temp for pre-boost to be considered
+MAX_PREBOOST_HOURS = 6           # How many hours ahead to look for pre-boost
+PREBOOST_TEMP_THRESHOLD = 2.0    # How many degrees colder than target to trigger pre-boost
+PREBOOST_PRICE_THRESHOLD = 1.20  # SEK/kWh - Absolute price threshold for pre-boost
 
-# Datumformat för semester
-DATE_FORMAT = "%Y-%m-%d"
+# New additions:
+BRAKING_MODE_TEMP = 25.0         # Virtual outdoor temperature when braking due to high price
+PREBOOST_OUTPUT_TEMP = -15.0     # Virtual outdoor temperature when pre-boosting
 
-# Pre_boost Inställningar
+NORMAL_MODE_MAX_OUTPUT_TEMP = 20.0 # Max virtual outdoor temp in normal operation
+NORMAL_MODE_MIN_OUTPUT_TEMP = -10.0 # Min virtual outdoor temp in normal operation
 
-# Maximal pre-boostjustering i grader
-MAX_PREBOOST_ADJUSTMENT = 5.0  # °C
-
-# Minsta elpris som triggar pre-boost
-PREBOOST_PRICE_THRESHOLD = 1.20  # SEK/kWh
-
-# Minsta temperaturprognos som kräver pre-boost
-PREBOOST_TEMP_THRESHOLD = 2.0  # °C
-
-# Tröghetsmultiplikator för att skala pre-boostens tid
-INERTIA_SCALING_FACTOR = 1.0  # kan justeras för att påverka hur långt i förväg pre-boost triggas
+AGGRESSIVENESS_SCALING_FACTOR = 0.5 # Factor for aggressiveness in normal mode
