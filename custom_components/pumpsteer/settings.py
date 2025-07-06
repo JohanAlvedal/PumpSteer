@@ -11,7 +11,7 @@ PREBOOST_TEMP_THRESHOLD = 2.0    # How many degrees colder than target to trigge
 PREBOOST_PRICE_THRESHOLD = 1.20  # SEK/kWh - Absolute price threshold for pre-boost
 
 # Braking and output settings
-BRAKING_MODE_TEMP = 25.0         # Virtual outdoor temperature when braking due to high price
+BRAKING_MODE_TEMP = 20.0         # Virtual outdoor temperature when braking due to high price
 PREBOOST_OUTPUT_TEMP = -15.0     # Virtual outdoor temperature when pre-boosting
 
 NORMAL_MODE_MAX_OUTPUT_TEMP = 20.0 # Max virtual outdoor temp in normal operation
