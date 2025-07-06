@@ -2,7 +2,7 @@
 DEFAULT_HOUSE_INERTIA = 1.0
 
 # Holiday mode settings
-HOLIDAY_TEMP = 17.0  # Target temperature when holiday mode is active
+HOLIDAY_TEMP = 16.0  # Target temperature when holiday mode is active
 
 # Pre-boost settings
 PREBOOST_MAX_OUTDOOR_TEMP = 10.0  # Max outdoor temp for pre-boost to be considered
