@@ -146,7 +146,6 @@ Denna sensor tillhandahåller den beräknade virtuella temperaturen.
 | `Inertia` | Hur långsamt huset reagerar på förändringar i utomhustemperaturen (högre = bättre isolerat) |
 | `Aggressiveness` | Från 0,0 (passiv) till 5,0 (aggressiv besparing) |
 | `Summer threshold` | Utomhustemperaturtröskeln för att inaktivera värmekontroll |
-| `Elpriser (prognos)` | Timvisa elpriser från din prissensor |
 | `Pre-boost Aktiv` | Sant om pre-boost eller bromsning är aktiv (pausar tröghetsberäkningen) |
 
 ### 2\. `sensor.pumpsteer_future_strategy` (Diagnossensor)
