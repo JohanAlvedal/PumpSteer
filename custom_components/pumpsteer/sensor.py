@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.typing import StateType  # For state type hinting
+from . import settings # import settings.py
 
 # Import async_call_later to schedule updates
 from homeassistant.helpers.event import async_call_later
@@ -24,8 +25,8 @@ INERTIA_WEIGHT_FACTOR = 4  # How much old inertia should weigh
 INERTIA_DIVISOR = 5  # (INERTIA_WEIGHT_FACTOR + 1)
 MAX_INERTIA_VALUE = 5.0
 MIN_INERTIA_VALUE = 0.0
-DEFAULT_INERTIA_VALUE = 1.0
-PREBOOST_MAX_OUTDOOR_TEMP = 10.0
+DEFAULT_INERTIA_VALUE = settings.DEFAULT_HOUSE_INERTIA
+PREBOOST_MAX_OUTDOOR_TEMP = settings.PREBOOST_MAX_OUTDOOR_TEMP 
 
 def safe_float(val: StateType) -> float | None:
     """Safely converts a value to float, returns None on error."""
@@ -71,7 +72,7 @@ class PumpSteerSensor(Entity):
         self._last_update_time = None
         self._previous_indoor_temp = None
         self._last_outdoor_temp = None
-        self._inertia_value = DEFAULT_INERTIA_VALUE
+        self._inertia_value = settings.DEFAULT_HOUSE_INERTIA
         self._name = "PumpSteer"
 
         # Set standard Home Assistant properties
@@ -176,8 +177,8 @@ class PumpSteerSensor(Entity):
         # Aggressiveness and inertia from helpers (assumed to always exist)
         aggressiveness = safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or 0.0
         user_defined_inertia = safe_float(get_state(self.hass, "input_number.house_inertia"))  
-        inertia = user_defined_inertia if user_defined_inertia is not None else self._inertia_value
-
+        inertia = user_defined_inertia if user_defined_inertia is not None else settings.DEFAULT_HOUSE_INERTIA
+        
         # Collect critical data to check if anything is missing
         critical_entities_data = {
             "Indoor (actual)": indoor_temp,
@@ -224,10 +225,10 @@ class PumpSteerSensor(Entity):
         actual_target_temp_for_logic = configured_target_temp
 
         if holiday_mode_active:
-            actual_target_temp_for_logic = HOLIDAY_TARGET_TEMPERATURE
+            actual_target_temp_for_logic = settings.HOLIDAY_TEMP
             self._attributes["Mode"] = "Holiday"
             self._attributes["Holiday Active"] = holiday_mode_active
-            _LOGGER.info(f"[PumpSteer] Overriding target temperature to {HOLIDAY_TARGET_TEMPERATURE}°C due to Holiday Mode.")
+            _LOGGER.info(f"[PumpSteer] Overriding target temperature to {settings.HOLIDAY_TEMP}°C due to Holiday Mode.")
         elif self._attributes.get("Mode") == "Holiday":  # If we just left holiday mode
             self._attributes["Mode"] = "Normal"  # Reset to Normal (or whatever the default is)
 
@@ -264,19 +265,19 @@ class PumpSteerSensor(Entity):
             else:
                 # 3. Pre-boost Mode (based on forecast)
                 boost_mode = None
-                if real_outdoor_temp <= PREBOOST_MAX_OUTDOOR_TEMP:
+                if real_outdoor_temp <= settings.PREBOOST_MAX_OUTDOOR_TEMP:
                     # Use actual_target_temp_for_logic for cold_threshold if needed in check_combined_preboost
                     boost_mode = check_combined_preboost(
                         hourly_temps_csv,
                         electricity_prices,
-                        lookahead_hours=6,
-                        cold_threshold=actual_target_temp_for_logic - 2.0,  # Example: 2 degrees below target temperature
-                        price_threshold_ratio=0.8,
+                        lookahead_hours=settings.MAX_PREBOOST_HOURS,
+                        cold_threshold=actual_target_temp_for_logic - settings.PREBOOST_TEMP_THRESHOLD,  # Example: 2 degrees below target temperature
+                        price_threshold_ratio=settings.PREBOOST_PRICE_THRESHOLD,
                         aggressiveness=aggressiveness,  
                         inertia=inertia
                     )
                 else:
-                    _LOGGER.info(f"PumpSteer: Pre-boost deactivated as outdoor temperature ({real_outdoor_temp}°C) is above max threshold ({PREBOOST_MAX_OUTDOOR_TEMP}°C).")
+                    _LOGGER.info(f"PumpSteer: Pre-boost deactivated as outdoor temperature ({real_outdoor_temp}°C) is above max threshold ({settings.PREBOOST_MAX_OUTDOOR_TEMP}°C).")
                 
                 if boost_mode == "preboost":
                     self._state = -15.0  # Very low virtual outdoor temp to accelerate
@@ -345,7 +346,7 @@ class PumpSteerSensor(Entity):
             self._previous_indoor_temp = indoor_temp
             self._last_outdoor_temp = real_outdoor_temp
 
-        current_inertia = user_defined_inertia if user_defined_inertia is not None else self._inertia_value
+        current_inertia = user_defined_inertia if user_defined_inertia is not None else settings.DEFAULT_HOUSE_INERTIA
 
         # Update attributes
         self._attributes.update({
@@ -466,12 +467,12 @@ class PumpSteerFutureStrategySensor(Entity):
 
         # Define parameters for future pre-boost check
         # These should ideally be configurable, but for now use static values or derive from aggressiveness
-        lookahead_hours = 6
-        cold_threshold_for_future = configured_target_temp - 2.0 # Example: 2 degrees below target
-        price_threshold_ratio_for_future = 0.8 # Example price threshold for future analysis
+        lookahead_hours = settings.MAX_PREBOOST_HOURS
+        cold_threshold_for_future = configured_target_temp - settings.PREBOOST_TEMP_THRESHOLD
+        price_threshold_ratio_for_future = settings.PREBOOST_PRICE_THRESHOLD
         
         boost_mode = None
-        if real_outdoor_temp <= PREBOOST_MAX_OUTDOOR_TEMP:
+        if real_outdoor_temp <= settings.PREBOOST_MAX_OUTDOOR_TEMP:
             # Check for pre-boost in the future
             boost_mode = check_combined_preboost(
                 hourly_temps_csv,
@@ -484,7 +485,7 @@ class PumpSteerFutureStrategySensor(Entity):
             )
             _LOGGER.debug(f"Future strategy check: boost_mode = {boost_mode}")
         else:
-            _LOGGER.debug(f"Future strategy: Pre-boost not considered as outdoor temp ({real_outdoor_temp}°C) is above max threshold ({PREBOOST_MAX_OUTDOOR_TEMP}°C).")
+            _LOGGER.debug(f"Future strategy: Pre-boost not considered as outdoor temp ({real_outdoor_temp}°C) is above max threshold ({settings.PREBOOST_MAX_OUTDOOR_TEMP}°C).")
 
 
         if boost_mode == "preboost":
