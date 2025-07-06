@@ -8,7 +8,21 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.typing import StateType  # For state type hinting
-from . import settings # import settings.py
+
+# Import specific settings directly
+from .settings import (
+    DEFAULT_HOUSE_INERTIA,
+    HOLIDAY_TEMP,
+    PREBOOST_MAX_OUTDOOR_TEMP,
+    MAX_PREBOOST_HOURS,
+    PREBOOST_TEMP_THRESHOLD,
+    PREBOOST_PRICE_THRESHOLD,
+    BRAKING_MODE_TEMP,
+    PREBOOST_OUTPUT_TEMP,
+    NORMAL_MODE_MAX_OUTPUT_TEMP,
+    NORMAL_MODE_MIN_OUTPUT_TEMP,
+    AGGRESSIVENESS_SCALING_FACTOR
+)
 
 # Import async_call_later to schedule updates
 from homeassistant.helpers.event import async_call_later
