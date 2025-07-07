@@ -1,42 +1,57 @@
-from datetime import datetime, timedelta
 import logging
-from .settings import HIGH_PRICE_THRESHOLD, DEFAULT_HOUSE_INERTIA, COLD_HOUR_TEMP_THRESHOLD
+from typing import Optional
 
 _LOGGER = logging.getLogger(__name__)
 
-def get_preboost_strategy(price_forecast, temp_forecast, current_hour, house_inertia=None):
-    if house_inertia is None:
-        house_inertia = DEFAULT_HOUSE_INERTIA
+def check_combined_preboost(
+    temp_csv: str,
+    prices: list[float],
+    lookahead_hours: int = 6,
+    cold_threshold: float = 2.0,
+    price_threshold_ratio: float = 0.8,
+    min_peak_hits: int = 1,
+    aggressiveness: float = 0.0,
+    inertia: float = 1.0
+) -> Optional[str]:
+    """
+    Returns 'preboost' if a pre-heat should be activated for an expected cold and expensive period.
+    This is a forward-looking function.
+    """
+    try:
+        temps = [float(t.strip()) for t in temp_csv.split(",") if t.strip() != ""]
+        if not temps or not prices or len(temps) < lookahead_hours or len(prices) < lookahead_hours:
+            _LOGGER.debug(
+                "Pre-boost check: Not enough data (temps: %d, prices: %d)",
+                len(temps), len(prices)
+            )
+            return None
+    except Exception:
+        _LOGGER.error("Pre-boost check: Error processing data", exc_info=True)
+        return None
 
-    cold_and_expensive_hours = []
-    for hour_offset in range(24):
-        forecast_hour = current_hour + timedelta(hours=hour_offset)
-        price = price_forecast.get(hour_offset)
-        temp = temp_forecast.get(hour_offset)
+    # Use aggressiveness to adjust the price threshold for enabling preboost
+    # Higher aggressiveness makes it harder to preboost based on price (raises the threshold)
+    adjusted_price_threshold_ratio = max(0.5, min(0.9, 0.9 - (aggressiveness * 0.04)))
+    max_price = max(prices[:lookahead_hours])
+    price_threshold = max_price * adjusted_price_threshold_ratio
 
-        if price is None or temp is None:
-            continue
+    # Main logic for pre-boost: Look for a future hour that is both cold and expensive
+    lead_time = min(3.0, max(0.5, inertia * 0.75))
+    lead_hours = int(round(lead_time))
 
-        # Nu används COLD_HOUR_TEMP_THRESHOLD från settings!
-        if price >= HIGH_PRICE_THRESHOLD and temp < COLD_HOUR_TEMP_THRESHOLD:
-            cold_and_expensive_hours.append(forecast_hour)
+    for i in range(1, lookahead_hours):
+        # Check if future hours are both cold and expensive
+        if temps[i] < cold_threshold and prices[i] >= price_threshold:
+            if i <= lead_hours:
+                _LOGGER.debug(
+                    f"PREBOOST: Preboost activated (inertia: {inertia:.2f}, lead_hours: {lead_hours}, peak in {i}h)"
+                )
+                return "preboost"
+            else:
+                _LOGGER.debug(
+                    f"PREBOOST: Too early to preboost (peak in {i}h, lead_hours: {lead_hours})"
+                )
+                return None
 
-    first_preboost_hour = (
-        cold_and_expensive_hours[0] - timedelta(hours=house_inertia)
-        if cold_and_expensive_hours else None
-    )
-
-    strategy = {
-        "cold_and_expensive_hours_next_6h": [
-            hour for hour in cold_and_expensive_hours
-            if current_hour <= hour <= current_hour + timedelta(hours=6)
-        ],
-        "first_preboost_hour": first_preboost_hour,
-        "preboost_expected_in_hours": (
-            (first_preboost_hour - current_hour).total_seconds() / 3600
-            if first_preboost_hour else None
-        ),
-    }
-
-    _LOGGER.debug("Preboost-strategi: %s", strategy)
-    return strategy
+    _LOGGER.debug("Preboost: No cold+expensive hours found in the forecast.")
+    return None
