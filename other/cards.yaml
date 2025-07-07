@@ -12,7 +12,7 @@ entities:
   - entity: input_datetime.holiday_start
   - entity: input_datetime.holiday_end
   
-#####################################################
+## Main sensors ###################################################
 type: entities
 entities:
   - entity: input_number.indoor_target_temperature
@@ -37,7 +37,7 @@ entities:
 state_color: true
 
 
-  ###############################################
+  ## Semester #############################################
 
 type: vertical-stack
 cards:
@@ -52,11 +52,61 @@ cards:
         name: Till
 
 
-  ################################################
+  ## Pumpdebug ##############################################
 
-type: history-graph
+type: entities
 entities:
+  - entity: input_number.integral_temp_error
+  - entity: input_number.house_inertia
+  - entity: sensor.shelly_h_t_temp_temperature
   - entity: sensor.pumpsteer
-  - entity: sensor.temperatur_nu ## Ändra till din utetemperatur 
+  - entity: sensor.pumpsteer_future_strategy
+title: Pumpdebug
+
+
+## PumpSteer – Integralfel och reglering ###################################################
+
+type: custom:apexcharts-card
+header:
+  title: PumpSteer – Integralfel och reglering
+  show: true
+graph_span: 48h
+span:
+  start: day
+  offset: "-1d"
+now:
+  show: true
+apex_config:
+  yaxis:
+    - id: temp
+      title:
+        text: Temperatur (°C)
+    - id: integral
+      opposite: true
+      title:
+        text: Integralfel (°C·h)
+series:
+  - entity: sensor.pumpsteer
+    name: Virtuell temperatur (ut)
+    yaxis_id: temp
+    type: line
+    stroke_width: 2
+  - entity: sensor.shelly_h_t_temp_temperature
+    name: Inomhustemperatur
+    yaxis_id: temp
+    type: line
+    stroke_width: 2
+  - entity: input_number.indoor_target_temperature
+    name: Målt. (manuell)
+    yaxis_id: temp
+    type: line
+    color: "#999"
+    stroke_width: 2
+  - entity: input_number.integral_temp_error
+    name: Integralfel
+    yaxis_id: integral
+    type: area
+    color: "#ffa726"
+    stroke_width: 2
 
 #####################################################
