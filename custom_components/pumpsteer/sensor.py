@@ -9,27 +9,14 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.typing import StateType  # For state type hinting
 
-# Import specific settings directly
-from .settings import (
-    DEFAULT_HOUSE_INERTIA,
-    HOLIDAY_TEMP,
-    PREBOOST_MAX_OUTDOOR_TEMP,
-    MAX_PREBOOST_HOURS,
-    PREBOOST_TEMP_THRESHOLD,
-    PREBOOST_PRICE_THRESHOLD,
-    BRAKING_MODE_TEMP,
-    PREBOOST_OUTPUT_TEMP,
-    NORMAL_MODE_MAX_OUTPUT_TEMP,
-    NORMAL_MODE_MIN_OUTPUT_TEMP,
-    AGGRESSIVENESS_SCALING_FACTOR
-)
-
 # Import async_call_later to schedule updates
 from homeassistant.helpers.event import async_call_later
 
 # Custom imports for PumpSteer
 from .pre_boost import check_combined_preboost
-from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE # Added holiday imports
+from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
+from .temp_control_logic import calculate_temperature_output
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,8 +26,8 @@ INERTIA_WEIGHT_FACTOR = 4  # How much old inertia should weigh
 INERTIA_DIVISOR = 5  # (INERTIA_WEIGHT_FACTOR + 1)
 MAX_INERTIA_VALUE = 5.0
 MIN_INERTIA_VALUE = 0.0
-DEFAULT_INERTIA_VALUE = DEFAULT_HOUSE_INERTIA
-PREBOOST_MAX_OUTDOOR_TEMP = PREBOOST_MAX_OUTDOOR_TEMP 
+DEFAULT_INERTIA_VALUE = 1.0
+PREBOOST_MAX_OUTDOOR_TEMP = 10.0
 
 def safe_float(val: StateType) -> float | None:
     """Safely converts a value to float, returns None on error."""
@@ -71,6 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     """Sets up the PumpSteer sensor platform."""
     sensors = [
         PumpSteerSensor(hass, entry),
+        # Pasted code for PumpSteerFutureStrategySensor below this line
         PumpSteerFutureStrategySensor(hass, entry),
     ]
     async_add_entities(sensors, True)
@@ -86,7 +74,7 @@ class PumpSteerSensor(Entity):
         self._last_update_time = None
         self._previous_indoor_temp = None
         self._last_outdoor_temp = None
-        self._inertia_value = DEFAULT_HOUSE_INERTIA
+        self._inertia_value = DEFAULT_INERTIA_VALUE
         self._name = "PumpSteer"
 
         # Set standard Home Assistant properties
@@ -105,7 +93,6 @@ class PumpSteerSensor(Entity):
             "Inertia": self._inertia_value,
             "Aggressiveness": None,
             "Summer Threshold": None,
-            "Electricity Prices (forecast)": None,
             "Pre-boost Active": False,
         }
 
@@ -181,7 +168,7 @@ class PumpSteerSensor(Entity):
         # Get states for entities
         indoor_temp = safe_float(get_state(self.hass, indoor_temp_entity_id))
         real_outdoor_temp = safe_float(get_state(self.hass, real_outdoor_temp_entity_id))
-        electricity_prices = get_attr(self.hass, electricity_price_entity_id, "today")  
+        electricity_prices = get_attr(self.hass, electricity_price_entity_id, "today") 
         hourly_temps_csv = get_state(self.hass, hourly_forecast_temperatures_entity_id)
         
         # Get target temperature and summer threshold from input_number helpers
@@ -190,9 +177,9 @@ class PumpSteerSensor(Entity):
         
         # Aggressiveness and inertia from helpers (assumed to always exist)
         aggressiveness = safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or 0.0
-        user_defined_inertia = safe_float(get_state(self.hass, "input_number.house_inertia"))  
-        inertia = user_defined_inertia if user_defined_inertia is not None else DEFAULT_HOUSE_INERTIA
-        
+        user_defined_inertia = safe_float(get_state(self.hass, "input_number.house_inertia")) 
+        inertia = user_defined_inertia if user_defined_inertia is not None else self._inertia_value
+
         # Collect critical data to check if anything is missing
         critical_entities_data = {
             "Indoor (actual)": indoor_temp,
@@ -239,10 +226,10 @@ class PumpSteerSensor(Entity):
         actual_target_temp_for_logic = configured_target_temp
 
         if holiday_mode_active:
-            actual_target_temp_for_logic = HOLIDAY_TEMP
+            actual_target_temp_for_logic = HOLIDAY_TARGET_TEMPERATURE
             self._attributes["Mode"] = "Holiday"
             self._attributes["Holiday Active"] = holiday_mode_active
-            _LOGGER.info(f"[PumpSteer] Overriding target temperature to {HOLIDAY_TEMP}°C due to Holiday Mode.")
+            _LOGGER.info(f"[PumpSteer] Overriding target temperature to {HOLIDAY_TARGET_TEMPERATURE}°C due to Holiday Mode.")
         elif self._attributes.get("Mode") == "Holiday":  # If we just left holiday mode
             self._attributes["Mode"] = "Normal"  # Reset to Normal (or whatever the default is)
 
@@ -252,15 +239,16 @@ class PumpSteerSensor(Entity):
         
         # 1. Summer Mode - highest priority (still uses actual_target_temp_for_logic for logic)
         if real_outdoor_temp >= summer_threshold_temp:
-            self._state = round(25.0, 1)  # High value to turn off/minimize heating
+            self._state = round(20.0, 1)  # High value to turn off/minimize heating
             self._attributes["Mode"] = "summer_mode" + (" + holiday" if holiday_mode_active else "")
-            self._attributes["Pre-boost Active"] = False
+            self._attributes["Pre-boost Active"] = False # Återställ vid sommarläge
             _LOGGER.info("PumpSteer: Summer Mode activated (Outdoor temp: %.1f >= %.1f)", real_outdoor_temp, summer_threshold_temp)
         elif holiday_mode_active:  # Holiday mode has already been handled above and set Mode to "Holiday"
             # No further logic here, state is set at the end based on actual_target_temp_for_logic
             pass
         else:  # Only if neither summer mode nor holiday mode is active
             # 2. Braking Mode (based on price) - prioritized over pre-boost
+            # Kontrollera att electricity_prices inte är tomma innan max() anropas
             max_price_in_forecast = max(electricity_prices) if electricity_prices else 0.0
             current_price = electricity_prices[0] if electricity_prices and electricity_prices[0] is not None else 0.0
 
@@ -269,10 +257,10 @@ class PumpSteerSensor(Entity):
                 price_factor = current_price / max_price_in_forecast
             
             # Dynamic threshold based on aggressiveness
-            braking_threshold_ratio = 1.0 - (aggressiveness / 5.0) * 0.4  
+            braking_threshold_ratio = 1.0 - (aggressiveness / 5.0) * 0.4 
             
             if price_factor >= braking_threshold_ratio:
-                self._state = round(25.0, 1)  # Sets the virtual outdoor temperature to a high level
+                self._state = round(20.0, 1)  # Sets the virtual outdoor temperature to a high level
                 self._attributes["Mode"] = "braking_mode"
                 self._attributes["Pre-boost Active"] = True  # Use this to pause inertia calculation
                 _LOGGER.info("PumpSteer: Braking mode activated due to high price (Aggressiveness: %.1f, Price Factor: %.2f)", aggressiveness, price_factor)
@@ -284,10 +272,10 @@ class PumpSteerSensor(Entity):
                     boost_mode = check_combined_preboost(
                         hourly_temps_csv,
                         electricity_prices,
-                        lookahead_hours=MAX_PREBOOST_HOURS,
-                        cold_threshold=actual_target_temp_for_logic - PREBOOST_TEMP_THRESHOLD,  # Example: 2 degrees below target temperature
-                        price_threshold_ratio=PREBOOST_PRICE_THRESHOLD,
-                        aggressiveness=aggressiveness,  
+                        lookahead_hours=6,
+                        cold_threshold=actual_target_temp_for_logic - 2.0,  # Example: 2 degrees below target temperature
+                        price_threshold_ratio=0.8,
+                        aggressiveness=aggressiveness, 
                         inertia=inertia
                     )
                 else:
@@ -300,24 +288,18 @@ class PumpSteerSensor(Entity):
                     _LOGGER.info("PumpSteer: Preboost (accelerate) activated to build heat buffer.")
                 else:
                     # 4. Normal operation (heating/neutral)
-                    # This logic MUST use actual_target_temp_for_logic
-                    diff = indoor_temp - actual_target_temp_for_logic
-                    
-                    scaling_factor = aggressiveness * 0.5  
-                    fake_temp = real_outdoor_temp + (diff * scaling_factor)
+                    # Anropa den nya funktionen för temperaturstyrningslogiken
+                    calculated_fake_temp, calculated_mode = calculate_temperature_output(
+                        indoor_temp=indoor_temp,
+                        actual_target_temp_for_logic=actual_target_temp_for_logic,
+                        real_outdoor_temp=real_outdoor_temp,
+                        aggressiveness=aggressiveness
+                    )
+                    self._state = round(calculated_fake_temp, 1)
+                    self._attributes["Mode"] = calculated_mode
+                    self._attributes["Pre-boost Active"] = False # Återställ Pre-boost Active då den inte är aktiv här
+                    _LOGGER.debug(f"PumpSteer: Normal operation (fake temp: {self._state}°C, Mode: {self._attributes['Mode']})")
 
-                    if diff < 0:
-                        # House is colder than target
-                        fake_temp = min(fake_temp, 20.0)
-                        self._attributes["Mode"] = "heating"
-                    else:
-                        # House is at or above target
-                        fake_temp = max(fake_temp, -10.0)  
-                        self._attributes["Mode"] = "neutral" if abs(diff) < 0.5 else "braking_by_temp"
-                        
-                    self._state = round(fake_temp, 1)
-                    self._attributes["Pre-boost Active"] = False
-                    _LOGGER.debug("PumpSteer: Normal operation (fake temp: %.1f °C, diff: %.2f) - Mode: %s", fake_temp, diff, self._attributes["Mode"])
 
         # --- INERTIA CALCULATION ---
         current_time = datetime.now()
@@ -360,7 +342,7 @@ class PumpSteerSensor(Entity):
             self._previous_indoor_temp = indoor_temp
             self._last_outdoor_temp = real_outdoor_temp
 
-        current_inertia = user_defined_inertia if user_defined_inertia is not None else DEFAULT_HOUSE_INERTIA
+        current_inertia = user_defined_inertia if user_defined_inertia is not None else self._inertia_value
 
         # Update attributes
         self._attributes.update({
@@ -370,39 +352,28 @@ class PumpSteerSensor(Entity):
             "Inertia": round(current_inertia, 2),
             "Aggressiveness": aggressiveness,
             "Summer Threshold": summer_threshold_temp,
-            "Electricity Prices (forecast)": electricity_prices,
             "Pre-boost Active": self._attributes.get("Pre-boost Active", False),
             # "Mode" is already set in the if/elif statements above
         })
         _LOGGER.debug(f"PumpSteer: Final state: {self._state}°C, Mode: {self._attributes['Mode']}")
 
-
+# --- START OF PumpSteerFutureStrategySensor CLASS ---
 class PumpSteerFutureStrategySensor(Entity):
     """Representation of a PumpSteer Future Strategy Sensor."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         self.hass = hass
         self._config_entry = config_entry
-        self._state = "Unknown"  # State will be the future strategy
+        self._state = None
         self._attributes = {}
         self._name = "PumpSteer Future Strategy"
 
-        self._attr_unique_id = f"pumpsteer_future_strategy_{config_entry.entry_id}"
+        self._attr_unit_of_measurement = "°C" # Or whatever makes sense for its state
+        self._attr_device_class = "temperature" # Or another appropriate device class
+        self._attr_state_class = "measurement" # Or another appropriate state class
+        self._attr_unique_id = f"{config_entry.entry_id}_future_strategy"
 
-        self._attributes = {
-            "Status": "Initializing",
-            "Pre-boost Expected": False,
-            "Cold Threshold Used": None,
-            "Price Threshold Ratio Used": None,
-            "Lookahead Hours": None,
-            "Forecast Temperature (next 6h)": None,
-            "Forecast Prices (next 6h)": None,
-        }
-
-        config_entry.add_update_listener(self.async_options_update_listener)
-
-        _LOGGER.debug(f"PumpSteerFutureStrategySensor: Initializing with config data: {self._config_entry.data}")
-        _LOGGER.debug(f"PumpSteerFutureStrategySensor: Initializing with config options: {self._config_entry.options}")
+        _LOGGER.debug("PumpSteerFutureStrategySensor: Initializing")
 
     @property
     def name(self) -> str:
@@ -428,96 +399,76 @@ class PumpSteerFutureStrategySensor(Entity):
         }
 
     @property
+    def unit_of_measurement(self) -> str:
+        """Returns the unit of measurement."""
+        return self._attr_unit_of_measurement
+
+    @property
+    def device_class(self) -> str:
+        """Returns the device class."""
+        return self._attr_device_class
+
+    @property
     def icon(self) -> str:
         """Returns the icon to use in the frontend."""
-        return "mdi:chart-timeline-variant" # An icon representing future/forecast
-
-    async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Handles option updates."""
-        _LOGGER.debug("PumpSteerFutureStrategySensor: Options updated, reloading sensor.")
-        self._config_entry = entry
-        await self.async_update()
+        return "mdi:chart-timeline-variant-shimmer" # A relevant icon
 
     async def async_update(self) -> None:
-        """Updates the sensor's state based on future predictions."""
+        """Updates the sensor's state."""
         config = {**self._config_entry.data, **self._config_entry.options}
 
-        real_outdoor_temp_entity_id = config.get("real_outdoor_entity")
-        electricity_price_entity_id = config.get("electricity_price_entity")
         hourly_forecast_temperatures_entity_id = config.get("hourly_forecast_temperatures_entity")
-        target_temp_entity_id = config.get("target_temp_entity") # Added for future strategy logic
+        electricity_price_entity_id = config.get("electricity_price_entity")
 
-        real_outdoor_temp = safe_float(get_state(self.hass, real_outdoor_temp_entity_id))
-        electricity_prices = get_attr(self.hass, electricity_price_entity_id, "today")
         hourly_temps_csv = get_state(self.hass, hourly_forecast_temperatures_entity_id)
-        
-        # Get target temperature and summer threshold from input_number helpers
-        configured_target_temp = safe_float(get_state(self.hass, target_temp_entity_id))
-        
-        aggressiveness = safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or 0.0
-        user_defined_inertia = safe_float(get_state(self.hass, "input_number.house_inertia"))
-        inertia = user_defined_inertia if user_defined_inertia is not None else DEFAULT_INERTIA_VALUE # Use DEFAULT_INERTIA_VALUE if user_defined_inertia is None for future calculations.
+        electricity_prices = get_attr(self.hass, electricity_price_entity_id, "today")
 
-        # Collect critical data, similar to PumpSteerSensor
-        critical_data = {
-            "Outdoor (actual)": real_outdoor_temp,
-            "Target Temp": configured_target_temp,
-            "Electricity Prices (forecast)": electricity_prices,
-            "Temperature Forecast": hourly_temps_csv,
-        }
-
-        missing_data = [name for name, value in critical_data.items() if value is None]
-
-        if missing_data:
-            _LOGGER.warning("PumpSteerFutureStrategySensor: Waiting for data for: %s. Retrying in 10 seconds.", ", ".join(missing_data))
+        if not hourly_temps_csv or not electricity_prices:
             self._state = STATE_UNAVAILABLE
-            self._attributes["Status"] = f"Waiting for data: {', '.join(missing_data)}"
-            self.async_on_remove(
-                async_call_later(self.hass, timedelta(seconds=10), self.async_schedule_update_ha_state)
-            )
+            self._attributes["Status"] = "Waiting for forecast data"
+            self._attributes["Forecast Data"] = None
+            _LOGGER.warning("PumpSteer Future: Waiting for forecast data.")
             return
 
-        self._attributes["Status"] = "OK"
+        try:
+            # Parse CSV temps and create a list of floats
+            forecast_temperatures = [float(t) for t in hourly_temps_csv.split(',') if t.strip()]
+        except ValueError as e:
+            _LOGGER.error(f"PumpSteer Future: Error parsing hourly forecast temperatures: {e}")
+            self._state = STATE_UNAVAILABLE
+            self._attributes["Status"] = "Error parsing temperatures"
+            self._attributes["Forecast Data"] = None
+            return
 
-        # Define parameters for future pre-boost check
-        # These should ideally be configurable, but for now use static values or derive from aggressiveness
-        lookahead_hours = MAX_PREBOOST_HOURS
-        cold_threshold_for_future = configured_target_temp - PREBOOST_TEMP_THRESHOLD
-        price_threshold_ratio_for_future = PREBOOST_PRICE_THRESHOLD
+        if not electricity_prices:
+             _LOGGER.warning("PumpSteer Future: Electricity prices are not available for future strategy.")
+             self._state = STATE_UNAVAILABLE
+             self._attributes["Status"] = "Waiting for electricity prices"
+             self._attributes["Forecast Data"] = None
+             return
+
+
+        # Create a list of tuples (price, temperature) for each hour
+        # Ensure both lists are of the same length, take the minimum
+        min_len = min(len(electricity_prices), len(forecast_temperatures))
+        hourly_data = []
+        for i in range(min_len):
+            price = electricity_prices[i] if electricity_prices[i] is not None else 0.0
+            temp = forecast_temperatures[i]
+            hourly_data.append({"hour": i, "price": price, "temp": temp})
+
+        # Example: Find the cheapest hour with temp below a certain threshold
+        # You'll expand this logic based on your desired "future strategy"
+        # For now, just show the hourly data in attributes
         
-        boost_mode = None
-        if real_outdoor_temp <= PREBOOST_MAX_OUTDOOR_TEMP:
-            # Check for pre-boost in the future
-            boost_mode = check_combined_preboost(
-                hourly_temps_csv,
-                electricity_prices,
-                lookahead_hours=lookahead_hours,
-                cold_threshold=cold_threshold_for_future,
-                price_threshold_ratio=price_threshold_ratio_for_future,
-                aggressiveness=aggressiveness,
-                inertia=inertia
-            )
-            _LOGGER.debug(f"Future strategy check: boost_mode = {boost_mode}")
+        # Example calculation for state: maybe the average of the first 3 hours' forecasted temperature
+        if forecast_temperatures:
+            self._state = round(sum(forecast_temperatures[:3]) / min(3, len(forecast_temperatures)), 1)
         else:
-            _LOGGER.debug(f"Future strategy: Pre-boost not considered as outdoor temp ({real_outdoor_temp}°C) is above max threshold ({PREBOOST_MAX_OUTDOOR_TEMP}°C).")
+            self._state = STATE_UNAVAILABLE
 
 
-        if boost_mode == "preboost":
-            self._state = "Pre-boost Expected"
-            self._attributes["Pre-boost Expected"] = True
-            _LOGGER.info("PumpSteerFutureStrategySensor: Pre-boost is expected based on forecast.")
-        else:
-            self._state = "Normal/Braking Expected"
-            self._attributes["Pre-boost Expected"] = False
-            _LOGGER.info("PumpSteerFutureStrategySensor: Pre-boost is NOT expected based on forecast.")
+        self._attributes["Status"] = "OK"
+        self._attributes["Forecast Data"] = hourly_data
+        _LOGGER.debug("PumpSteerFutureStrategySensor: Updated with %d hours of forecast data.", len(hourly_data))
 
-
-        # Update attributes for future strategy sensor
-        self._attributes.update({
-            "Cold Threshold Used": cold_threshold_for_future,
-            "Price Threshold Ratio Used": price_threshold_ratio_for_future,
-            "Lookahead Hours": lookahead_hours,
-            "Forecast Temperature (next 6h)": hourly_temps_csv, # Raw CSV
-            "Forecast Prices (next 6h)": electricity_prices,    # Raw list
-        })
-        _LOGGER.debug(f"PumpSteerFutureStrategySensor: Final state: {self._state}")
