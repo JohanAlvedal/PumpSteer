@@ -16,55 +16,43 @@ entities:
 type: entities
 entities:
   - entity: input_number.indoor_target_temperature
-  - entity: input_number.pumpsteer_summer_threshold
   - entity: sensor.shelly_h_t_temp_temperature
-  - entity: input_number.pumpsteer_aggressiveness
+    secondary_info: last-changed
+  - entity: sensor.yttertemp_no
+    secondary_info: last-changed
   - entity: sensor.pumpsteer
     secondary_info: last-changed
-  - entity: sensor.pumpsteer_future_strategy
-    secondary_info: last-changed
+  - entity: input_number.pumpsteer_summer_threshold
   - entity: input_number.house_inertia
     secondary_info: last-changed
   - entity: input_number.pumpsteer_aggressiveness
     name: Aggressiveness (0–5)
-  - entity: input_number.indoor_target_temperature
-    name: Target Temperature
-  - entity: input_number.house_inertia
-    secondary_info: last-changed
   - entity: input_text.hourly_forecast_temperatures
     name: Forecast Data (raw)
     secondary_info: last-updated
-  - entity: sensor.pumpsteer
+  - entity: sensor.pumpsteer_future_strategy
     secondary_info: last-changed
   - entity: sensor.pumpsteer_operating_mode
   - entity: sensor.pumpsteer_indoor_target_diff
 state_color: true
 
+
   ###############################################
 
-  type: entities
-title: PumpSteer Controls
-show_header_toggle: false
-entities:
-  - entity: sensor.pumpsteer
-  - entity: sensor.pumpsteer_future_strategy
+type: vertical-stack
+cards:
+  - type: entities
+    title: Semestermode
+    entities:
+      - entity: input_boolean.holiday_mode
+        name: Aktivt
+      - entity: input_datetime.holiday_start
+        name: Från
+      - entity: input_datetime.holiday_end
+        name: Till
+
 
   ################################################
-
-type: markdown
-content: |2
-    ### 🧠 PumpSteer Status
-
-    **Läge:** {{ state_attr('sensor.pumpsteer', 'Läge') }}
-    **Inne (verklig):** {{ state_attr('sensor.pumpsteer', 'Inne (verklig)') }} °C  
-    **Inne (mål):** {{ state_attr('sensor.pumpsteer', 'Inne (mål)') }} °C  
-    **Ute (verklig):** {{ state_attr('sensor.pumpsteer', 'Ute (verklig)') }} °C  
-    **Aggressivitet:** {{ state_attr('sensor.pumpsteer', 'Aggressivitet') }}  
-    **Sommartröskel:** {{ state_attr('sensor.pumpsteer', 'Sommartröskel') }} °C  
-    **Pre-boost aktiv:** {{ state_attr('sensor.pumpsteer', 'Pre-boost Aktiv') }}
-
-
-##################################################
 
 type: history-graph
 entities:
