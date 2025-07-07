@@ -1,6 +1,12 @@
 import voluptuous as vol
+
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.helpers.selector import selector
+
+# Import your OptionsFlowHandler here
+# Make sure your options_flow.py is in the same directory or correctly imported
+from .options_flow import PumpSteerOptionsFlowHandler # This line is crucial!
 
 DOMAIN = "pumpsteer"
 
@@ -23,7 +29,16 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required("hourly_forecast_temperatures_entity"): selector({"entity": {"domain": "input_text"}}),
                 vol.Required("target_temp_entity"): selector({"entity": {"domain": "input_number"}}),
                 vol.Required("summer_threshold_entity"): selector({"entity": {"domain": "input_number"}}),
+                # These are commented out here, which is fine if they are fixed input_number helpers
                 # vol.Optional("aggressiveness_entity"): selector({"entity": {"domain": "input_number"}}),
                 # vol.Optional("house_inertia_entity"): selector({"entity": {"domain": "input_number"}}),
             })
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Get the options flow for this handler."""
+        # This method tells Home Assistant to use PumpSteerOptionsFlowHandler
+        # when the user clicks the "Configure" button for this integration.
+        return PumpSteerOptionsFlowHandler(config_entry)
