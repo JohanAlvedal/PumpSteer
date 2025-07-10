@@ -11,7 +11,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from .pre_boost import check_combined_preboost
 from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
 from .temp_control_logic import calculate_temperature_output
-from .electricy_price import classify_prices
+from .electricity_price import classify_prices
 from .utils import (
     safe_float, get_state, get_attr,
     safe_get_price_data, safe_parse_temperature_forecast,
