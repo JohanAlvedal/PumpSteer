@@ -2,9 +2,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-# 🟩 NYA KONSTANTER – SÄKERHETSGRÄNSER
-MIN_FAKE_TEMP = -25.0
-MAX_FAKE_TEMP = 30.0
+from .settings import MIN_FAKE_TEMP, MAX_FAKE_TEMP
 
 def calculate_temperature_output(
     indoor_temp: float,
