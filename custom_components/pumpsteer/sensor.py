@@ -9,7 +9,8 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .pre_boost import check_combined_preboost
-from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
+from .settings import BRAKING_MODE_TEMP, HOLIDAY_TEMP
+from .holiday import is_holiday_mode_active
 from .temp_control_logic import calculate_temperature_output
 from .electricity_price import classify_prices
 from .utils import (
@@ -21,7 +22,6 @@ from .utils import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PREBOOST_MAX_OUTDOOR_TEMP = 10.0
 DOMAIN = "pumpsteer"
 
 class PumpSteerSensor(Entity):
@@ -140,15 +140,16 @@ class PumpSteerSensor(Entity):
         )
 
         if holiday:
-            target_temp = HOLIDAY_TARGET_TEMPERATURE
-
+            target_temp = HOLIDAY_TEMP
+            _LOGGER.info("PumpSteer: Holiday mode active – overriding target temperature to %.1f °C", HOLIDAY_TEMP)
+            
         braking_threshold_ratio = 1.0 - (aggressiveness / 5.0) * 0.4
 
         if outdoor_temp >= summer_threshold:
-            self._state = 25.0
+            self._state = BRAKING_MODE_TEMP
             mode = "summer_mode"
         elif price_category in ["dyrt", "extremt_dyrt"]:
-            self._state = 25.0
+            self._state = BRAKING_MODE_TEMP
             mode = "braking_by_price"
             _LOGGER.info(f"PumpSteer: Blocking heat at hour {now_hour} due to {price_category} price (set fake temp to 25 °C)")
         else:
