@@ -24,7 +24,7 @@ BRAKING_MODE_TEMP = 20.0
 PREBOOST_OUTPUT_TEMP = -15.0
 
 # Max och min temperaturgränser som får användas som "falsk" utetemperatur
-NORMAL_MODE_MAX_OUTPUT_TEMP = 20.0
+NORMAL_MODE_MAX_OUTPUT_TEMP = 30.0
 NORMAL_MODE_MIN_OUTPUT_TEMP = -10.0
 
 # Globala säkerhetsgränser för beräknad utomhustemperatur
