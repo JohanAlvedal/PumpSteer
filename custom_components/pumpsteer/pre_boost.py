@@ -1,22 +1,24 @@
 import logging
 from typing import Optional
 
-_LOGGER = logging.getLogger(__name__)
+from .settings import COLD_HOUR_TEMP_THRESHOLD
+from .settings import (
+    AGGRESSIVENESS_SCALING_FACTOR,
+    INERTIA_LEAD_TIME_FACTOR,
+    MIN_PRICE_THRESHOLD_RATIO,
+    MAX_PRICE_THRESHOLD_RATIO,
+    BASE_PRICE_THRESHOLD_RATIO,
+    MIN_LEAD_TIME,
+    MAX_LEAD_TIME,
+)
 
-# Konstanter för bättre läsbarhet och underhåll
-AGGRESSIVENESS_SCALING_FACTOR = 0.04
-INERTIA_LEAD_TIME_FACTOR = 0.75
-MIN_PRICE_THRESHOLD_RATIO = 0.5
-MAX_PRICE_THRESHOLD_RATIO = 0.9
-BASE_PRICE_THRESHOLD_RATIO = 0.9
-MIN_LEAD_TIME = 0.5
-MAX_LEAD_TIME = 3.0
+_LOGGER = logging.getLogger(__name__)
 
 def check_combined_preboost(
     temp_csv: str,
     prices: list[float],
     lookahead_hours: int = 6,
-    cold_threshold: float = 2.0,
+    cold_threshold: float = COLD_HOUR_TEMP_THRESHOLD,
     price_threshold_ratio: float = 0.8,
     min_peak_hits: int = 1,
     aggressiveness: float = 0.0,
