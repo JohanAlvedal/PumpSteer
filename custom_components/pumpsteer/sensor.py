@@ -179,7 +179,12 @@ class PumpSteerSensor(Entity):
             "Outdoor Temperature": outdoor_temp,
             "Braking Threshold (%)": round(braking_threshold_ratio * 100, 1),
             "Price Factor (%)": round(price_factor * 100, 1),
-            "Holiday Mode": holiday
+            "Holiday Mode": holiday,
+            "Last Updated": datetime.now().isoformat(),
+            "Temp Error (°C)": round(indoor_temp - target_temp, 2),
+            "To Summer Threshold (°C)": round(summer_threshold - outdoor_temp, 2),
+            "Next 3 Hours Prices": prices[now_hour:now_hour+3] if len(prices) >= now_hour + 3 else prices[now_hour:],
+            "Decision Reason": f"{mode} - Triggered by {'price' if mode == 'braking_by_price' else 'temp' if mode == 'heating' else 'neutral'}"
         })
 
 
