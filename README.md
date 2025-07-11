@@ -26,7 +26,6 @@ Använd den på egen risk och testa noggrant i din egen miljö.
 - 📊 Helt lokalt (inga molnberoenden)
 - 🧠 Självjusterande beräkning av husets tröghet
 - 🔄 Stöder komfortprofiler via en aggressivitetsinställning
-- 📈 ApexCharts-exempel ingår för visualisering
 
 
 > **Obs\!**
