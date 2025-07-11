@@ -147,23 +147,6 @@ Denna sensor tillhandahåller den beräknade virtuella temperaturen.
 | `Summer threshold` | Utomhustemperaturtröskeln för att inaktivera värmekontroll |
 | `Pre-boost Aktiv` | Sant om pre-boost eller bromsning är aktiv (pausar tröghetsberäkningen) |
 
-### 2\. `sensor.pumpsteer_future_strategy` (Diagnossensor)
-
-Denna sensor ger insikter om *varför* systemet fattar sina beslut.
-
-**Tillstånd:**
-Antalet kommande timmar som identifierats som både kalla och dyra.
-
-**Attribut:**
-
-| Attribut | Betydelse |
-| :--- | :--- |
-| `preboost_expected_in_hours` | Hur många timmar i förväg systemet kommer att starta pre-boost, baserat på husets tröghet. |
-| `first_preboost_hour` | Klockslaget (t.ex. "18:00") för nästa förväntade pre-boost-händelse. |
-| `cold_and_expensive_hours_next_6h` | Totalt antal timmar identifierade som "kalla & dyra" under de närmaste 6 timmarna. |
-| `expensive_hours_next_6h` | Totalt antal timmar som anses "dyra" under de närmaste 6 timmarna. |
-| `braking_price_threshold_percent` | Aktuell priströskel (i % av maxpris) för att aktivera bromsläge. |
-
 -----
 
 ## Aggressivitet – Vad gör den?
@@ -176,49 +159,6 @@ Aggressivitet (0,0 till 5,0) styr avvägningen mellan energibesparingar och inom
 | **Hög** (t.ex. 4-5) | Bromsar tidigt och ofta, även vid måttliga pristoppar. | Ökar endast i de mest nödvändiga fallen för att spara energi. |
 
 **Högre aggressivitet sparar mer pengar, men kan minska inomhuskomforten.**
-
------
-
-## 📈 ApexCharts Exempel
-
-### Visualisera temperaturer
-
-```yaml
-type: custom:apexcharts-card
-header:
-  title: PumpSteer Temperaturkontroll
-graph_span: 24h
-span:
-  start: day
-series:
-  - entity: sensor.pumpsteer
-    name: Fejkad utomhustemp
-  - entity: sensor.ute_verklig_temp
-    name: Real Outdoor Temp
-  - entity: sensor.inne_verklig_temp
-    name: Inomhustemp
-  - entity: input_number.varmepump_target_temp
-    name: Måltemp
-    stroke_width: 2
-    curve: stepline
-```
-
-### Visualisera framtida strategi
-
-```yaml
-type: custom:apexcharts-card
-header:
-  title: PumpSteer - Framtida hot
-chart_type: bar
-graph_span: 24h
-series:
-  - entity: sensor.pumpsteer_future_strategy
-    name: Kalla & dyra timmar
-    attribute: cold_and_expensive_hours_next_6h
-  - entity: sensor.pumpsteer_future_strategy
-    name: Expensive Hours
-    attribute: expensive_hours_next_6h
-```
 
 -----
 
