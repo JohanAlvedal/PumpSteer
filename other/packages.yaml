@@ -1,137 +1,144 @@
-type: entities
-title: 🔧 PumpSteer – Drift & Status
-show_header_toggle: false
-entities:
-  - entity: sensor.pumpsteer
-    name: Fejkad utetemperatur
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_operating_mode
-    name: Driftläge
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_preboosting
-    name: Preboost aktiv
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_braking
-    name: Broms aktiv
-    secondary_info: last-changed
-  - entity: sensor.real_outdoor_temperature
-    name: Ute (verklig)
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_inertia
-    name: Husets tröghet
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_aggressiveness
-    name: Aggressivitet
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_current_price_level
-    name: Elprisnivå
-    icon: mdi:chart-bell-curve-cumulative
-    secondary_info: last-changed
-  - entity: input_number.pumpsteer_aggressiveness
-  - entity: input_number.house_inertia
-  - entity: input_number.indoor_target_temperature
-  - entity: input_number.pumpsteer_summer_threshold
-  - entity: input_text.hourly_forecast_temperatures
-    name: Forecast Data (raw)
-    secondary_info: last-changed
-  - entity: input_boolean.holiday_mode
-  - entity: input_datetime.holiday_start
-    name: Från
-  - entity: input_datetime.holiday_end
-    name: Till
+input_number:
+  pumpsteer_aggressiveness:
+    name: PumpSteer Aggressiveness
+    min: 0
+    max: 5
+    step: 1
+    unit_of_measurement: "level"
+    icon: mdi:lightning-bolt-circle
+    mode: box
 
+  pumpsteer_summer_threshold:
+    name: Summer Mode Threshold
+    min: 0
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: box
+
+  indoor_target_temperature:
+    name: Indoor Target Temperature
+    min: 0
+    max: 27
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    mode: box
+
+  house_inertia:
+    name: House Inertia
+    min: 0.0
+    max: 10.0
+    step: 0.1
+    # unit_of_measurement: "x"  # eller ta bort om du föredrar helt utan
+    icon: mdi:home-thermometer
+    mode: box
   #######################################################
-type: entities
-entities:
-  - entity: sensor.pumpsteer
-    secondary_info: last-changed
-  - entity: sensor.temp_hall_nere_temperature
-    secondary_info: last-changed
-  - entity: input_number.indoor_target_temperature
-  - entity: input_number.pumpsteer_integral_gain
-  - entity: input_number.integral_temp_error
-    secondary_info: last-changed
-  - entity: input_number.house_inertia
-    secondary_info: last-changed
-title: Pumpdebug
+  integral_temp_error:
+    name: "Integral Temperature Error"
+    min: -1000
+    max: 1000
+    step: 0.1
+    unit_of_measurement: "°C·h"
+    mode: box
 
+  pumpsteer_integral_gain:
+    name: "PumpSteer Integral Gain"
+    min: 0.0
+    max: 1.0
+    step: 0.01
+    mode: slider
+    unit_of_measurement: ""
+    icon: mdi:tune
 #######################################################
-type: entities
-title: PumpSteer
-entities:
-  - entity: sensor.pumpsteer
-    name: Status
-    attribute: Status
-    icon: mdi:check-circle
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Mode
-    name: Mode
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Fake Outdoor Temperature
-    name: Fake Outdoor Temp (°C)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Price Category
-    name: Price Category
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Current Price
-    name: Current Price (SEK/kWh)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Max Price
-    name: Max Price (SEK/kWh)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Aggressiveness
-    name: Aggressiveness
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Inertia
-    name: Inertia
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Target Temperature
-    name: Target Temp (°C)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Indoor Temperature
-    name: Indoor Temp (°C)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Outdoor Temperature
-    name: Outdoor Temp (°C)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Braking Threshold (%)
-    name: Braking Threshold (%)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Price Factor (%)
-    name: Price Factor (%)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Holiday Mode
-    name: Holiday Mode
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Last Updated
-    name: Last Updated
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Temp Error (°C)
-    name: Temp Error (°C)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: To Summer Threshold (°C)
-    name: To Summer Threshold (°C)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Next 3 Hours Prices
-    name: Next 3h Prices (SEK/kWh)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Decision Reason
-    name: Decision Reason
+input_text:
+  hourly_forecast_temperatures:
+    name: Hourly Forecast Temperatures
+    max: 255
+
+input_boolean:
+  holiday_mode:
+    name: Semestermode aktivt
+    icon: mdi:beach
+
+input_datetime:
+  holiday_start:
+    name: Semester börjar
+    has_date: true
+    has_time: true
+
+  holiday_end:
+    name: Semester slutar
+    has_date: true
+    has_time: true
+
+template:
+  - sensor:
+      - name: "Real Outdoor Temperature"
+        state: >
+          {{ state_attr('sensor.pumpsteer', 'Outdoor Temperature') | default(0) }}
+        unit_of_measurement: "°C"
+        device_class: temperature
+
+      - name: "VirtualOutdoorTemp Tempdiff"
+        state: >
+          {% set fake = states('sensor.pumpsteer') | float(0) %}
+          {% set real = state_attr('sensor.pumpsteer', 'Outdoor Temperature') | default(0) | float %}
+          {{ (fake - real) | round(1) }}
+        unit_of_measurement: "°C"
+        icon: mdi:thermometer-minus
+
+      - name: "PumpSteer Indoor Target Diff"
+        state: >
+          {% set actual = state_attr('sensor.pumpsteer', 'Indoor Temperature') | default(0) | float %}
+          {% set target = state_attr('sensor.pumpsteer', 'Target Temperature') | default(0) | float %}
+          {{ (actual - target) | round(1) }}
+        unit_of_measurement: "°C"
+        icon: mdi:home-thermometer-outline
+
+      - name: "PumpSteer Operating Mode"
+        state: >
+          {{ state_attr('sensor.pumpsteer', 'Mode') | default('unknown') | title }}
+        icon: >
+          {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
+          {% if mode == 'preboost' %}
+            mdi:flash
+          {% elif mode == 'heating' %}
+            mdi:fire
+          {% elif mode == 'neutral' %}
+            mdi:pause-circle
+          {% elif mode == 'summer_mode' %}
+            mdi:weather-sunny
+          {% elif mode == 'braking_mode' or mode == 'braking_by_temp' %}
+            mdi:car-brake-alert
+          {% else %}
+            mdi:help-circle
+          {% endif %}
+
+      - name: "PumpSteer Inertia"
+        state: "{{ state_attr('sensor.pumpsteer', 'Inertia') | default(0) }}"
+        icon: mdi:speedometer
+        state_class: measurement
+
+      - name: "PumpSteer Aggressiveness"
+        state: "{{ state_attr('sensor.pumpsteer', 'Aggressiveness') | default(0) }}"
+        icon: mdi:target
+        state_class: measurement
+
+      - name: "PumpSteer Is Preboosting"
+        state: >
+          {{ state_attr('sensor.pumpsteer', 'Mode') | default('') == 'preboost' }}
+        icon: mdi:fire
+
+      - name: "PumpSteer Is Braking"
+        state: >
+          {{ state_attr('sensor.pumpsteer', 'Mode') | default('') in ['braking_mode', 'braking_by_temp'] }}
+        icon: mdi:car-brake-alert
+
+      - name: "PumpSteer Current Price Level"
+        unit_of_measurement: "%"
+        state: >
+          {% set price = state_attr('sensor.pumpsteer', 'Current Price') | default(0) | float %}
+          {% set max = state_attr('sensor.pumpsteer', 'Max Price') | default(1) | float %}
+          {{ (price / max * 100) | round(0) }}
+        icon: mdi:cash-percent
