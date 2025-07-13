@@ -146,10 +146,10 @@ entities:
 type: custom:apexcharts-card
 header:
   show: true
-  title: Pris / Pumpsteer
+  title: Elpris / Prisnivå
 now:
   show: true
-  label: Nu
+  label: nu
 graph_span: 1d
 span:
   start: day
@@ -196,20 +196,18 @@ series:
     unit: SEK/kWh
     show:
       in_header: false
-      legend_value: false
+      legend_value: true
       extremas: true
     data_generator: |
       return entity.attributes.today.map((price, index) => {
         return [new Date().setHours(index,0,0), price];
       });
-  - entity: sensor.pumpsteer
+  - entity: sensor.pumpsteer_current_price_level
     yaxis_id: usage
     type: area
-    name: Pumpsteer
+    name: Prisnivå
     group_by:
       func: max
-    show:
-      legend_value: false
 
 
 #####################################################
