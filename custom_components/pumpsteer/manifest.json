@@ -1,10 +1,10 @@
 {
   "domain": "pumpsteer",
   "name": "PumpSteer",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "issue_tracker": "https://github.com/JohanAlvedal/pumpsteer/issues",
-  "logo": "custom_components/pumpsteer/icon.png",
+  "logo": "logo.png",
   "config_flow": true,
   "requirements": [],
   "dependencies": [],

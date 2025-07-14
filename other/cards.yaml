@@ -12,31 +12,90 @@ entities:
   - entity: input_datetime.holiday_start
   - entity: input_datetime.holiday_end
   
-## Main sensors ###################################################
 type: entities
+title: PumpSteer
 entities:
-  - entity: input_number.indoor_target_temperature
-  - entity: sensor.shelly_h_t_temp_temperature
-    secondary_info: last-changed
-  - entity: sensor.yttertemp_no
-    secondary_info: last-changed
   - entity: sensor.pumpsteer
-    secondary_info: last-changed
-  - entity: input_number.pumpsteer_summer_threshold
-  - entity: input_number.house_inertia
-    secondary_info: last-changed
-  - entity: input_number.pumpsteer_aggressiveness
-    name: Aggressiveness (0–5)
-  - entity: input_text.hourly_forecast_temperatures
-    name: Forecast Data (raw)
-    secondary_info: last-updated
-  - entity: sensor.pumpsteer_future_strategy
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_operating_mode
-  - entity: sensor.pumpsteer_indoor_target_diff
-state_color: true
-
-
+    name: Status
+    attribute: Status
+    icon: mdi:check-circle
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Mode
+    name: Mode
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Fake Outdoor Temperature
+    name: Fake Outdoor Temp (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Price Category
+    name: Price Category
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Current Price
+    name: Current Price (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Max Price
+    name: Max Price (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Aggressiveness
+    name: Aggressiveness
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Inertia
+    name: Inertia
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Target Temperature
+    name: Target Temp (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Indoor Temperature
+    name: Indoor Temp (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Outdoor Temperature
+    name: Outdoor Temp (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Braking Threshold (%)
+    name: Braking Threshold (%)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Price Factor (%)
+    name: Price Factor (%)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Holiday Mode
+    name: Holiday Mode
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Last Updated
+    name: Last Updated
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Temp Error (°C)
+    name: Temp Error (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: To Summer Threshold (°C)
+    name: To Summer Threshold (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Next 3 Hours Prices
+    name: Next 3h Prices (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Saving Potential (SEK/kWh)
+    name: Saving Potential (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Decision Reason
+    name: Decision Reason
+=======
   ## Semester #############################################
 
 type: vertical-stack
@@ -54,17 +113,71 @@ cards:
 
   ## Pumpdebug ##############################################
 
-type: entities
-entities:
-  - entity: input_number.integral_temp_error
-  - entity: input_number.house_inertia
-  - entity: sensor.shelly_h_t_temp_temperature
-  - entity: sensor.pumpsteer
-  - entity: sensor.pumpsteer_future_strategy
-title: Pumpdebug
-
-
-## PumpSteer – Integralfel och reglering ###################################################
+type: custom:apexcharts-card
+header:
+  show: true
+  title: Elpris / Prisnivå
+now:
+  show: true
+  label: nu
+graph_span: 1d
+span:
+  start: day
+apex_config:
+  stroke:
+    width: 2
+  dataLabels:
+    enabled: true
+  fill:
+    type: gradient
+    gradient:
+      shadeIntensity: 1
+      inverseColors: false
+      opacityFrom: 0.45
+      opacityTo: 0.05
+      stops:
+        - 10
+        - 50
+        - 75
+        - 1000
+  legend:
+    show: true
+  yaxis:
+    - id: price
+      show: true
+      decimalsInFloat: 1
+      floating: false
+      forceNiceScale: true
+      extend_to: end
+    - id: usage
+      show: true
+      opposite: true
+      decimalsInFloat: 1
+      floating: false
+      forceNiceScale: true
+      extend_to: end
+series:
+  - entity: sensor.nordpool_kwh_se3_sek_3_10_025
+    type: area
+    color: coral
+    float_precision: 2
+    stroke_width: 2
+    name: Elpris
+    unit: SEK/kWh
+    show:
+      in_header: false
+      legend_value: true
+      extremas: true
+    data_generator: |
+      return entity.attributes.today.map((price, index) => {
+        return [new Date().setHours(index,0,0), price];
+      });
+  - entity: sensor.pumpsteer_current_price_level
+    yaxis_id: usage
+    type: area
+    name: Prisnivå
+    group_by:
+      func: max
 
 type: custom:apexcharts-card
 header:

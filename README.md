@@ -1,14 +1,15 @@
 # PumpSteer
 
-PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera din värmepump genom att manipulera insignalen från utomhustemperatursensorn. Den låter dig spara energi och pengar genom att anpassa din uppvärmningsstrategi baserat på elpriser, inomhustemperatur och väderprognoser.
+PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera din värmepump genom att manipulera insignalen från utomhustemperatursensorn. Den låter dig spara energi och pengar genom att anpassa din uppvärmningsstrategi baserat på elpriser, inomhustemperatur, väderprognoser och termisk tröghet.
 
 -----
 
 # Ansvarsfriskrivning
 
 Jag är inte expert på programmering, energihantering eller automation. Denna setup är baserad på mina personliga erfarenheter och experiment. Jag kan inte garantera att den fungerar för alla, och jag tar inget ansvar för problem eller skador som kan uppstå vid användning av denna konfiguration eller kod.
-Använd den på egen risk och testa noggrant i din egen miljö.
 
+**Använd den på egen risk och testa noggrant i din egen miljö.**
+=======
 ## ✅ Funktioner
 
 - 🔧 **Smart virtuell styrning av utomhustemperatur**
@@ -32,92 +33,8 @@ Använd den på egen risk och testa noggrant i din egen miljö.
 > Semesterläge är endast aktivt när sommarläge *inte* är aktivt.
 > Om utomhustemperaturen är över sommar-tröskeln kommer sommarläget alltid att prioriteras över semesterläget.
 > Detta innebär att uppvärmningen minimeras under varma perioder, även om semesterläget är aktiverat.
-
------
-
-## Lägg till PumpSteer till HACS som ett anpassat arkiv (Custom Repository)
-
-Om PumpSteer ännu inte finns tillgängligt i HACS standardbutik kan du lägga till det manuellt som ett anpassat arkiv:
-
-I Home Assistant, gå till HACS i sidofältet.
-Klicka på menyn med tre punkter (⋮) i det övre högra hörnet och välj "Custom repositories" (Anpassade arkiv).
-I fältet "Repository" (Arkiv), ange:
-
-```
-
-[https://github.com/JohanAlvedal/PumpSteer](https://github.com/JohanAlvedal/PumpSteer)
-
-````
-
-Ställ in kategorin till "Integration".
-Klicka på "Add" (Lägg till).
-PumpSteer kommer nu att visas under HACS \> Integrations. Klicka på "Install" för att lägga till det.
-Starta om Home Assistant efter installationen.
-Fortsätt med konfigurationsstegen som beskrivits ovan.
-Obs:
-Så länge PumpSteer inte finns i den officiella HACS-butiken måste du upprepa dessa steg om du installerar om HACS eller rensar dess konfiguration.
-
------
-
-## 🔧 Installation och Konfiguration
-
-Följ dessa tre steg för att få PumpSteer igång.
-
-### Steg 1: Skapa hjälpentiteter (via Packages)
-
-För att göra setup så enkel som möjligt, innehåller detta projekt en paketfil som skapar alla nödvändiga `input_number`- och `input_text`-hjälpare åt dig.
-
-1.  **Ladda ner filen `pumpsteer_package.yaml`** från arkivet.
-
-2.  Placera filen i din `/config/packages/` katalog. Om `packages`-katalogen inte finns i roten av din `/config`-mapp, måste du skapa den.
-
-3.  **Aktivera packages** i din huvudsakliga `configuration.yaml`-fil. Om du inte redan har gjort det, lägg till följande rader. Om du redan har en `homeassistant:`-sektion, lägg bara till `packages:`-raden till den.
-
-    ```yaml
-    homeassistant:
-      packages: !include_dir_named packages
-    ```
-
-4.  **Starta om Home Assistant.** Efter omstart kommer alla nödvändiga hjälpare (listade i avsnittet "Referens för hjälpentiteter" nedan) att vara tillgängliga.
-
-### Steg 2: Installera den anpassade komponenten
-
-Detta är standardproceduren för att installera en anpassad komponent.
-
-1.  Placera katalogen `pumpsteer` (som innehåller `sensor.py`, `pre_boost.py`, etc.) i din Home Assistant-mapp `custom_components`.
-2.  Starta om Home Assistant igen.
-
-### Steg 3: Lägg till integrationen
-
-1.  Navigera till **Inställningar \> Enheter och Tjänster \> Lägg till Integration**.
-2.  Sök efter och välj **PumpSteer**.
-3.  I konfigurationsdialogen, välj de hjälpentiteter som skapades av paketfilen.
-
------
-
-## 📄 Referens för hjälpentiteter
-
-Genom att använda den medföljande filen `pumpsteer_package.yaml` kommer följande entiteter att skapas. Du kan justera deras värden från Home Assistant-gränssnittet under **Inställningar \> Enheter och Tjänster \> Hjälpare**.
-
-| Typ | Beskrivning |
-| :--- | :--- |
-| `sensor` | Inomhustemperaturgivare (måste du tillhandahålla) |
-| `sensor` | Verklig utomhustemperaturgivare (måste du tillhandahålla) |
-| `sensor` | Elprissensor (måste du tillhandahålla, t.ex. Nordpool eller Tibber) |
-| `input_text` | Lagrar de timvisa prognostiserade temperaturerna (CSV-sträng, 24 värden) |
-| `input_number`| Din önskade målinomhustemperatur |
-| `input_number`| Utomhustemperaturtröskeln för att aktivera sommarläge |
-| `input_number` | Aggressivitetsnivån för besparingar vs. komfort (0,0 till 5,0) |
-| `input_number` | Den beräknade husets tröghet (du kan låta PumpSteer hantera detta eller åsidosätta det) |
-
------
-
-## 🧪 Prognosformat
-
-`input_text`-entiteten för temperaturprognosen måste innehålla **högst 24 kommaseparerade värden** som representerar de timvisa prognostiserade utomhustemperaturerna för de kommande 24 timmarna:
-
-```text
--3.5,-4.2,-5.0,-4.8,... (totalt 24 värden)
+> 
+=======
 ````
 
 Om strängen är ogiltig eller ofullständig, kommer sensorn att logga en varning och tillfälligt avbryta beräkningarna tills giltig data är tillgänglig.
@@ -169,7 +86,7 @@ PumpSteer beräknar en "fejkad" utomhustemperatur för att knuffa din värmepump
   - **Pre-boosta:** Värma mer när priser och temperaturer är låga, före en kommande kall och dyr pristopp.
   - **Bromsa:** Undvika uppvärmning när priserna är som högst.
   - **Normalt:** Justera försiktigt uppvärmningen för att bibehålla komfort med minimal kostnad.
-  - **Sommarläge:** Stå ner när det är varmt ute.
+  - **Sommarläge:** Stå ner när det är varmt ute
 
 -----
 
@@ -197,4 +114,4 @@ Om du är kunnig inom detta område välkomnas konstruktiv feedback, förslag oc
 
 -----
 
-© Johan Älvedal
+© Johan Ä

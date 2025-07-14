@@ -1,508 +1,321 @@
-# Standard imports
 import logging
 from datetime import datetime, timedelta
+from typing import Optional, Dict, Any
 
-# Home Assistant-specific imports
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.helpers.typing import StateType  # For state type hinting
+from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-# Import async_call_later to schedule updates
-from homeassistant.helpers.event import async_call_later
-
-# Custom imports for PumpSteer
 from .pre_boost import check_combined_preboost
-from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE # Added holiday imports
+from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
+from .temp_control_logic import calculate_temperature_output
+from .electricity_price import hybrid_classify_prices
+from .settings import (
+    DEFAULT_HOUSE_INERTIA,
+    HOLIDAY_TEMP,
+    BRAKING_MODE_TEMP,
+    PREBOOST_MAX_OUTDOOR_TEMP,
+    AGGRESSIVENESS_SCALING_FACTOR
+)
+from .utils import (
+    safe_float, get_state, get_attr,
+    safe_get_price_data, safe_parse_temperature_forecast,
+    validate_required_entities, safe_get_entity_state_with_description,
+    safe_array_slice
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-# Constants for inertia calculation
-INERTIA_UPDATE_INTERVAL = timedelta(minutes=10)  # How often to check delta
-INERTIA_WEIGHT_FACTOR = 4  # How much old inertia should weigh
-INERTIA_DIVISOR = 5  # (INERTIA_WEIGHT_FACTOR + 1)
-MAX_INERTIA_VALUE = 5.0
-MIN_INERTIA_VALUE = 0.0
-DEFAULT_INERTIA_VALUE = 1.0
-PREBOOST_MAX_OUTDOOR_TEMP = 10.0
+DOMAIN = "pumpsteer"
 
-def safe_float(val: StateType) -> float | None:
-    """Safely converts a value to float, returns None on error."""
-    try:
-        if val is None:  # Explicitly handle None
-            return None
-        return float(val)
-    except (TypeError, ValueError):
-        return None
-
-def get_state(hass: HomeAssistant, entity_id: str) -> str | None:
-    """Safely retrieves the state of an entity. Returns None if entity_id is invalid or state is unavailable/unknown."""
-    if not entity_id:
-        return None
-    entity = hass.states.get(entity_id)
-    if entity and entity.state not in [STATE_UNAVAILABLE, STATE_UNKNOWN]:
-        return entity.state
-    return None
-
-def get_attr(hass: HomeAssistant, entity_id: str, attribute: str) -> any:
-    """Safely retrieves an attribute from an entity. Returns None if entity_id is invalid or attribute is missing."""
-    if not entity_id:
-        return None
-    entity = hass.states.get(entity_id)
-    return entity.attributes.get(attribute) if entity and attribute in entity.attributes else None
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    """Sets up the PumpSteer sensor platform."""
-    sensors = [
-        PumpSteerSensor(hass, entry),
-        PumpSteerFutureStrategySensor(hass, entry),
-    ]
-    async_add_entities(sensors, True)
+# Local constants not found in settings.py
+NEUTRAL_TEMP_THRESHOLD = 0.5
+DEFAULT_SUMMER_THRESHOLD = 18.0
+DEFAULT_AGGRESSIVENESS = 0.0
 
 class PumpSteerSensor(Entity):
-    """Representation of a PumpSteer Sensor."""
+    """PumpSteer sensor for heat pump control."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
+        """Initialize the PumpSteer sensor."""
         self.hass = hass
         self._config_entry = config_entry
         self._state = None
         self._attributes = {}
-        self._last_update_time = None
-        self._previous_indoor_temp = None
-        self._last_outdoor_temp = None
-        self._inertia_value = DEFAULT_INERTIA_VALUE
         self._name = "PumpSteer"
+        self._last_update_time = None
 
-        # Set standard Home Assistant properties
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
         self._attr_state_class = "measurement"
         self._attr_unique_id = config_entry.entry_id
 
-        # Initialize extra attributes
-        self._attributes = {
-            "Status": "Initializing",
-            "Mode": "initializing",
-            "Outdoor (actual)": None,
-            "Indoor (target)": None,  # Will be updated with actual_target_temp_for_logic
-            "Indoor (actual)": None,
-            "Inertia": self._inertia_value,
-            "Aggressiveness": None,
-            "Summer Threshold": None,
-            "Electricity Prices (forecast)": None,
-            "Pre-boost Active": False,
-        }
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, config_entry.entry_id)},
+            name="PumpSteer",
+            manufacturer="Custom",
+            model="Heat Pump Controller",
+            sw_version="1.0.0"
+        )
 
-        # Add a listener for configuration changes
         config_entry.add_update_listener(self.async_options_update_listener)
-
-        _LOGGER.debug(f"PumpSteerSensor: Initializing with config data: {self._config_entry.data}")
-        _LOGGER.debug(f"PumpSteerSensor: Initializing with config options: {self._config_entry.options}")
+        _LOGGER.debug("PumpSteerSensor: Initializing")
 
     @property
     def name(self) -> str:
-        """Returns the sensor's name."""
+        """Return the name of the sensor."""
         return self._name
 
     @property
     def unique_id(self) -> str:
-        """Returns a unique ID for the sensor."""
-        return f"pumpsteer_{self._config_entry.entry_id}"
-
-    @property
-    def state(self) -> StateType:
-        """Returns the sensor's state."""
-        return self._state
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        """Returns the sensor's state attributes."""
-        # Combine existing attributes with new, friendly names
-        return {
-            **self._attributes,
-            "friendly_name": "PumpSteer – Control Output"
-        }
-
-    @property
-    def unit_of_measurement(self) -> str:
-        """Returns the unit of measurement."""
-        return "°C"
-
-    @property
-    def device_class(self) -> str:
-        """Returns the device class."""
-        return "temperature"
-
-    @property
-    def icon(self) -> str:
-        """Returns the icon to use in the frontend."""
-        return "mdi:thermometer-lines"
-
-    async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Handles option updates."""
-        _LOGGER.debug("PumpSteer: Options updated, reloading sensor.")
-        self._config_entry = entry  # Update config_entry to get the latest options
-        await self.async_update()  # Call update directly to apply new settings
-
-    async def async_update(self) -> None:
-        """Updates the sensor's state."""
-        # Combine data and options to get the full configuration
-        config = {**self._config_entry.data, **self._config_entry.options}
-        
-        # Get all entity IDs from the combined configuration
-        indoor_temp_entity_id = config.get("indoor_temp_entity")
-        real_outdoor_temp_entity_id = config.get("real_outdoor_entity")
-        electricity_price_entity_id = config.get("electricity_price_entity")
-        hourly_forecast_temperatures_entity_id = config.get("hourly_forecast_temperatures_entity")
-        target_temp_entity_id = config.get("target_temp_entity")
-        summer_threshold_entity_id = config.get("summer_threshold_entity")
-        
-        # Get IDs for holiday mode helpers (they may be None if optional and not configured)
-        holiday_mode_boolean_entity_id = self._config_entry.options.get("holiday_mode_boolean_entity") or config.get("holiday_mode_boolean_entity")
-        holiday_start_datetime_entity_id = self._config_entry.options.get("holiday_start_datetime_entity") or config.get("holiday_start_datetime_entity")
-        holiday_end_datetime_entity_id = self._config_entry.options.get("holiday_end_datetime_entity") or config.get("holiday_end_datetime_entity")
-
-        # Get states for entities
-        indoor_temp = safe_float(get_state(self.hass, indoor_temp_entity_id))
-        real_outdoor_temp = safe_float(get_state(self.hass, real_outdoor_temp_entity_id))
-        electricity_prices = get_attr(self.hass, electricity_price_entity_id, "today")  
-        hourly_temps_csv = get_state(self.hass, hourly_forecast_temperatures_entity_id)
-        
-        # Get target temperature and summer threshold from input_number helpers
-        configured_target_temp = safe_float(get_state(self.hass, target_temp_entity_id))
-        summer_threshold_temp = safe_float(get_state(self.hass, summer_threshold_entity_id))
-        
-        # Aggressiveness and inertia from helpers (assumed to always exist)
-        aggressiveness = safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or 0.0
-        user_defined_inertia = safe_float(get_state(self.hass, "input_number.house_inertia"))  
-        inertia = user_defined_inertia if user_defined_inertia is not None else self._inertia_value
-
-        # Collect critical data to check if anything is missing
-        critical_entities_data = {
-            "Indoor (actual)": indoor_temp,
-            "Outdoor (actual)": real_outdoor_temp,
-            "Target Temp": configured_target_temp,  # Uses the configured value here
-            "Summer Threshold": summer_threshold_temp,
-            "Electricity Prices (forecast)": electricity_prices,
-            "Temperature Forecast": hourly_temps_csv,
-        }
-
-        missing_data_info = [name for name, value in critical_entities_data.items() if value is None]
-
-        if missing_data_info:
-            _LOGGER.warning("PumpSteer: Waiting for data for: %s. Retrying in 10 seconds.", ", ".join(missing_data_info))
-            self._state = STATE_UNAVAILABLE
-            self._attributes["Status"] = f"Waiting for data: {', '.join(missing_data_info)}"
-            # Schedule a new update after 10 seconds
-            self.async_on_remove(
-                async_call_later(self.hass, timedelta(seconds=10), self.async_schedule_update_ha_state)
-            )
-            return
-
-        self._attributes["Status"] = "OK"
-        
-        # --- HOLIDAY MODE LOGIC ---
-        # Check if holiday mode is active
-        holiday_mode_active = False
-        if holiday_mode_boolean_entity_id and holiday_start_datetime_entity_id and holiday_end_datetime_entity_id:
-            holiday_mode_active = is_holiday_mode_active(
-                self.hass,
-                holiday_mode_boolean_entity_id,
-                holiday_start_datetime_entity_id,
-                holiday_end_datetime_entity_id
-            )
-        
-        self._attributes["Holiday Status"] = "Active" if holiday_mode_active else "Inactive"
-        # NOTE:
-        # Holiday mode is only active when Summer mode is NOT active.
-        # If the outdoor temperature is above the summer threshold, Summer mode will always take priority over Holiday mode.
-        # This is to ensure that heating is minimized during warm periods, regardless of holiday settings.
-
-        # Determine the actual target temperature to use in calculations
-        # Default is the configured temperature
-        actual_target_temp_for_logic = configured_target_temp
-
-        if holiday_mode_active:
-            actual_target_temp_for_logic = HOLIDAY_TARGET_TEMPERATURE
-            self._attributes["Mode"] = "Holiday"
-            self._attributes["Holiday Active"] = holiday_mode_active
-            _LOGGER.info(f"[PumpSteer] Overriding target temperature to {HOLIDAY_TARGET_TEMPERATURE}°C due to Holiday Mode.")
-        elif self._attributes.get("Mode") == "Holiday":  # If we just left holiday mode
-            self._attributes["Mode"] = "Normal"  # Reset to Normal (or whatever the default is)
-
-        # --- END HOLIDAY MODE LOGIC ---
-
-        # --- CHECK MODE AND SET OUTPUT VALUE ---
-        
-        # 1. Summer Mode - highest priority (still uses actual_target_temp_for_logic for logic)
-        if real_outdoor_temp >= summer_threshold_temp:
-            self._state = round(25.0, 1)  # High value to turn off/minimize heating
-            self._attributes["Mode"] = "summer_mode" + (" + holiday" if holiday_mode_active else "")
-            self._attributes["Pre-boost Active"] = False
-            _LOGGER.info("PumpSteer: Summer Mode activated (Outdoor temp: %.1f >= %.1f)", real_outdoor_temp, summer_threshold_temp)
-        elif holiday_mode_active:  # Holiday mode has already been handled above and set Mode to "Holiday"
-            # No further logic here, state is set at the end based on actual_target_temp_for_logic
-            pass
-        else:  # Only if neither summer mode nor holiday mode is active
-            # 2. Braking Mode (based on price) - prioritized over pre-boost
-            max_price_in_forecast = max(electricity_prices) if electricity_prices else 0.0
-            current_price = electricity_prices[0] if electricity_prices and electricity_prices[0] is not None else 0.0
-
-            price_factor = 0.0
-            if max_price_in_forecast > 0:
-                price_factor = current_price / max_price_in_forecast
-            
-            # Dynamic threshold based on aggressiveness
-            braking_threshold_ratio = 1.0 - (aggressiveness / 5.0) * 0.4  
-            
-            if price_factor >= braking_threshold_ratio:
-                self._state = round(25.0, 1)  # Sets the virtual outdoor temperature to a high level
-                self._attributes["Mode"] = "braking_mode"
-                self._attributes["Pre-boost Active"] = True  # Use this to pause inertia calculation
-                _LOGGER.info("PumpSteer: Braking mode activated due to high price (Aggressiveness: %.1f, Price Factor: %.2f)", aggressiveness, price_factor)
-            else:
-                # 3. Pre-boost Mode (based on forecast)
-                boost_mode = None
-                if real_outdoor_temp <= PREBOOST_MAX_OUTDOOR_TEMP:
-                    # Use actual_target_temp_for_logic for cold_threshold if needed in check_combined_preboost
-                    boost_mode = check_combined_preboost(
-                        hourly_temps_csv,
-                        electricity_prices,
-                        lookahead_hours=6,
-                        cold_threshold=actual_target_temp_for_logic - 2.0,  # Example: 2 degrees below target temperature
-                        price_threshold_ratio=0.8,
-                        aggressiveness=aggressiveness,  
-                        inertia=inertia
-                    )
-                else:
-                    _LOGGER.info(f"PumpSteer: Pre-boost deactivated as outdoor temperature ({real_outdoor_temp}°C) is above max threshold ({PREBOOST_MAX_OUTDOOR_TEMP}°C).")
-                
-                if boost_mode == "preboost":
-                    self._state = -15.0  # Very low virtual outdoor temp to accelerate
-                    self._attributes["Mode"] = "preboost"
-                    self._attributes["Pre-boost Active"] = True
-                    _LOGGER.info("PumpSteer: Preboost (accelerate) activated to build heat buffer.")
-                else:
-                    # 4. Normal operation (heating/neutral)
-                    # This logic MUST use actual_target_temp_for_logic
-                    diff = indoor_temp - actual_target_temp_for_logic
-                    
-                    scaling_factor = aggressiveness * 0.5  
-                    fake_temp = real_outdoor_temp + (diff * scaling_factor)
-
-                    if diff < 0:
-                        # House is colder than target
-                        fake_temp = min(fake_temp, 20.0)
-                        self._attributes["Mode"] = "heating"
-                    else:
-                        # House is at or above target
-                        fake_temp = max(fake_temp, -10.0)  
-                        self._attributes["Mode"] = "neutral" if abs(diff) < 0.5 else "braking_by_temp"
-                        
-                    self._state = round(fake_temp, 1)
-                    self._attributes["Pre-boost Active"] = False
-                    _LOGGER.debug("PumpSteer: Normal operation (fake temp: %.1f °C, diff: %.2f) - Mode: %s", fake_temp, diff, self._attributes["Mode"])
-
-        # --- INERTIA CALCULATION ---
-        current_time = datetime.now()
-        
-        # Inertia calculation is paused if Pre-boost or Braking is active.
-        # We use the attribute "Pre-boost Active" as a general flag for this.
-        if self._last_update_time and (current_time - self._last_update_time) >= INERTIA_UPDATE_INTERVAL:
-            if not self._attributes.get("Pre-boost Active") and not self._attributes.get("Mode") == "braking_mode" and not self._attributes.get("Mode") == "summer_mode" and not self._attributes.get("Mode") == "Holiday":
-                # Only perform inertia calculation in "Normal" or "heating/neutral" mode
-                if self._previous_indoor_temp is not None and self._last_outdoor_temp is not None:
-                    delta_indoor = indoor_temp - self._previous_indoor_temp
-                    delta_outdoor = real_outdoor_temp - self._last_outdoor_temp
-                    if abs(delta_outdoor) > 0.001:
-                        new_inertia_contribution = delta_indoor / delta_outdoor
-                        new_inertia_contribution = max(-5.0, min(5.0, new_inertia_contribution))
-                        
-                        self._inertia_value = (self._inertia_value * INERTIA_WEIGHT_FACTOR + new_inertia_contribution) / INERTIA_DIVISOR
-                        self._inertia_value = max(MIN_INERTIA_VALUE, min(MAX_INERTIA_VALUE, self._inertia_value))
-                        
-                        house_inertia_entity_id = "input_number.house_inertia"
-                        self.hass.async_create_task(
-                            self.hass.services.async_call(
-                                "input_number", "set_value",
-                                {"entity_id": house_inertia_entity_id, "value": round(self._inertia_value, 2)},
-                                blocking=False,
-                            )
-                        )
-                        _LOGGER.debug(f"PumpSteer: Updated input_number.house_inertia to {self._inertia_value:.2f}")
-                    else:
-                        _LOGGER.debug("PumpSteer: Delta outdoor too small (%.2f), skipping inertia calculation for this interval.", delta_outdoor)
-                else:
-                    _LOGGER.debug("PumpSteer: Previous indoor/outdoor temp not available, skipping inertia calculation.")
-                self._previous_indoor_temp = indoor_temp
-                self._last_outdoor_temp = real_outdoor_temp
-                self._last_update_time = current_time
-            else:
-                _LOGGER.debug("Inertia calculation paused due to current mode (%s). No update.", self._attributes.get("Mode"))
-        elif not self._last_update_time:
-            self._last_update_time = current_time
-            self._previous_indoor_temp = indoor_temp
-            self._last_outdoor_temp = real_outdoor_temp
-
-        current_inertia = user_defined_inertia if user_defined_inertia is not None else self._inertia_value
-
-        # Update attributes
-        self._attributes.update({
-            "Outdoor (actual)": real_outdoor_temp,
-            "Indoor (target)": actual_target_temp_for_logic,  # Shows the actual target temp used
-            "Indoor (actual)": indoor_temp,
-            "Inertia": round(current_inertia, 2),
-            "Aggressiveness": aggressiveness,
-            "Summer Threshold": summer_threshold_temp,
-            "Electricity Prices (forecast)": electricity_prices,
-            "Pre-boost Active": self._attributes.get("Pre-boost Active", False),
-            # "Mode" is already set in the if/elif statements above
-        })
-        _LOGGER.debug(f"PumpSteer: Final state: {self._state}°C, Mode: {self._attributes['Mode']}")
-
-
-class PumpSteerFutureStrategySensor(Entity):
-    """Representation of a PumpSteer Future Strategy Sensor."""
-
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
-        self.hass = hass
-        self._config_entry = config_entry
-        self._state = "Unknown"  # State will be the future strategy
-        self._attributes = {}
-        self._name = "PumpSteer Future Strategy"
-
-        self._attr_unique_id = f"pumpsteer_future_strategy_{config_entry.entry_id}"
-
-        self._attributes = {
-            "Status": "Initializing",
-            "Pre-boost Expected": False,
-            "Cold Threshold Used": None,
-            "Price Threshold Ratio Used": None,
-            "Lookahead Hours": None,
-            "Forecast Temperature (next 6h)": None,
-            "Forecast Prices (next 6h)": None,
-        }
-
-        config_entry.add_update_listener(self.async_options_update_listener)
-
-        _LOGGER.debug(f"PumpSteerFutureStrategySensor: Initializing with config data: {self._config_entry.data}")
-        _LOGGER.debug(f"PumpSteerFutureStrategySensor: Initializing with config options: {self._config_entry.options}")
-
-    @property
-    def name(self) -> str:
-        """Returns the sensor's name."""
-        return self._name
-
-    @property
-    def unique_id(self) -> str:
-        """Returns a unique ID for the sensor."""
+        """Return a unique identifier."""
         return self._attr_unique_id
 
     @property
     def state(self) -> StateType:
-        """Returns the sensor's state."""
+        """Return the state of the sensor."""
         return self._state
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Returns the sensor's state attributes."""
+        """Return extra attributes."""
         return {
             **self._attributes,
-            "friendly_name": "PumpSteer – Future Strategy"
+            "friendly_name": "PumpSteer"
         }
 
     @property
+    def unit_of_measurement(self) -> str:
+        """Return the unit of measurement."""
+        return self._attr_unit_of_measurement
+
+    @property
+    def device_class(self) -> str:
+        """Return the device class."""
+        return self._attr_device_class
+
+    @property
     def icon(self) -> str:
-        """Returns the icon to use in the frontend."""
-        return "mdi:chart-timeline-variant" # An icon representing future/forecast
+        """Return the icon."""
+        return "mdi:thermostat-box"
+
+    @property
+    def available(self) -> bool:
+        """Return True if the entity is available."""
+        return self._state != STATE_UNAVAILABLE
+
+    @property
+    def should_poll(self) -> bool:
+        """Return True if the entity should be polled."""
+        return True
 
     async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Handles option updates."""
-        _LOGGER.debug("PumpSteerFutureStrategySensor: Options updated, reloading sensor.")
+        """Handle configuration options updates."""
         self._config_entry = entry
         await self.async_update()
 
-    async def async_update(self) -> None:
-        """Updates the sensor's state based on future predictions."""
-        config = {**self._config_entry.data, **self._config_entry.options}
-
-        real_outdoor_temp_entity_id = config.get("real_outdoor_entity")
-        electricity_price_entity_id = config.get("electricity_price_entity")
-        hourly_forecast_temperatures_entity_id = config.get("hourly_forecast_temperatures_entity")
-        target_temp_entity_id = config.get("target_temp_entity") # Added for future strategy logic
-
-        real_outdoor_temp = safe_float(get_state(self.hass, real_outdoor_temp_entity_id))
-        electricity_prices = get_attr(self.hass, electricity_price_entity_id, "today")
-        hourly_temps_csv = get_state(self.hass, hourly_forecast_temperatures_entity_id)
-        
-        # Get target temperature and summer threshold from input_number helpers
-        configured_target_temp = safe_float(get_state(self.hass, target_temp_entity_id))
-        
-        aggressiveness = safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or 0.0
-        user_defined_inertia = safe_float(get_state(self.hass, "input_number.house_inertia"))
-        inertia = user_defined_inertia if user_defined_inertia is not None else DEFAULT_INERTIA_VALUE # Use DEFAULT_INERTIA_VALUE if user_defined_inertia is None for future calculations.
-
-        # Collect critical data, similar to PumpSteerSensor
-        critical_data = {
-            "Outdoor (actual)": real_outdoor_temp,
-            "Target Temp": configured_target_temp,
-            "Electricity Prices (forecast)": electricity_prices,
-            "Temperature Forecast": hourly_temps_csv,
+    def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract and validate sensor data from Home Assistant."""
+        return {
+            'indoor_temp': safe_float(get_state(self.hass, config.get("indoor_temp_entity"))),
+            'outdoor_temp': safe_float(get_state(self.hass, config.get("real_outdoor_entity"))),
+            'target_temp': safe_float(get_state(self.hass, config.get("target_temp_entity"))),
+            'summer_threshold': safe_float(get_state(self.hass, config.get("summer_threshold_entity"))) or DEFAULT_SUMMER_THRESHOLD,
+            'aggressiveness': safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or DEFAULT_AGGRESSIVENESS,
+            'inertia': safe_float(get_state(self.hass, "input_number.house_inertia")) or DEFAULT_HOUSE_INERTIA
         }
 
-        missing_data = [name for name, value in critical_data.items() if value is None]
+    def _get_price_data(self, config: Dict[str, Any]) -> tuple[list, float, str]:
+        """Extract and process electricity price data."""
+        prices_raw = get_attr(self.hass, config.get("electricity_price_entity"), "today")
+        if not prices_raw:
+            prices_raw = get_attr(self.hass, config.get("electricity_price_entity"), "raw_today")
 
-        if missing_data:
-            _LOGGER.warning("PumpSteerFutureStrategySensor: Waiting for data for: %s. Retrying in 10 seconds.", ", ".join(missing_data))
+        prices = []
+        if isinstance(prices_raw, list):
+            for i, p in enumerate(prices_raw):
+                try:
+                    prices.append(float(p))
+                except Exception:
+                    _LOGGER.warning(f"PumpSteer: Invalid electricity price at index {i}: {p}")
+
+        now_hour = datetime.now().hour
+        current_price = prices[now_hour] if prices and now_hour < len(prices) else 0.0
+
+        if prices and now_hour < len(prices):
+            price_category = hybrid_classify_prices(prices)[now_hour] + " (hybrid)"
+        else:
+            price_category = "unknown" # Changed from "okänd"
+
+        return prices, current_price, price_category
+
+    def _validate_required_data(self, sensor_data: Dict[str, Any], prices: list) -> Optional[list]:
+        """Validate that all necessary sensor data is available."""
+        missing = []
+
+        if sensor_data['indoor_temp'] is None:
+            missing.append("Indoor temperature") # Changed from "Inomhustemperatur"
+        if sensor_data['outdoor_temp'] is None:
+            missing.append("Outdoor temperature") # Changed from "Utomhustemperatur"
+        if sensor_data['target_temp'] is None:
+            missing.append("Target temperature") # Changed from "Måltemperatur"
+        if not prices:
+            missing.append("Electricity prices") # Changed from "Elpriser"
+
+        return missing if missing else None
+
+    def _calculate_output_temperature(self, sensor_data: Dict[str, Any], price_category: str) -> tuple[float, str]:
+        """Calculate the output temperature based on current conditions."""
+        indoor_temp = sensor_data['indoor_temp']
+        outdoor_temp = sensor_data['outdoor_temp']
+        target_temp = sensor_data['target_temp']
+        summer_threshold = sensor_data['summer_threshold']
+        aggressiveness = sensor_data['aggressiveness']
+
+        # Check for summer mode
+        if outdoor_temp >= summer_threshold:
+            return BRAKING_MODE_TEMP, "summer_mode"
+
+        # Check for expensive electricity periods
+        # Assuming PRICE_CATEGORIES in electricity_price.py are also translated,
+        # otherwise ensure consistency or map them here.
+        # Original: if price_category.startswith("dyrt") or price_category.startswith("extremt_dyrt"):
+        if "expensive" in price_category or "extremely_expensive" in price_category: # Adjusted to match expected English categories
+            now_hour = datetime.now().hour
+            _LOGGER.info(f"PumpSteer: Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {BRAKING_MODE_TEMP} °C)") # Changed comment
+            return BRAKING_MODE_TEMP, "braking_by_price"
+
+        # Calculate temperature difference
+        temp_diff = indoor_temp - target_temp
+
+        # If within neutral zone, use real outdoor temperature
+        if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
+            return outdoor_temp, "neutral"
+
+        # Use temperature control logic for heating/cooling
+        fake_temp, mode = calculate_temperature_output(
+            indoor_temp,
+            target_temp,
+            outdoor_temp,
+            aggressiveness
+        )
+        return fake_temp, mode
+
+    def _build_attributes(self, sensor_data: Dict[str, Any], prices: list, current_price: float,
+                          price_category: str, mode: str, holiday: bool) -> Dict[str, Any]:
+        """Build the attribute dictionary for the sensor."""
+        now_hour = datetime.now().hour
+        max_price = max(prices) if prices else 1.0
+        price_factor = current_price / max_price if max_price > 0 else 0
+
+        # Use aggressiveness scaling from settings
+        braking_threshold_ratio = 1.0 - (sensor_data['aggressiveness'] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
+
+        # Build decision reason
+        decision_triggers = {
+            'braking_by_price': 'price', # Changed from 'pris'
+            'heating': 'temperature',    # Changed from 'temperatur'
+            'cooling': 'temperature',    # Changed from 'temperatur'
+            'summer_mode': 'summer',     # Changed from 'sommar'
+            'neutral': 'neutral'
+        }
+        decision_reason = f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}" # Changed from 'okänd'
+
+        return {
+            "Mode": mode,
+            "Fake Outdoor Temperature": self._state,
+            "Price Category": price_category,
+            "Status": "OK",
+            "Current Price": current_price,
+            "Max Price": max_price,
+            "Aggressiveness": sensor_data['aggressiveness'],
+            "Inertia": sensor_data['inertia'],
+            "Target Temperature": sensor_data['target_temp'],
+            "Indoor Temperature": sensor_data['indoor_temp'],
+            "Outdoor Temperature": sensor_data['outdoor_temp'],
+            "Summer Threshold": sensor_data['summer_threshold'],
+            "Braking Threshold (%)": round(braking_threshold_ratio * 100, 1),
+            "Price Factor (%)": round(price_factor * 100, 1),
+            "Holiday Mode": holiday,
+            "Last Updated": datetime.now().isoformat(),
+            "Temp Error (°C)": round(sensor_data['indoor_temp'] - sensor_data['target_temp'], 2),
+            "To Summer Threshold (°C)": round(sensor_data['summer_threshold'] - sensor_data['outdoor_temp'], 2),
+            "Next 3 Hours Prices": prices[now_hour:now_hour+3] if len(prices) >= now_hour + 3 else prices[now_hour:],
+            "Saving Potential (SEK/kWh)": round(max_price - current_price, 3), # Kept SEK/kWh as it's a unit, unless specified otherwise
+            "Decision Reason": decision_reason
+        }
+
+    async def async_update(self) -> None:
+        """Update the sensor's state and attributes."""
+        try:
+            config = {**self._config_entry.data, **self._config_entry.options}
+
+            # Get sensor data
+            sensor_data = self._get_sensor_data(config)
+
+            # Get price data
+            prices, current_price, price_category = self._get_price_data(config)
+
+            # Validate required data
+            missing = self._validate_required_data(sensor_data, prices)
+            if missing:
+                self._state = STATE_UNAVAILABLE
+                self._attributes = {
+                    "Status": f"Missing: {', '.join(missing)}", # Changed from "Saknas"
+                    "Last Updated": datetime.now().isoformat()
+                }
+                _LOGGER.warning(f"PumpSteer: Missing sensor data: {', '.join(missing)}") # Changed from "Saknad sensordata"
+                return
+
+            # Check holiday mode
+            holiday = is_holiday_mode_active(
+                self.hass,
+                config.get("holiday_mode_boolean_entity"),
+                config.get("holiday_start_datetime_entity"),
+                config.get("holiday_end_datetime_entity")
+            )
+
+            # Adjust target temperature for holiday mode
+            if holiday:
+                sensor_data['target_temp'] = HOLIDAY_TEMP
+
+            # Calculate output temperature
+            fake_temp, mode = self._calculate_output_temperature(sensor_data, price_category)
+            self._state = round(fake_temp, 1)
+
+            # Build attributes
+            self._attributes = self._build_attributes(
+                sensor_data, prices, current_price, price_category, mode, holiday
+            )
+
+            self._last_update_time = datetime.now()
+            _LOGGER.debug(f"PumpSteer: Updated - Mode: {mode}, State: {self._state}°C") # Changed from "Uppdaterad - Läge: {mode}, Tillstånd"
+
+        except Exception as e:
+            _LOGGER.error(f"PumpSteer: Error during update: {e}") # Changed from "Fel vid uppdatering"
             self._state = STATE_UNAVAILABLE
-            self._attributes["Status"] = f"Waiting for data: {', '.join(missing_data)}"
-            self.async_on_remove(
-                async_call_later(self.hass, timedelta(seconds=10), self.async_schedule_update_ha_state)
-            )
-            return
-
-        self._attributes["Status"] = "OK"
-
-        # Define parameters for future pre-boost check
-        # These should ideally be configurable, but for now use static values or derive from aggressiveness
-        lookahead_hours = 6
-        cold_threshold_for_future = configured_target_temp - 2.0 # Example: 2 degrees below target
-        price_threshold_ratio_for_future = 0.8 # Example price threshold for future analysis
-        
-        boost_mode = None
-        if real_outdoor_temp <= PREBOOST_MAX_OUTDOOR_TEMP:
-            # Check for pre-boost in the future
-            boost_mode = check_combined_preboost(
-                hourly_temps_csv,
-                electricity_prices,
-                lookahead_hours=lookahead_hours,
-                cold_threshold=cold_threshold_for_future,
-                price_threshold_ratio=price_threshold_ratio_for_future,
-                aggressiveness=aggressiveness,
-                inertia=inertia
-            )
-            _LOGGER.debug(f"Future strategy check: boost_mode = {boost_mode}")
-        else:
-            _LOGGER.debug(f"Future strategy: Pre-boost not considered as outdoor temp ({real_outdoor_temp}°C) is above max threshold ({PREBOOST_MAX_OUTDOOR_TEMP}°C).")
+            self._attributes = {
+                "Status": f"Error: {str(e)}", # Changed from "Fel"
+                "Last Updated": datetime.now().isoformat()
+            }
 
 
-        if boost_mode == "preboost":
-            self._state = "Pre-boost Expected"
-            self._attributes["Pre-boost Expected"] = True
-            _LOGGER.info("PumpSteerFutureStrategySensor: Pre-boost is expected based on forecast.")
-        else:
-            self._state = "Normal/Braking Expected"
-            self._attributes["Pre-boost Expected"] = False
-            _LOGGER.info("PumpSteerFutureStrategySensor: Pre-boost is NOT expected based on forecast.")
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up the PumpSteer sensor from a config entry."""
+    _LOGGER.debug("PumpSteer: Setting up sensor platform")
 
+    # Create the sensor
+    sensor = PumpSteerSensor(hass, config_entry)
 
-        # Update attributes for future strategy sensor
-        self._attributes.update({
-            "Cold Threshold Used": cold_threshold_for_future,
-            "Price Threshold Ratio Used": price_threshold_ratio_for_future,
-            "Lookahead Hours": lookahead_hours,
-            "Forecast Temperature (next 6h)": hourly_temps_csv, # Raw CSV
-            "Forecast Prices (next 6h)": electricity_prices,    # Raw list
-        })
-        _LOGGER.debug(f"PumpSteerFutureStrategySensor: Final state: {self._state}")
+    # Add the sensor
+    async_add_entities([sensor], update_before_add=True)
+
+    _LOGGER.info("PumpSteer: Sensor platform setup complete")

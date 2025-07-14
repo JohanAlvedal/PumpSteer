@@ -20,10 +20,13 @@ def is_holiday_mode_active(
 
     Args:
         hass: The Home Assistant instance.
-        holiday_mode_boolean_entity_id: The entity ID for the holiday mode boolean switch (e.g., input_boolean.pumpsteer_holiday_mode).
+        holiday_mode_boolean_entity_id: The entity ID for the holiday mode boolean switch
+                                        (e.g., input_boolean.pumpsteer_holiday_mode).
                                         If None, this check is skipped (see important note below).
-        holiday_start_datetime_entity_id: The entity ID for the holiday start datetime (e.g., input_datetime.pumpsteer_holiday_start).
-        holiday_end_datetime_entity_id: The entity ID for the holiday end datetime (e.g., input_datetime.pumpsteer_holiday_end).
+        holiday_start_datetime_entity_id: The entity ID for the holiday start datetime
+                                          (e.g., input_datetime.pumpsteer_holiday_start).
+        holiday_end_datetime_entity_id: The entity ID for the holiday end datetime
+                                        (e.g., input_datetime.pumpsteer_holiday_end).
 
     Returns:
         True if holiday mode is active, False otherwise.
@@ -67,7 +70,7 @@ def is_holiday_mode_active(
         # `as_datetime` handles various datetime string formats and timezones.
         holiday_start_time = as_datetime(holiday_start_state.state)
         holiday_end_time = as_datetime(holiday_end_state.state)
-        
+
         # Get the current time, ensuring it has the same timezone information as the holiday times
         # for accurate comparison.
         current_time = datetime.now(holiday_start_time.tzinfo)
