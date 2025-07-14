@@ -9,109 +9,173 @@ PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera
 Jag är inte expert på programmering, energihantering eller automation. Denna setup är baserad på mina personliga erfarenheter och experiment. Jag kan inte garantera att den fungerar för alla, och jag tar inget ansvar för problem eller skador som kan uppstå vid användning av denna konfiguration eller kod.
 
 **Använd den på egen risk och testa noggrant i din egen miljö.**
-=======
+
+-----
+
 ## ✅ Funktioner
 
-- 🔧 **Smart virtuell styrning av utomhustemperatur**
-- ⚡ Anpassar uppvärmningsstrategin baserat på:  
-  - Inomhustemperatur  
-  - Måltemperatur  
-  - Prognos för elpris  
-  - Temperaturprognos
-- 🌡️ Fejkat utomhustemperatur beräknas för att lura värmepumpen att spara eller buffra energi
-- 🚀 **Pre-boost-läge:** bygg upp en värmebuffert före kalla och dyra pristoppar
-- 🧊 **Bromsläge:** undvik uppvärmning under de dyraste timmarna
-- 🏖️ **Sommarläge:** inaktiverar fejkad temperatur när utomhustemperaturen är över tröskelvärdet
-- 🏝️ **Semesterläge:** När semesterläget är aktiverat och aktuell tid ligger inom de valda datumen, sänks inomhustemperaturen till 16 grader tills du är tillbaka.
-- 📦 **Enkel installation** med medföljande `packages`-fil för hjälpentiteter
-- 📊 Helt lokalt (inga molnberoenden)
-- 🧠 Självjusterande beräkning av husets tröghet
-- 🔄 Stöder komfortprofiler via en aggressivitetsinställning
+- 🔧 Smart virtuell styrning av utomhustemperatur
+- 🌡️ Dynamisk komfortstyrning med:
+  - Inomhustemperatur
+  - Målinomhustemperatur
+  - Prognos för elpris
+  - Temperaturprognos (kommaseparerad lista)
+  - Termisk tröghet
+  - ~~PI-reglering (integralfel)~~
+- 💸 Elprisanpassning via Nordpool eller annan sensor
+- ~~🚀 Pre-boost-läge: lagrar värme före pristoppar~~
+- 🧊 Bromsläge: minimerar uppvärmning vid höga priser
+- ☀️ Sommarläge: inaktiverar all styrning vid varma temperaturer
+- 🏝️ Semesterläge: tillfällig temperatursänkning under frånvaro
+- 🧠 Självanpassning till husets tröghet
+- 🎛️ Finjustering via hjälpentiteter (`input_number`, `input_text`, `input_boolean`, `input_datetime`)
+- 🖼️ Extra sensorer via `template:` för UI-visualisering
 
-
-> **Obs\!**
-> Semesterläge är endast aktivt när sommarläge *inte* är aktivt.
-> Om utomhustemperaturen är över sommar-tröskeln kommer sommarläget alltid att prioriteras över semesterläget.
-> Detta innebär att uppvärmningen minimeras under varma perioder, även om semesterläget är aktiverat.
-> 
-=======
-````
-
-Om strängen är ogiltig eller ofullständig, kommer sensorn att logga en varning och tillfälligt avbryta beräkningarna tills giltig data är tillgänglig.
+> 💡 **Notis**: Semesterläge är endast aktivt när utomhustemperaturen är under sommartröskeln.
 
 -----
 
-## 📊 Sensorutgångar
+## 🔧 Installation via HACS (Custom Repository)
 
-PumpSteer skapar två sensorer.
+Om PumpSteer ännu inte finns i HACS:
 
-### 1\. `sensor.pumpsteer` (Kontrollsensor)
-
-Denna sensor tillhandahåller den beräknade virtuella temperaturen.
-
-**Tillstånd:** Den fejkade utomhustemperaturen (`°C`) som ska skickas till din värmepump.
-
-**Attribut:**
-
-| Attribut | Betydelse |
-| :--- | :--- |
-| `Läge` | Aktuellt driftläge. Kan vara: `heating`, `neutral`, `braking_by_temp`, `summer_mode`, `preboost`, `braking_mode` |
-| `Ute (verklig)` | Aktuell temperatur från den verkliga utomhussensorn |
-| `Inne (mål)` | Din önskade inomhustemperatur |
-| `Inne (verklig)` | Aktuell inomhustemperatur |
-| `Inertia` | Hur långsamt huset reagerar på förändringar i utomhustemperaturen (högre = bättre isolerat) |
-| `Aggressiveness` | Från 0,0 (passiv) till 5,0 (aggressiv besparing) |
-| `Summer threshold` | Utomhustemperaturtröskeln för att inaktivera värmekontroll |
-| `Pre-boost Aktiv` | Sant om pre-boost eller bromsning är aktiv (pausar tröghetsberäkningen) |
+1. Gå till **HACS > ⋮ > Custom Repositories**
+2. Lägg till: `https://github.com/JohanAlvedal/PumpSteer`
+3. Välj **Integration** som kategori
+4. Installera PumpSteer
+5. Starta om Home Assistant
+6. Följ installationsguiden och välj hjälpentiteter
 
 -----
 
-## Aggressivitet – Vad gör den?
+## 📦 Hjälpentiteter (via `pumpsteer_package.yaml`)
 
-Aggressivitet (0,0 till 5,0) styr avvägningen mellan energibesparingar och inomhuskomfort. Den påverkar både när uppvärmningen minskas (bromsning) och när extra uppvärmning läggs till (pre-boost).
+Följande entiteter används av PumpSteer och kan justeras i UI:
 
-| Inställning | Bromsbeteende | Pre-boost-beteende |
-| :--- | :--- | :--- |
-| **Låg** (t.ex. 0-1) | Bromsar sällan, endast vid de absolut högsta priserna. | Ökar lättare för att prioritera komfort. |
-| **Hög** (t.ex. 4-5) | Bromsar tidigt och ofta, även vid måttliga pristoppar. | Ökar endast i de mest nödvändiga fallen för att spara energi. |
-
-**Högre aggressivitet sparar mer pengar, men kan minska inomhuskomforten.**
-
------
-
-## 🧠 Hur det fungerar
-
-PumpSteer beräknar en "fejkad" utomhustemperatur för att knuffa din värmepump till att antingen:
-
-  - **Pre-boosta:** Värma mer när priser och temperaturer är låga, före en kommande kall och dyr pristopp.
-  - **Bromsa:** Undvika uppvärmning när priserna är som högst.
-  - **Normalt:** Justera försiktigt uppvärmningen för att bibehålla komfort med minimal kostnad.
-  - **Sommarläge:** Stå ner när det är varmt ute
+| Typ | Entitet | Funktion |
+|-----|---------|----------|
+| `input_number` | `indoor_target_temperature` | Mål för inomhustemperatur |
+| `input_number` | `pumpsteer_summer_threshold` | Tröskel för att aktivera sommarläge |
+| `input_number` | `pumpsteer_aggressiveness` | Komfort vs besparing (0–5) |
+| `input_number` | `house_inertia` | Hur trögt huset reagerar (0–10) |
+| `input_number` | `pumpsteer_integral_gain` | Justerar PI-regleringens känslighet |
+| `input_number` | `integral_temp_error` | Ackumulerad temperaturavvikelse |
+| `input_text` | `hourly_forecast_temperatures` | Prognostemperaturer (24 CSV-värden) |
+| `input_boolean` | `holiday_mode` | Aktiverar semesterläge |
+| `input_datetime` | `holiday_start` / `holiday_end` | Semesterns intervall (automatisk aktivering) |
 
 -----
 
-## 💬 Loggning och Felsökning
+## 🧪 Prognosformat
 
-  - Varningar och fel loggas i standardloggen för Home Assistant.
-  - Om nödvändig sensordata inte är tillgänglig, kommer PumpSteer att visa `unavailable` och försöka igen automatiskt.
-  - Husets tröghetsvärde beräknas och uppdateras automatiskt om du inte anger en manuell åsidosättning via ett `input_number`.
+`input_text.hourly_forecast_temperatures` måste innehålla 24 kommaseparerade temperaturer (°C):
 
------
+```text
+-3.5,-4.2,-5.0,-4.8,... (totalt 24 värden)
 
-## En notering från utvecklaren
+Ogiltiga format ignoreras och loggas.
 
-Denna integration har byggts av en amatörutvecklare med kraftfull assistans av Googles Gemini och Copilot. Det är resultatet av en passion för smarta hem, mycket trial and error, och många, många Home Assistant restarts.
+⸻
 
-Vänligen betrakta detta som en **betaprodukt** i ordets sannaste bemärkelse.
+📊 Sensor: sensor.pumpsteer
 
-Om du är kunnig inom detta område välkomnas konstruktiv feedback, förslag och bidrag varmt. Var tålmodig, då detta är ett lärande projekt.
+Denna sensor är integrationens huvudutgång.
 
------
+Tillstånd:
 
-## 🔗 Länkar
+Virtuell (fejkad) utomhustemperatur som skickas till din värmepump
 
-  - [Ärendehanterare](https://github.com/JohanAlvedal/pumpsteer/issues)
+Attribut:
 
------
+Attribut	Betydelse
+Mode	heating, neutral, braking_mode, preboost, summer_mode, …
+Outdoor Temperature	Verklig utomhustemperatur
+Indoor Temperature	Faktisk innetemperatur
+Target Temperature	Önskad innetemperatur
+Inertia	Husets uppskattade tröghet
+Aggressiveness	Komfort kontra besparing
+Summer Threshold	Tröskel för sommarläge
+Holiday Mode Active	Är semesterläge aktivt
+Preboost Active	Förvärmning pågår (kommande funktion)
+Braking Active	Bromsning pågår
+Current Price	Aktuellt elpris (float)
+Max Price	Maxpris för dagen
+Integral Temp Error	Temperaturavvikelsens historik
+Integral Gain	K-faktor för PI-reglering
 
-© Johan Ä
+
+⸻
+
+💡 Extra sensorer via template
+
+template:
+  - sensor:
+      - name: "PumpSteer Indoor Target Diff"
+        state: >
+          {% set actual = state_attr('sensor.pumpsteer', 'Indoor Temperature') | float(0) %}
+          {% set target = state_attr('sensor.pumpsteer', 'Target Temperature') | float(0) %}
+          {{ (actual - target) | round(1) }}
+        unit_of_measurement: "°C"
+
+      - name: "PumpSteer Operating Mode"
+        state: "{{ state_attr('sensor.pumpsteer', 'Mode') | title }}"
+        icon: >
+          {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
+          {% if mode == 'preboost' %} mdi:flash
+          {% elif mode == 'heating' %} mdi:fire
+          {% elif mode == 'neutral' %} mdi:pause-circle
+          {% elif mode == 'summer_mode' %} mdi:weather-sunny
+          {% elif mode in ['braking_mode', 'braking_by_temp'] %} mdi:car-brake-alert
+          {% else %} mdi:help-circle
+          {% endif %}
+
+
+⸻
+
+🤖 PI-reglering
+
+PumpSteer innehåller en enkel PI-reglering baserad på:
+	•	integral_temp_error (temperaturfel ackumulerat över tid)
+	•	pumpsteer_integral_gain (justerar reglerrespons)
+
+Denna funktion är ännu inte aktiverad i dev_dev-branchen men finns förberedd i koden.
+
+⸻
+
+🧠 Hur det fungerar
+
+PumpSteer försöker styra värmepumpens uppfattade behov via fejkad utetemp. Det gör den genom att:
+	•	Värma mer när elpriset är lågt (preboost) (kommer snart)
+	•	Undvika värme när priset är högt (braking)
+	•	Gå i neutralt läge om allt är stabilt
+	•	Ignorera all styrning om utomhustemperaturen är över sommartröskeln
+	•	Sänka måltemperaturen till 16°C under aktiv semester
+
+Allt sker lokalt – inga molnberoenden.
+
+⸻
+
+🛠️ Loggning
+	•	Fel och varningar loggas i Home Assistants logg
+	•	Ogiltiga värden (t.ex. prognoser) loggas och ignoreras
+	•	Sensor visar unavailable vid kritiska fel
+
+⸻
+
+🧪 Observera
+
+Denna integration är ett hobbyprojekt, byggt med stöd av ChatGPT, Copilot och mycket tålamod. Feedback och förbättringsförslag är varmt välkomna.
+
+⸻
+
+🔗 Länkar
+	•	GitHub
+	•	Issues
+
+⸻
+
+© Johan Älvedal
+
+---
+
+Vill du att jag också genererar en `.md`-fil du kan ladda ner direkt? Ska jag lägga den i en Gist, bifoga som länk eller skicka som råfil (t.ex. zip)?
