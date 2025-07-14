@@ -1,7 +1,7 @@
 {
   "domain": "pumpsteer",
   "name": "PumpSteer",
-  "version": "0.1.7-beta",
+  "version": "0.2.0",
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "issue_tracker": "https://github.com/JohanAlvedal/pumpsteer/issues",
   "logo": "logo.png",
