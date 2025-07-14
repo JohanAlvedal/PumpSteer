@@ -12,51 +12,6 @@ entities:
   - entity: input_datetime.holiday_start
   - entity: input_datetime.holiday_end
   
-#####################################################
-type: entities
-title: 🔧 PumpSteer – Drift & Status
-show_header_toggle: false
-entities:
-  - entity: sensor.pumpsteer
-    name: Fejkad utetemperatur
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_operating_mode
-    name: Driftläge
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_preboosting
-    name: Preboost aktiv
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_braking
-    name: Broms aktiv
-    secondary_info: last-changed
-  - entity: sensor.real_outdoor_temperature
-    name: Ute (verklig)
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_inertia
-    name: Husets tröghet
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_aggressiveness
-    name: Aggressivitet
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_current_price_level
-    name: Elprisnivå
-    icon: mdi:chart-bell-curve-cumulative
-    secondary_info: last-changed
-  - entity: input_number.pumpsteer_aggressiveness
-  - entity: input_number.house_inertia
-  - entity: input_number.indoor_target_temperature
-  - entity: input_number.pumpsteer_summer_threshold
-  - entity: input_text.hourly_forecast_temperatures
-    name: Forecast Data (raw)
-    secondary_info: last-changed
-  - entity: input_boolean.holiday_mode
-  - entity: input_datetime.holiday_start
-    name: Från
-  - entity: input_datetime.holiday_end
-    name: Till
-
-  ###############################################
-
 type: entities
 title: PumpSteer
 entities:
@@ -140,8 +95,23 @@ entities:
     entity: sensor.pumpsteer
     attribute: Decision Reason
     name: Decision Reason
+=======
+  ## Semester #############################################
 
-##################################################
+type: vertical-stack
+cards:
+  - type: entities
+    title: Semestermode
+    entities:
+      - entity: input_boolean.holiday_mode
+        name: Aktivt
+      - entity: input_datetime.holiday_start
+        name: Från
+      - entity: input_datetime.holiday_end
+        name: Till
+
+
+  ## Pumpdebug ##############################################
 
 type: custom:apexcharts-card
 header:
@@ -209,5 +179,47 @@ series:
     group_by:
       func: max
 
+type: custom:apexcharts-card
+header:
+  title: PumpSteer – Integralfel och reglering
+  show: true
+graph_span: 48h
+span:
+  start: day
+  offset: "-1d"
+now:
+  show: true
+apex_config:
+  yaxis:
+    - id: temp
+      title:
+        text: Temperatur (°C)
+    - id: integral
+      opposite: true
+      title:
+        text: Integralfel (°C·h)
+series:
+  - entity: sensor.pumpsteer
+    name: Virtuell temperatur (ut)
+    yaxis_id: temp
+    type: line
+    stroke_width: 2
+  - entity: sensor.shelly_h_t_temp_temperature
+    name: Inomhustemperatur
+    yaxis_id: temp
+    type: line
+    stroke_width: 2
+  - entity: input_number.indoor_target_temperature
+    name: Målt. (manuell)
+    yaxis_id: temp
+    type: line
+    color: "#999"
+    stroke_width: 2
+  - entity: input_number.integral_temp_error
+    name: Integralfel
+    yaxis_id: integral
+    type: area
+    color: "#ffa726"
+    stroke_width: 2
 
 #####################################################

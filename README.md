@@ -9,69 +9,84 @@ PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera
 Jag är inte expert på programmering, energihantering eller automation. Denna setup är baserad på mina personliga erfarenheter och experiment. Jag kan inte garantera att den fungerar för alla, och jag tar inget ansvar för problem eller skador som kan uppstå vid användning av denna konfiguration eller kod.
 
 **Använd den på egen risk och testa noggrant i din egen miljö.**
-
------
-
+=======
 ## ✅ Funktioner
 
-- 🔧 Smart virtuell styrning av utomhustemperatur
-- 🌡️ Dynamisk komfortstyrning med:
-  - Inomhustemperatur
-  - Målinomhustemperatur
-  - Prognos för elpris
-  - Temperaturprognos (kommaseparerad lista)
-  - Termisk tröghet
-  - ~~PI-reglering (integralfel)~~
-- 💸 Elprisanpassning via Nordpool eller annan sensor
-- ~~🚀 Pre-boost-läge: lagrar värme före pristoppar~~
-- 🧊 Bromsläge: minimerar uppvärmning vid höga priser
-- ☀️ Sommarläge: inaktiverar all styrning vid varma temperaturer
-- 🏝️ Semesterläge: tillfällig temperatursänkning under frånvaro
-- 🧠 Självanpassning till husets tröghet
-- 🎛️ Finjustering via hjälpentiteter (`input_number`, `input_text`, `input_boolean`, `input_datetime`)
-- 🖼️ Extra sensorer via `template:` för UI-visualisering
+- 🔧 **Smart virtuell styrning av utomhustemperatur**
+- ⚡ Anpassar uppvärmningsstrategin baserat på:  
+  - Inomhustemperatur  
+  - Måltemperatur  
+  - Prognos för elpris  
+  - Temperaturprognos
+- 🌡️ Fejkat utomhustemperatur beräknas för att lura värmepumpen att spara eller buffra energi
+- 🚀 **Pre-boost-läge:** bygg upp en värmebuffert före kalla och dyra pristoppar
+- 🧊 **Bromsläge:** undvik uppvärmning under de dyraste timmarna
+- 🏖️ **Sommarläge:** inaktiverar fejkad temperatur när utomhustemperaturen är över tröskelvärdet
+- 🏝️ **Semesterläge:** När semesterläget är aktiverat och aktuell tid ligger inom de valda datumen, sänks inomhustemperaturen till 16 grader tills du är tillbaka.
+- 📦 **Enkel installation** med medföljande `packages`-fil för hjälpentiteter
+- 📊 Helt lokalt (inga molnberoenden)
+- 🧠 Självjusterande beräkning av husets tröghet
+- 🔄 Stöder komfortprofiler via en aggressivitetsinställning
 
-> 💡 **Notis**: Semesterläge är endast aktivt när utomhustemperaturen är under sommartröskeln.
 
------
+> **Obs\!**
+> Semesterläge är endast aktivt när sommarläge *inte* är aktivt.
+> Om utomhustemperaturen är över sommar-tröskeln kommer sommarläget alltid att prioriteras över semesterläget.
+> Detta innebär att uppvärmningen minimeras under varma perioder, även om semesterläget är aktiverat.
+> 
+=======
+````
 
-## 🔧 Installation via HACS (Custom Repository)
-
-Om PumpSteer ännu inte finns i HACS:
-
-1. Gå till **HACS > ⋮ > Custom Repositories**
-2. Lägg till: `https://github.com/JohanAlvedal/PumpSteer`
-3. Välj **Integration** som kategori
-4. Installera PumpSteer
-5. Starta om Home Assistant
-6. Följ installationsguiden och välj hjälpentiteter
+Om strängen är ogiltig eller ofullständig, kommer sensorn att logga en varning och tillfälligt avbryta beräkningarna tills giltig data är tillgänglig.
 
 -----
 
-## 📦 Hjälpentiteter (via `pumpsteer_package.yaml`)
+## 📊 Sensorutgångar
 
-Följande entiteter används av PumpSteer och kan justeras i UI:
+PumpSteer skapar två sensorer.
 
-| Typ | Entitet | Funktion |
-|-----|---------|----------|
-| `input_number` | `indoor_target_temperature` | Mål för inomhustemperatur |
-| `input_number` | `pumpsteer_summer_threshold` | Tröskel för att aktivera sommarläge |
-| `input_number` | `pumpsteer_aggressiveness` | Komfort vs besparing (0–5) |
-| `input_number` | `house_inertia` | Hur trögt huset reagerar (0–10) |
-| `input_number` | `pumpsteer_integral_gain` | Justerar PI-regleringens känslighet |
-| `input_number` | `integral_temp_error` | Ackumulerad temperaturavvikelse |
-| `input_text` | `hourly_forecast_temperatures` | Prognostemperaturer (24 CSV-värden) |
-| `input_boolean` | `holiday_mode` | Aktiverar semesterläge |
-| `input_datetime` | `holiday_start` / `holiday_end` | Semesterns intervall (automatisk aktivering) |
+### 1\. `sensor.pumpsteer` (Kontrollsensor)
+
+Denna sensor tillhandahåller den beräknade virtuella temperaturen.
+
+**Tillstånd:** Den fejkade utomhustemperaturen (`°C`) som ska skickas till din värmepump.
+
+**Attribut:**
+
+| Attribut | Betydelse |
+| :--- | :--- |
+| `Läge` | Aktuellt driftläge. Kan vara: `heating`, `neutral`, `braking_by_temp`, `summer_mode`, `preboost`, `braking_mode` |
+| `Ute (verklig)` | Aktuell temperatur från den verkliga utomhussensorn |
+| `Inne (mål)` | Din önskade inomhustemperatur |
+| `Inne (verklig)` | Aktuell inomhustemperatur |
+| `Inertia` | Hur långsamt huset reagerar på förändringar i utomhustemperaturen (högre = bättre isolerat) |
+| `Aggressiveness` | Från 0,0 (passiv) till 5,0 (aggressiv besparing) |
+| `Summer threshold` | Utomhustemperaturtröskeln för att inaktivera värmekontroll |
+| `Pre-boost Aktiv` | Sant om pre-boost eller bromsning är aktiv (pausar tröghetsberäkningen) |
 
 -----
 
-## 🧪 Prognosformat
+## Aggressivitet – Vad gör den?
 
-`input_text.hourly_forecast_temperatures` måste innehålla 24 kommaseparerade temperaturer (°C):
+Aggressivitet (0,0 till 5,0) styr avvägningen mellan energibesparingar och inomhuskomfort. Den påverkar både när uppvärmningen minskas (bromsning) och när extra uppvärmning läggs till (pre-boost).
 
-```text
--3.5,-4.2,-5.0,-4.8,... (totalt 24 värden)
+| Inställning | Bromsbeteende | Pre-boost-beteende |
+| :--- | :--- | :--- |
+| **Låg** (t.ex. 0-1) | Bromsar sällan, endast vid de absolut högsta priserna. | Ökar lättare för att prioritera komfort. |
+| **Hög** (t.ex. 4-5) | Bromsar tidigt och ofta, även vid måttliga pristoppar. | Ökar endast i de mest nödvändiga fallen för att spara energi. |
+
+**Högre aggressivitet sparar mer pengar, men kan minska inomhuskomforten.**
+
+-----
+
+## 🧠 Hur det fungerar
+
+PumpSteer beräknar en "fejkad" utomhustemperatur för att knuffa din värmepump till att antingen:
+
+  - **Pre-boosta:** Värma mer när priser och temperaturer är låga, före en kommande kall och dyr pristopp.
+  - **Bromsa:** Undvika uppvärmning när priserna är som högst.
+  - **Normalt:** Justera försiktigt uppvärmningen för att bibehålla komfort med minimal kostnad.
+  - **Sommarläge:** Stå ner när det är varmt ute
 
 -----
 
@@ -99,5 +114,4 @@ Om du är kunnig inom detta område välkomnas konstruktiv feedback, förslag oc
 
 -----
 
-© Johan Älvedal
-
+© Johan Ä
