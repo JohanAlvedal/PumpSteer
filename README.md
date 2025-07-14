@@ -72,3 +72,32 @@ Följande entiteter används av PumpSteer och kan justeras i UI:
 
 ```text
 -3.5,-4.2,-5.0,-4.8,... (totalt 24 värden)
+
+-----
+
+## 💬 Loggning och Felsökning
+
+  - Varningar och fel loggas i standardloggen för Home Assistant.
+  - Om nödvändig sensordata inte är tillgänglig, kommer PumpSteer att visa `unavailable` och försöka igen automatiskt.
+  - Husets tröghetsvärde beräknas och uppdateras automatiskt om du inte anger en manuell åsidosättning via ett `input_number`.
+
+-----
+
+## En notering från utvecklaren
+
+Denna integration har byggts av en amatörutvecklare med kraftfull assistans av Googles Gemini och Copilot. Det är resultatet av en passion för smarta hem, mycket trial and error, och många, många Home Assistant restarts.
+
+Vänligen betrakta detta som en **betaprodukt** i ordets sannaste bemärkelse.
+
+Om du är kunnig inom detta område välkomnas konstruktiv feedback, förslag och bidrag varmt. Var tålmodig, då detta är ett lärande projekt.
+
+-----
+
+## 🔗 Länkar
+
+  - [Ärendehanterare](https://github.com/JohanAlvedal/pumpsteer/issues)
+
+-----
+
+© Johan Älvedal
+
