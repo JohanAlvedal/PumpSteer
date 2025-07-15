@@ -8,8 +8,8 @@ PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera
 
 Jag är inte expert på programmering, energihantering eller automation. Denna setup är baserad på mina personliga erfarenheter och experiment. Jag kan inte garantera att den fungerar för alla, och jag tar inget ansvar för problem eller skador som kan uppstå vid användning av denna konfiguration eller kod.
 
-**Använd den på egen risk och testa noggrant i din egen miljö.**
-=======
+*Använd den på egen risk och testa noggrant i din egen miljö.*
+===
 ## ✅ Funktioner
 
 - 🔧 **Smart virtuell styrning av utomhustemperatur**
