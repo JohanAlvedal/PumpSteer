@@ -71,34 +71,42 @@ input_datetime:
     name: Semester slutar
     has_date: true
     has_time: true
+    
+input_select:
+  pumpsteer_price_model:
+    name: PumpSteer - Prismodell
+    options:
+      - hybrid
+      - percentiles
+    initial: hybrid
 
 template:
   - sensor:
       - name: "Real Outdoor Temperature"
         state: >
-          {{ state_attr('sensor.pumpsteer', 'Outdoor Temperature') }}
+          {{ state_attr('sensor.pumpsteer', 'Outdoor Temperature') | default(0) }}
         unit_of_measurement: "°C"
         device_class: temperature
 
       - name: "VirtualOutdoorTemp Tempdiff"
         state: >
           {% set fake = states('sensor.pumpsteer') | float(0) %}
-          {% set real = state_attr('sensor.pumpsteer', 'Outdoor Temperature') | float(0) %}
+          {% set real = state_attr('sensor.pumpsteer', 'Outdoor Temperature') | default(0) | float %}
           {{ (fake - real) | round(1) }}
         unit_of_measurement: "°C"
         icon: mdi:thermometer-minus
 
       - name: "PumpSteer Indoor Target Diff"
         state: >
-          {% set actual = state_attr('sensor.pumpsteer', 'Indoor Temperature') | float(0) %}
-          {% set target = state_attr('sensor.pumpsteer', 'Target Temperature') | float(0) %}
+          {% set actual = state_attr('sensor.pumpsteer', 'Indoor Temperature') | default(0) | float %}
+          {% set target = state_attr('sensor.pumpsteer', 'Target Temperature') | default(0) | float %}
           {{ (actual - target) | round(1) }}
         unit_of_measurement: "°C"
         icon: mdi:home-thermometer-outline
 
       - name: "PumpSteer Operating Mode"
         state: >
-          {{ state_attr('sensor.pumpsteer', 'Mode') | title }}
+          {{ state_attr('sensor.pumpsteer', 'Mode') | default('unknown') | title }}
         icon: >
           {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
           {% if mode == 'preboost' %}
@@ -127,18 +135,18 @@ template:
 
       - name: "PumpSteer Is Preboosting"
         state: >
-          {{ state_attr('sensor.pumpsteer', 'Mode') == 'preboost' }}
+          {{ state_attr('sensor.pumpsteer', 'Mode') | default('') == 'preboost' }}
         icon: mdi:fire
 
       - name: "PumpSteer Is Braking"
         state: >
-          {{ state_attr('sensor.pumpsteer', 'Mode') in ['braking_mode', 'braking_by_temp'] }}
+          {{ state_attr('sensor.pumpsteer', 'Mode') | default('') in ['braking_mode', 'braking_by_temp'] }}
         icon: mdi:car-brake-alert
 
       - name: "PumpSteer Current Price Level"
         unit_of_measurement: "%"
         state: >
-          {% set price = state_attr('sensor.pumpsteer', 'Current Price') | float(0) %}
-          {% set max = state_attr('sensor.pumpsteer', 'Max Price') | float(1) %}
+          {% set price = state_attr('sensor.pumpsteer', 'Current Price') | default(0) | float %}
+          {% set max = state_attr('sensor.pumpsteer', 'Max Price') | default(1) | float %}
           {{ (price / max * 100) | round(0) }}
         icon: mdi:cash-percent
