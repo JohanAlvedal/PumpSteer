@@ -1,10 +1,12 @@
 import logging
 
-_LOGGER = logging.getLogger(__name__)
+from .settings import (
+    MIN_FAKE_TEMP,
+    MAX_FAKE_TEMP,
+    BRAKE_FAKE_TEMP,
+)
 
-# NEW CONSTANTS – SAFETY LIMITS
-MIN_FAKE_TEMP = -25.0
-MAX_FAKE_TEMP = 30.0
+_LOGGER = logging.getLogger(__name__)
 
 def calculate_temperature_output(
     indoor_temp: float,
@@ -37,7 +39,7 @@ def calculate_temperature_output(
     aggressiveness = max(0, min(5, aggressiveness))
     diff = indoor_temp - actual_target_temp_for_logic
 
-    # ASSTHROUGH (Aggressiveness = 0)
+    # PASSTHROUGH (Aggressiveness = 0)
     # If aggressiveness is 0, the system operates in passthrough mode,
     # meaning the fake temperature is simply the real outdoor temperature.
     if aggressiveness == 0:
@@ -49,7 +51,7 @@ def calculate_temperature_output(
     # SCALING WITH AGGRESSIVENESS
     scaling_factor = aggressiveness * 0.1
     fake_temp = 0.0
-    mode = "unknown"
+    mode = "aggressiveness"
 
     # HEATING mode (too cold indoors)
     # If indoor temperature is significantly below target, activate heating.
@@ -67,9 +69,7 @@ def calculate_temperature_output(
     # The fake temperature is increased to make the heat pump work less (or cool).
     elif diff > 0.5:
         fake_temp = real_outdoor_temp + (diff * scaling_factor * 4)
-        # Previously: fake_temp = max(fake_temp, 25.0)
-        # Now: limit between 25.0 and MAX_FAKE_TEMP
-        fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), 25.0)
+        fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), BRAKE_FAKE_TEMP)
         mode = "braking_by_temp"
         _LOGGER.debug(f"TempControl: Braking (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}")
 
@@ -85,7 +85,5 @@ def calculate_temperature_output(
     if fake_temp <= MIN_FAKE_TEMP or fake_temp >= MAX_FAKE_TEMP:
         _LOGGER.warning(f"TempControl: Fake temp reached safety limit: {fake_temp:.1f} °C (Mode: {mode})")
 
-    # Previously: extra safety check (redundant after applying global limits)
-    # fake_temp = max(min(fake_temp, 30.0), -25.0)
-
     return fake_temp, mode
+
