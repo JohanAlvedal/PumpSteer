@@ -2,16 +2,18 @@ name: HACS Validation
 
 on:
   push:
-    paths:
-      - 'custom_components/**'
+    branches:
+      - main
   pull_request:
-    paths:
-      - 'custom_components/**'
 
 jobs:
-  hacs:
-    name: HACS Validation
+  validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: hacs/action@main
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Run HACS action
+        uses: hacs/action@main
+        with:
+          category: integration  # 🟢 Detta är viktigt!
