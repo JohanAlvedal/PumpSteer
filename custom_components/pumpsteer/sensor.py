@@ -192,8 +192,9 @@ class PumpSteerSensor(Entity):
         return fake_temp, mode
 
     def _build_attributes(self, sensor_data: Dict[str, Any], prices: list, current_price: float,
-                          price_category: str, mode: str, holiday: bool, categories: list) -> Dict[str, Any]:
-        now_hour = datetime.now().hour
+                      price_category: str, mode: str, holiday: bool, categories: list,
+                      now_hour: int) -> Dict[str, Any]:  # Lägg till now_hour parameter
+        # now_hour = datetime.now().hour
         max_price = max(prices) if prices else 1.0
         price_factor = current_price / max_price if max_price > 0 else 0
 
@@ -201,12 +202,14 @@ class PumpSteerSensor(Entity):
 
         decision_triggers = {
             'braking_by_price': 'price',
+            'braking_by_temp': 'temperature',  # Lägg till denna rad
             'heating': 'temperature',
             'cooling': 'temperature',
             'summer_mode': 'summer',
             'neutral': 'neutral',
             'preboost': 'pre-boost (cold & expensive forecast)'
         }
+
         decision_reason = f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
 
         return {
@@ -234,49 +237,26 @@ class PumpSteerSensor(Entity):
             "Price Categories All Hours": categories,
         }
 
-    # async def _get_price_data(self, config: Dict[str, Any]) -> tuple[list, float, str, list]:
-    #     """Get and classify prices using Tibber-model with trailing average."""
-    #     entity_id = config.get("electricity_price_entity")
-
-    #     prices_raw = get_attr(self.hass, entity_id, "today") or get_attr(self.hass, entity_id, "raw_today")
-
-    #     if not prices_raw:
-    #         _LOGGER.warning(f"PumpSteer: Could not retrieve electricity prices from {entity_id}")
-    #         return [], 0.0, "unknown", []
-
-    #     prices = [float(p) for p in prices_raw if isinstance(p, (float, int))]
-
-    #     now_hour = datetime.now().hour
-    #     current_price = prices[now_hour] if prices and now_hour < len(prices) else 0.0
-
-    #     categories = await async_hybrid_classify_with_history(
-    #         self.hass,
-    #         price_list=prices,
-    #         price_entity_id=entity_id,
-    #         trailing_hours=72
-    #     )
-
-    #     price_category = categories[now_hour] + " (hybrid)" if categories and now_hour < len(categories) else "unknown"
-    #     return prices, current_price, price_category, categories
-    async def _get_price_data(self, config: Dict[str, Any]) -> tuple[list, float, str, list]:
+    async def _get_price_data(self, config: Dict[str, Any]) -> tuple[list, float, str, list, int]:  # Lägg till int för now_hour
         entity_id = config.get("electricity_price_entity")
     
         prices_raw = get_attr(self.hass, entity_id, "today") or get_attr(self.hass, entity_id, "raw_today")
         if not prices_raw:
             _LOGGER.warning(f"PumpSteer: Could not retrieve electricity prices from {entity_id}")
-            return [], 0.0, "unknown", []
-    
+            return [], 0.0, "unknown", [], 0  # Lägg till 0 för now_hour
+        
         prices = [float(p) for p in prices_raw if isinstance(p, (float, int))]
+        # Fånga nuvarande timme EN gång för konsistens
         now_hour = datetime.now().hour
         current_price = prices[now_hour] if prices and now_hour < len(prices) else 0.0
-    
-        # 🔀 Läs från input_select
+        
+        # 🔀 Läs från input_select  
         mode = get_state(self.hass, "input_select.pumpsteer_price_model") or "hybrid"
         categories = []
-    
+        
         if mode == "percentiles":
             categories = classify_prices(prices)
-            price_category = categories[now_hour] + " (percentiles)" if now_hour < len(categories) else "unknown"
+            price_category = categories[now_hour] + " (percentiles)" if categories and now_hour < len(categories) else "unknown"
         else:
             categories = await async_hybrid_classify_with_history(
                 self.hass,
@@ -284,16 +264,19 @@ class PumpSteerSensor(Entity):
                 price_entity_id=entity_id,
                 trailing_hours=72
             )
-            price_category = categories[now_hour] + " (hybrid)" if now_hour < len(categories) else "unknown"
-    
-        return prices, current_price, price_category, categories
+            price_category = categories[now_hour] + " (hybrid)" if categories and now_hour < len(categories) else "unknown"
+        
+        return prices, current_price, price_category, categories, now_hour
 
     async def async_update(self) -> None:
         try:
             config = {**self._config_entry.data, **self._config_entry.options}
-
+            
+            # Fånga tiden EN gång för konsistens genom hela uppdateringen
+            now_hour = datetime.now().hour  # <-- LÄGG TILL DENNA RAD
+    
             sensor_data = self._get_sensor_data(config)
-            prices, current_price, price_category, categories = await self._get_price_data(config)
+            prices, current_price, price_category, categories, now_hour = await self._get_price_data(config)
 
             missing = self._validate_required_data(sensor_data, prices)
             if missing:
@@ -319,7 +302,7 @@ class PumpSteerSensor(Entity):
             self._state = round(fake_temp, 1)
 
             self._attributes = self._build_attributes(
-                sensor_data, prices, current_price, price_category, mode, holiday, categories
+                sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
             )
 
             self._last_update_time = datetime.now()
