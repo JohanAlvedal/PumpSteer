@@ -1,0 +1,10 @@
+{
+  "name": "PumpSteer",
+  "content_in_root": true,
+  "domain": "pumpsteer",
+  "country": ["SE"],
+  "homeassistant": "2023.0.0",
+  "render_readme": true,
+  "zip_release": false,
+  "filename": "pumpsteer"
+}
