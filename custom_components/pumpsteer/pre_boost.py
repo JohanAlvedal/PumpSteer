@@ -112,8 +112,13 @@ def check_combined_preboost(
     )
 
     # Huvudlogik för pre-boost: Leta efter en framtida timme som är både kall och dyr
-    # Iterera upp till minsta av tillgängliga timmar eller lookahead_hours
-    for i in range(1, min(lookahead_hours + 1, len(temps), len(prices))): # Inkludera den sista timmen i lookahead_hours
+    # Säkerställ att vi inte går utanför någon av listorna
+    max_safe_hours = min(lookahead_hours, len(temps) - 1, len(prices) - 1)
+    if max_safe_hours < 1:  # Behöver minst 1 timme att kolla
+        _LOGGER.debug("Pre-boost check: Not enough data points for lookahead")
+        return None
+    
+    for i in range(1, max_safe_hours + 1):
         # Kontrollera om framtida timmar är både kalla och dyra
         # cold_threshold bör komma från sensor.py och baseras på target_temp
         if temps[i] < cold_threshold and prices[i] >= price_threshold:
