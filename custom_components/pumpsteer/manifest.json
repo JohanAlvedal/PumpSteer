@@ -1,13 +1,12 @@
 {
   "domain": "pumpsteer",
   "name": "PumpSteer",
-  "version": "1.2",
-  "documentation": "https://github.com/JohanAlvedal/pumpsteer",
-  "issue_tracker": "https://github.com/JohanAlvedal/pumpsteer/issues",
-  "config_flow": true,
-  "requirements": [],
-  "dependencies": [],
   "codeowners": ["@johanalvedal"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "iot_class": "local_polling",
-  "dependencies": ["recorder"]
+  "issue_tracker": "https://github.com/JohanAlvedal/pumpsteer/issues",
+  "requirements": [],
+  "version": "1.2"
 }
