@@ -139,6 +139,7 @@ All styrning sker helt lokalt utan molnberoenden.
 ## 🧪 Observera
 
 Detta är ett hobbyprojekt byggt med hjälp av ChatGPT, Copilot och mycket tålamod. Feedback, förbättringar och förslag är alltid välkomna.
+
 ---
 
 ## 🔗 Länkar
