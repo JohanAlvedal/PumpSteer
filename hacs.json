@@ -1,10 +1,9 @@
 {
   "name": "PumpSteer",
-  "content_in_root": true,
-  "domain": "pumpsteer",
-  "country": ["SE"],
-  "homeassistant": "2023.0.0",
+  "content_in_root": false,
+  "domains": ["pumpsteer"],
+  "country": "SE",
   "render_readme": true,
-  "zip_release": false,
-  "filename": "pumpsteer"
+  "homeassistant": "2024.6.0",
+  "category": "integration"
 }
