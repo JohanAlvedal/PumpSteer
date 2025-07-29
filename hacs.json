@@ -1,9 +1,5 @@
 {
   "name": "PumpSteer",
-  "content_in_root": false,
-  "domains": ["pumpsteer"],
-  "country": "SE",
   "render_readme": true,
-  "homeassistant": "2024.6.0",
-  "category": "integration"
+  "content_in_root": false
 }
