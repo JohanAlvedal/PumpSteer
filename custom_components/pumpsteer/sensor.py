@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -10,7 +10,7 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .pre_boost import check_combined_preboost  # Keep this import
+from .pre_boost import check_combined_preboost
 from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
 from .temp_control_logic import calculate_temperature_output
 from .electricity_price import async_hybrid_classify_with_history, classify_prices
@@ -18,9 +18,9 @@ from .settings import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
     BRAKING_MODE_TEMP,
-    PREBOOST_MAX_OUTDOOR_TEMP,  # Add this import
+    PREBOOST_MAX_OUTDOOR_TEMP,
     AGGRESSIVENESS_SCALING_FACTOR,
-    PREBOOST_OUTPUT_TEMP  # Add this import
+    PREBOOST_OUTPUT_TEMP
 )
 from .utils import (
     safe_float, get_state, get_attr,
@@ -33,10 +33,56 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
 
+# Hårdkodade entiteter som alltid finns i paketfilen
+HARDCODED_ENTITIES = {
+    "target_temp_entity": "input_number.indoor_target_temperature",
+    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold", 
+    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
+    "holiday_start_datetime_entity": "input_datetime.holiday_start",
+    "holiday_end_datetime_entity": "input_datetime.holiday_end",
+    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
+    "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
+    "house_inertia_entity": "input_number.house_inertia",
+    "price_model_entity": "input_select.pumpsteer_price_model"
+}
+
 # Local constants not found in settings.py
 NEUTRAL_TEMP_THRESHOLD = 0.5
 DEFAULT_SUMMER_THRESHOLD = 18.0
 DEFAULT_AGGRESSIVENESS = 0.0
+
+
+def safe_get_current_price_and_category(
+    prices: List[float], 
+    categories: List[str], 
+    hour: int,
+    mode: str = "unknown"
+) -> Tuple[float, str]:
+    """
+    Säkert hämta aktuellt pris och kategori för given timme.
+    
+    Args:
+        prices: Lista med priser
+        categories: Lista med kategorier
+        hour: Timme att hämta data för (0-23)
+        mode: Prismodell som används (för suffix)
+    
+    Returns:
+        Tuple med (current_price, price_category)
+    """
+    if not prices or hour >= len(prices) or hour < 0:
+        _LOGGER.warning(f"Invalid price data access: hour={hour}, prices_len={len(prices) if prices else 0}")
+        return 0.0, "unknown"
+    
+    current_price = prices[hour]
+    
+    if not categories or hour >= len(categories):
+        _LOGGER.warning(f"Invalid category data access: hour={hour}, categories_len={len(categories) if categories else 0}")
+        price_category = "unknown"
+    else:
+        price_category = f"{categories[hour]} ({mode})"
+    
+    return current_price, price_category
 
 
 class PumpSteerSensor(Entity):
@@ -111,17 +157,22 @@ class PumpSteerSensor(Entity):
         await self.async_update()
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Hämta sensordata från Home Assistant."""
         return {
+            # Användarvalda entiteter (från config)
             'indoor_temp': safe_float(get_state(self.hass, config.get("indoor_temp_entity"))),
             'outdoor_temp': safe_float(get_state(self.hass, config.get("real_outdoor_entity"))),
-            'target_temp': safe_float(get_state(self.hass, config.get("target_temp_entity"))),
-            'summer_threshold': safe_float(get_state(self.hass, config.get("summer_threshold_entity"))) or DEFAULT_SUMMER_THRESHOLD,
-            'aggressiveness': safe_float(get_state(self.hass, "input_number.pumpsteer_aggressiveness")) or DEFAULT_AGGRESSIVENESS,
-            'inertia': safe_float(get_state(self.hass, "input_number.house_inertia")) or DEFAULT_HOUSE_INERTIA,
-            'outdoor_temp_forecast_entity': config.get("outdoor_temp_forecast_entity")
+            
+            # Hårdkodade entiteter (alltid samma)
+            'target_temp': safe_float(get_state(self.hass, HARDCODED_ENTITIES["target_temp_entity"])),
+            'summer_threshold': safe_float(get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])) or DEFAULT_SUMMER_THRESHOLD,
+            'aggressiveness': safe_float(get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])) or DEFAULT_AGGRESSIVENESS,
+            'inertia': safe_float(get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])) or DEFAULT_HOUSE_INERTIA,
+            'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"]
         }
 
-    def _validate_required_data(self, sensor_data: Dict[str, Any], prices: list) -> Optional[list]:
+    def _validate_required_data(self, sensor_data: Dict[str, Any], prices: List[float]) -> Optional[List[str]]:
+        """Validera att all nödvändig data finns tillgänglig."""
         missing = []
 
         if sensor_data['indoor_temp'] is None:
@@ -139,7 +190,14 @@ class PumpSteerSensor(Entity):
 
         return missing if missing else None
 
-    def _calculate_output_temperature(self, sensor_data: Dict[str, Any], prices: list, price_category: str) -> tuple[float, str]:
+    def _calculate_output_temperature(
+        self, 
+        sensor_data: Dict[str, Any], 
+        prices: List[float], 
+        price_category: str,
+        now_hour: int
+    ) -> Tuple[float, str]:
+        """Beräkna uttemperatur baserat på aktuella förhållanden."""
         indoor_temp = sensor_data['indoor_temp']
         outdoor_temp = sensor_data['outdoor_temp']
         target_temp = sensor_data['target_temp']
@@ -151,50 +209,71 @@ class PumpSteerSensor(Entity):
         preboost_mode = None
         temp_forecast_csv = None
 
+        # Kontrollera pre-boost endast om det är kallt nog utomhus
         if outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
             if outdoor_temp_forecast_entity:
                 temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
 
             if temp_forecast_csv:
-                preboost_mode = check_combined_preboost(
-                    temp_csv=temp_forecast_csv,
-                    prices=prices,
-                    cold_threshold=target_temp - 2.0,
-                    aggressiveness=aggressiveness,
-                    inertia=inertia
-                )
+                try:
+                    preboost_mode = check_combined_preboost(
+                        temp_csv=temp_forecast_csv,
+                        prices=prices,
+                        cold_threshold=target_temp - 2.0,
+                        aggressiveness=aggressiveness,
+                        inertia=inertia
+                    )
+                except Exception as e:
+                    _LOGGER.error(f"Error in pre-boost check: {e}")
+                    preboost_mode = None
             else:
                 _LOGGER.debug("PumpSteer: No temperature forecast available for pre-boost check.")
 
+        # Pre-boost läge
         if preboost_mode == "preboost":
             _LOGGER.info(f"PumpSteer: Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
             return PREBOOST_OUTPUT_TEMP, "preboost"
 
+        # Sommarläge
         if outdoor_temp >= summer_threshold:
             return outdoor_temp, "summer_mode"
 
+        # Prisbromsning
         if "expensive" in price_category or "very_expensive" in price_category:
-            now_hour = datetime.now().hour
             _LOGGER.info(f"PumpSteer: Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {BRAKING_MODE_TEMP} °C)")
             return BRAKING_MODE_TEMP, "braking_by_price"
 
+        # Kontrollera temperaturskillnad
         temp_diff = indoor_temp - target_temp
 
         if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
             return outdoor_temp, "neutral"
 
-        fake_temp, mode = calculate_temperature_output(
-            indoor_temp,
-            target_temp,
-            outdoor_temp,
-            aggressiveness
-        )
-        return fake_temp, mode
+        # Beräkna uttemperatur baserat på temperaturskillnad
+        try:
+            fake_temp, mode = calculate_temperature_output(
+                indoor_temp,
+                target_temp,
+                outdoor_temp,
+                aggressiveness
+            )
+            return fake_temp, mode
+        except Exception as e:
+            _LOGGER.error(f"Error in temperature calculation: {e}")
+            return outdoor_temp, "error"
 
-    def _build_attributes(self, sensor_data: Dict[str, Any], prices: list, current_price: float,
-                      price_category: str, mode: str, holiday: bool, categories: list,
-                      now_hour: int) -> Dict[str, Any]:  # Lägg till now_hour parameter
-        # now_hour = datetime.now().hour
+    def _build_attributes(
+        self, 
+        sensor_data: Dict[str, Any], 
+        prices: List[float], 
+        current_price: float,
+        price_category: str, 
+        mode: str, 
+        holiday: bool, 
+        categories: List[str],
+        now_hour: int
+    ) -> Dict[str, Any]:
+        """Bygg attribut-dictionary för sensorn."""
         max_price = max(prices) if prices else 1.0
         price_factor = current_price / max_price if max_price > 0 else 0
 
@@ -202,23 +281,27 @@ class PumpSteerSensor(Entity):
 
         decision_triggers = {
             'braking_by_price': 'price',
-            'braking_by_temp': 'temperature',  # Lägg till denna rad
+            'braking_by_temp': 'temperature',
             'heating': 'temperature',
             'cooling': 'temperature',
             'summer_mode': 'summer',
             'neutral': 'neutral',
-            'preboost': 'pre-boost (cold & expensive forecast)'
+            'preboost': 'pre-boost (cold & expensive forecast)',
+            'error': 'error in calculation'
         }
 
         decision_reason = f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
+
+        # Säker slicing av prislistor
+        next_3_hours_prices = safe_array_slice(prices, now_hour, 3)
 
         return {
             "Mode": mode,
             "Fake Outdoor Temperature": self._state,
             "Price Category": price_category,
             "Status": "OK",
-            "Current Price": current_price,
-            "Max Price": max_price,
+            "Current Price": round(current_price, 3),
+            "Max Price": round(max_price, 3),
             "Aggressiveness": sensor_data['aggressiveness'],
             "Inertia": sensor_data['inertia'],
             "Target Temperature": sensor_data['target_temp'],
@@ -231,89 +314,147 @@ class PumpSteerSensor(Entity):
             "Last Updated": datetime.now().isoformat(),
             "Temp Error (°C)": round(sensor_data['indoor_temp'] - sensor_data['target_temp'], 2),
             "To Summer Threshold (°C)": round(sensor_data['summer_threshold'] - sensor_data['outdoor_temp'], 2),
-            "Next 3 Hours Prices": prices[now_hour:now_hour+3] if len(prices) >= now_hour + 3 else prices[now_hour:],
+            "Next 3 Hours Prices": next_3_hours_prices,
             "Saving Potential (SEK/kWh)": round(max_price - current_price, 3),
             "Decision Reason": decision_reason,
             "Price Categories All Hours": categories,
+            "Current Hour": now_hour,
+            "Data Quality": {
+                "prices_count": len(prices),
+                "categories_count": len(categories),
+                "forecast_available": bool(sensor_data['outdoor_temp_forecast_entity'])
+            }
         }
 
-    async def _get_price_data(self, config: Dict[str, Any]) -> tuple[list, float, str, list, int]:  # Lägg till int för now_hour
+    async def _get_price_data(
+        self, 
+        config: Dict[str, Any], 
+        now_hour: int
+    ) -> Tuple[List[float], float, str, List[str]]:
+        """
+        Hämta prisdata och klassificera priser.
+        
+        Args:
+            config: Konfiguration
+            now_hour: Aktuell timme
+            
+        Returns:
+            Tuple med (prices, current_price, price_category, categories)
+        """
         entity_id = config.get("electricity_price_entity")
+        
+        if not entity_id:
+            _LOGGER.error("No electricity price entity configured")
+            return [], 0.0, "unknown", []
     
+        # Försök hämta prisdata från olika attribut
         prices_raw = get_attr(self.hass, entity_id, "today") or get_attr(self.hass, entity_id, "raw_today")
         if not prices_raw:
             _LOGGER.warning(f"PumpSteer: Could not retrieve electricity prices from {entity_id}")
-            return [], 0.0, "unknown", [], 0  # Lägg till 0 för now_hour
+            return [], 0.0, "unknown", []
         
-        prices = [float(p) for p in prices_raw if isinstance(p, (float, int))]
-        # Fånga nuvarande timme EN gång för konsistens
-        now_hour = datetime.now().hour
-        current_price = prices[now_hour] if prices and now_hour < len(prices) else 0.0
+        # Konvertera till float-lista
+        try:
+            prices = [float(p) for p in prices_raw if isinstance(p, (float, int)) and p is not None]
+        except (ValueError, TypeError) as e:
+            _LOGGER.error(f"Error converting prices to float: {e}")
+            return [], 0.0, "unknown", []
         
-        # 🔀 Läs från input_select  
-        mode = get_state(self.hass, "input_select.pumpsteer_price_model") or "hybrid"
+        if not prices:
+            _LOGGER.warning("No valid prices found after conversion")
+            return [], 0.0, "unknown", []
+        
+        # Hämta prismodell från hårdkodad entitet
+        mode = get_state(self.hass, HARDCODED_ENTITIES["price_model_entity"]) or "hybrid"
         categories = []
         
-        if mode == "percentiles":
-            categories = classify_prices(prices)
-            price_category = categories[now_hour] + " (percentiles)" if categories and now_hour < len(categories) else "unknown"
-        else:
-            categories = await async_hybrid_classify_with_history(
-                self.hass,
-                price_list=prices,
-                price_entity_id=entity_id,
-                trailing_hours=72
-            )
-            price_category = categories[now_hour] + " (hybrid)" if categories and now_hour < len(categories) else "unknown"
+        try:
+            if mode == "percentiles":
+                categories = classify_prices(prices)
+            else:  # hybrid mode
+                categories = await async_hybrid_classify_with_history(
+                    self.hass,
+                    price_list=prices,
+                    price_entity_id=entity_id,
+                    trailing_hours=72
+                )
+        except Exception as e:
+            _LOGGER.error(f"Error classifying prices: {e}")
+            categories = ["unknown"] * len(prices)
         
-        return prices, current_price, price_category, categories, now_hour
+        # Säkert hämta aktuellt pris och kategori
+        current_price, price_category = safe_get_current_price_and_category(
+            prices, categories, now_hour, mode
+        )
+        
+        _LOGGER.debug(f"Price data retrieved: {len(prices)} prices, current: {current_price}, category: {price_category}")
+        
+        return prices, current_price, price_category, categories
 
     async def async_update(self) -> None:
+        """Uppdatera sensordata."""
         try:
+            # Fånga aktuell tid EN gång för hela uppdateringen
+            update_time = datetime.now()
+            now_hour = update_time.hour
+            
+            _LOGGER.debug(f"PumpSteer: Starting update at {update_time.isoformat()}, hour: {now_hour}")
+            
             config = {**self._config_entry.data, **self._config_entry.options}
             
-            # Fånga tiden EN gång för konsistens genom hela uppdateringen
-            now_hour = datetime.now().hour  # <-- LÄGG TILL DENNA RAD
-    
+            # Hämta sensordata
             sensor_data = self._get_sensor_data(config)
-            prices, current_price, price_category, categories, now_hour = await self._get_price_data(config)
+            
+            # Hämta prisdata (skicka now_hour för konsistens)
+            prices, current_price, price_category, categories = await self._get_price_data(config, now_hour)
 
+            # Validera nödvändig data
             missing = self._validate_required_data(sensor_data, prices)
             if missing:
                 self._state = STATE_UNAVAILABLE
                 self._attributes = {
                     "Status": f"Missing: {', '.join(missing)}",
-                    "Last Updated": datetime.now().isoformat()
+                    "Last Updated": update_time.isoformat(),
+                    "Current Hour": now_hour
                 }
                 _LOGGER.warning(f"PumpSteer: Missing sensor data: {', '.join(missing)}")
                 return
 
+            # Kontrollera semesterläge med hårdkodade entiteter
             holiday = is_holiday_mode_active(
                 self.hass,
-                config.get("holiday_mode_boolean_entity"),
-                config.get("holiday_start_datetime_entity"),
-                config.get("holiday_end_datetime_entity")
+                HARDCODED_ENTITIES["holiday_mode_boolean_entity"],
+                HARDCODED_ENTITIES["holiday_start_datetime_entity"],
+                HARDCODED_ENTITIES["holiday_end_datetime_entity"]
             )
 
+            # Justera måltemperatur för semesterläge
             if holiday:
                 sensor_data['target_temp'] = HOLIDAY_TEMP
+                _LOGGER.info(f"Holiday mode active, target temperature set to {HOLIDAY_TEMP}°C")
 
-            fake_temp, mode = self._calculate_output_temperature(sensor_data, prices, price_category)
+            # Beräkna uttemperatur och läge
+            fake_temp, mode = self._calculate_output_temperature(
+                sensor_data, prices, price_category, now_hour
+            )
             self._state = round(fake_temp, 1)
 
+            # Bygg attribut
             self._attributes = self._build_attributes(
-                sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
+                sensor_data, prices, current_price, price_category, 
+                mode, holiday, categories, now_hour
             )
 
-            self._last_update_time = datetime.now()
-            _LOGGER.debug(f"PumpSteer: Updated - Mode: {mode}, State: {self._state}°C")
+            self._last_update_time = update_time
+            _LOGGER.debug(f"PumpSteer: Update completed - Mode: {mode}, State: {self._state}°C, Hour: {now_hour}")
 
         except Exception as e:
             _LOGGER.error(f"PumpSteer: Error during update: {e}", exc_info=True)
             self._state = STATE_UNAVAILABLE
             self._attributes = {
                 "Status": f"Error: {str(e)}",
-                "Last Updated": datetime.now().isoformat()
+                "Last Updated": datetime.now().isoformat(),
+                "Error Details": str(e)
             }
 
 
@@ -322,6 +463,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    """Sätt upp sensorn."""
     _LOGGER.debug("PumpSteer: Setting up sensor platform")
 
     sensor = PumpSteerSensor(hass, config_entry)
