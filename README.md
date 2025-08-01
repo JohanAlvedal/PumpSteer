@@ -1,174 +1,174 @@
 # PumpSteer
 
-PumpSteer är en anpassad Home Assistant-integration för att dynamiskt optimera din värmepump genom att manipulera insignalen från utomhustemperatursensorn. Den låter dig spara energi och pengar genom att anpassa din uppvärmningsstrategi baserat på elpriser, inomhustemperatur, väderprognoser och termisk tröghet.
+PumpSteer is a custom Home Assistant integration that dynamically optimizes your heat pump by manipulating the outdoor temperature sensor input. It helps save energy and money by adjusting your heating strategy based on electricity prices, indoor temperature, weather forecasts, and thermal inertia.
 
 ---
 
-## ⚠️ Ansvarsfriskrivning
+## ⚠️ Disclaimer
 
-Jag är inte expert på programmering, energihantering eller automation. Denna setup är baserad på mina personliga erfarenheter och experiment. Jag kan inte garantera att den fungerar för alla, och jag tar inget ansvar för problem eller skador som kan uppstå vid användning av denna konfiguration eller kod.
+I'm not an expert in programming, energy systems, or automation. This setup is based on personal experiments and use. I cannot guarantee it will work for everyone, and I take no responsibility for any issues or damage resulting from the use of this configuration or code.
 
-**Använd den på egen risk och testa noggrant i din egen miljö.**
+**Use at your own risk and thoroughly test it in your environment.**
 
 ---
 
-## ✅ Funktioner
+## ✅ Features
 
-* 🔧 Smart virtuell styrning av utomhustemperatur
-* 🌡️ Dynamisk komfortstyrning med:
+* 🔧 Smart virtual control of outdoor temperature
+* 🌡️ Dynamic comfort control using:
 
-  * Inomhustemperatur
-  * Målinomhustemperatur
-  * Prognos för elpris
-  * Temperaturprognos (kommaseparerad lista)
-  * Termisk tröghet
-* 💸 Elprisanpassning via Nordpool eller annan sensor
-* 🧊 Bromsläge: minimerar uppvärmning vid höga priser
-* ☀️ Sommarläge: inaktiverar all styrning vid varma temperaturer
-* 🏝️ Semesterläge: tillfällig temperatursänkning under frånvaro
-* 🤖 ML-analys: inlärning av hur huset reagerar (sessionsbaserat)
-* 🔁 Autojustering av `house_inertia` (om aktiverad)
-* 🧠 Rekommendationer för förbättrad balans komfort/besparing
-* 🎛️ Finjustering via `input_number`, `input_text`, `input_boolean`, `input_datetime`
-* 🖼️ Extra sensorer för UI-visualisering
+  * Indoor temperature
+  * Target indoor temperature
+  * Electricity price forecast
+  * Temperature forecast (comma-separated list)
+  * Thermal inertia
+* 💸 Electricity price adjustment via Nordpool or other sensor
+* 🧊 Braking mode: limits heating during high prices
+* ☀️ Summer mode: disables heating control during warm weather
+* 🏝️ Holiday mode: temporarily reduces temperature when away
+* 🤖 ML analysis: learns how your house responds (session-based)
+* 🔁 Auto-adjustment of `house_inertia` (if enabled)
+* 🧠 Recommendations for improved comfort/savings balance
+* 🎛️ Fine-tuning via `input_number`, `input_text`, `input_boolean`, `input_datetime`
+* 🖼️ Extra sensors for UI visualization
 
-> 💡 **Notis:** Semesterläge är endast aktivt när utomhustemperaturen är under sommartröskeln.
+> 💡 **Note:** Holiday mode is only active when the outdoor temperature is below the summer threshold.
 
 ---
 
 ## 🔧 Installation via HACS (Custom Repository)
 
-Om PumpSteer ännu inte finns i HACS:
+If PumpSteer is not yet available in HACS:
 
-1. Gå till **HACS > ⋮ > Custom Repositories**
-2. Lägg till: `https://github.com/JohanAlvedal/PumpSteer`
-3. Välj **Integration** som kategori
-4. Installera PumpSteer
-5. Starta om Home Assistant
-6. Följ installationsguiden och välj hjälpentiteter
-
----
-
-## 📦 Hjälpentiteter (via `pumpsteer_package.yaml`)
-
-| Typ              | Entitet                         | Funktion                                    |
-| ---------------- | ------------------------------- | ------------------------------------------- |
-| `input_number`   | `indoor_target_temperature`     | Mål för inomhustemperatur                   |
-| `input_number`   | `pumpsteer_summer_threshold`    | Tröskel för att aktivera sommarläge         |
-| `input_number`   | `pumpsteer_aggressiveness`      | Komfort vs besparing (0–5)                  |
-| `input_number`   | `house_inertia`                 | Hur trögt huset reagerar (0–10)             |
-| `input_text`     | `hourly_forecast_temperatures`  | Temperaturprognos (24 CSV-värden)           |
-| `input_boolean`  | `holiday_mode`                  | Aktiverar semesterläge                      |
-| `input_boolean`  | `autotune_inertia`              | Tillåt systemet att justera `house_inertia` |
-| `input_datetime` | `holiday_start` / `holiday_end` | Automatisk aktivering av semesterläge       |
+1. Go to **HACS > ⋮ > Custom Repositories**
+2. Add: `https://github.com/JohanAlvedal/PumpSteer`
+3. Choose **Integration** as category
+4. Install PumpSteer
+5. Restart Home Assistant
+6. Follow the setup guide and select helper entities
 
 ---
 
-## 🧪 Prognosformat
+## 📦 Helper Entities (via `pumpsteer_package.yaml`)
 
-`input_text.hourly_forecast_temperatures` måste innehålla exakt 24 kommaseparerade temperaturvärden (°C):
+| Type             | Entity                          | Function                                |
+| ---------------- | ------------------------------- | --------------------------------------- |
+| `input_number`   | `indoor_target_temperature`     | Target indoor temperature               |
+| `input_number`   | `pumpsteer_summer_threshold`    | Threshold to activate summer mode       |
+| `input_number`   | `pumpsteer_aggressiveness`      | Comfort vs savings (0–5)                |
+| `input_number`   | `house_inertia`                 | How slow/fast the house responds (0–10) |
+| `input_text`     | `hourly_forecast_temperatures`  | Temperature forecast (24 CSV values)    |
+| `input_boolean`  | `holiday_mode`                  | Activates holiday mode                  |
+| `input_boolean`  | `autotune_inertia`              | Allow system to adjust `house_inertia`  |
+| `input_datetime` | `holiday_start` / `holiday_end` | Automatically enable holiday mode       |
+
+---
+
+## 🧪 Forecast Format
+
+`input_text.hourly_forecast_temperatures` must contain exactly 24 comma-separated temperature values (°C):
 
 ```
--3.5,-4.2,-5.0,-4.8,… (totalt 24 värden)
+-3.5,-4.2,-5.0,-4.8,… (total 24 values)
 ```
 
-Om formatet är ogiltigt loggas ett fel och prognosen ignoreras.
+If the format is invalid, an error will be logged and the forecast ignored.
 
 ---
 
 ## 📊 Sensor: `sensor.pumpsteer`
 
-Denna sensor är integrationens huvudutgång.
+This sensor is the main output of the integration.
 
-### Tillstånd:
+### State:
 
-Virtuell (fejkad) utomhustemperatur som skickas till din värmepump.
+Virtual (fake) outdoor temperature sent to your heat pump.
 
-### Attribut:
+### Attributes:
 
-| Attribut                     | Betydelse                                              |
-| ---------------------------- | ------------------------------------------------------ |
-| `Mode`                       | `heating`, `neutral`, `braking_mode`, `summer_mode`    |
-| `Fake Outdoor Temperature`   | Den beräknade temperatur som skickas till värmepumpen  |
-| `Price Category`             | Klassificering av nuvarande elpris                     |
-| `Status`                     | Systemstatus, t.ex. "OK" eller felmeddelanden          |
-| `Current Price`              | Aktuellt elpris i SEK/kWh                              |
-| `Max Price`                  | Dagens högsta elpris                                   |
-| `Aggressiveness`             | Komfort kontra besparing (0–5)                         |
-| `Inertia`                    | Husets uppskattade tröghet                             |
-| `Target Temperature`         | Önskad inomhustemperatur                               |
-| `Indoor Temperature`         | Faktisk innetemperatur                                 |
-| `Outdoor Temperature`        | Verklig utomhustemperatur                              |
-| `Summer Threshold`           | Tröskel för sommarläge                                 |
-| `Braking Threshold (%)`      | Procentuellt tröskelvärde för att bromsa vid högt pris |
-| `Price Factor (%)`           | Förhållandet mellan aktuellt och maxpris               |
-| `Holiday Mode`               | Om semesterläge är aktivt                              |
-| `Last Updated`               | Senaste uppdateringstiden                              |
-| `Temp Error (°C)`            | Avvikelse från målinomhustemperatur                    |
-| `To Summer Threshold (°C)`   | Hur nära det är till att aktivera sommarläge           |
-| `Next 3 Hours Prices`        | Kommande elpriser                                      |
-| `Saving Potential (SEK/kWh)` | Skillnad mellan maxpris och nuvarande pris             |
-| `Decision Reason`            | Beskrivning av beslut bakom aktuell drift              |
-| `Price Categories All Hours` | Klassificering för alla timmar                         |
-| `Current Hour`               | Aktuell timme                                          |
-| `Data Quality`               | Information om tillgänglighet och datamängd            |
+| Attribute                    | Meaning                                             |
+| ---------------------------- | --------------------------------------------------- |
+| `Mode`                       | `heating`, `neutral`, `braking_mode`, `summer_mode` |
+| `Fake Outdoor Temperature`   | Calculated temperature sent to the heat pump        |
+| `Price Category`             | Classification of current electricity price         |
+| `Status`                     | System status, e.g. "OK" or error messages          |
+| `Current Price`              | Current electricity price in SEK/kWh                |
+| `Max Price`                  | Highest price of the day                            |
+| `Aggressiveness`             | Comfort vs savings (0–5)                            |
+| `Inertia`                    | Estimated house inertia                             |
+| `Target Temperature`         | Desired indoor temperature                          |
+| `Indoor Temperature`         | Current indoor temperature                          |
+| `Outdoor Temperature`        | Real outdoor temperature                            |
+| `Summer Threshold`           | Threshold for summer mode                           |
+| `Braking Threshold (%)`      | Percent threshold to trigger braking                |
+| `Price Factor (%)`           | Current vs max price ratio                          |
+| `Holiday Mode`               | Whether holiday mode is active                      |
+| `Last Updated`               | Last update timestamp                               |
+| `Temp Error (°C)`            | Deviation from target indoor temperature            |
+| `To Summer Threshold (°C)`   | Distance to triggering summer mode                  |
+| `Next 3 Hours Prices`        | Upcoming electricity prices                         |
+| `Saving Potential (SEK/kWh)` | Potential savings from current price                |
+| `Decision Reason`            | Reason for current decision                         |
+| `Price Categories All Hours` | Classification for all hours                        |
+| `Current Hour`               | Current hour of the day                             |
+| `Data Quality`               | Availability and completeness of input data         |
 
 ---
 
 ## 🧠 Sensor: `sensor.pumpsteer_ml_analysis`
 
-ML-sensor som visar analys och rekommendationer baserat på hur huset presterar.
+ML sensor showing analysis and recommendations based on your house's behavior.
 
-### Attribut:
+### Attributes:
 
-| Attribut                   | Beskrivning                                        |
-| -------------------------- | -------------------------------------------------- |
-| `success_rate`             | Hur ofta systemet träffade måltemp inom rimlig tid |
-| `avg_heating_duration`     | Snittlängd på uppvärmningssessioner (min)          |
-| `most_used_aggressiveness` | Vanligast använda aggressivitetsnivå               |
-| `total_heating_sessions`   | Totalt antal identifierade sessioner               |
-| `recommendations`          | Lista med textförslag baserat på prestanda         |
-| `auto_tune_active`         | Om autojustering av `house_inertia` är aktiv       |
-| `last_updated`             | Tidpunkt för senaste analysuppdatering             |
+| Attribute                  | Description                                         |
+| -------------------------- | --------------------------------------------------- |
+| `success_rate`             | How often the system reached the target temperature |
+| `avg_heating_duration`     | Average heating session duration (min)              |
+| `most_used_aggressiveness` | Most used aggressiveness level                      |
+| `total_heating_sessions`   | Total number of sessions                            |
+| `recommendations`          | Text suggestions based on system performance        |
+| `auto_tune_active`         | If automatic inertia adjustment is active           |
+| `last_updated`             | Last analysis update timestamp                      |
 
-Rekommendationer visas i UI eller i `markdown`-kort.
-
----
-
-## 🧠 Hur det fungerar
-
-PumpSteer försöker styra värmepumpens uppfattade behov via fejkad utetemperatur:
-
-* Värma mer när elpriset är lågt
-* Undvika värme när priset är högt
-* Gå i neutralt läge om allt är stabilt
-* Stänga av värme vid hög utetemp (sommarläge)
-* Sänka måltemperaturen till 16 °C under semester
-* Lära sig över tid hur trögt huset är och anpassa inställningar (om `autotune_inertia` är aktivt)
-
-All styrning sker helt lokalt utan molnberoenden.
+Recommendations can be shown in UI or in markdown cards.
 
 ---
 
-## 🛠️ Loggning
+## 🧠 How it works
 
-* Fel och varningar loggas i Home Assistant
-* Sensor visar `unavailable` vid saknade data
-* ML-data sparas i `pumpsteer_ml_data.json` (max 100 sessions)
-* Autojusterat `inertia` sparas i `adaptive_state.json`
+PumpSteer controls your heat pump's perceived demand using a fake outdoor temperature:
+
+* Increases heating when electricity is cheap
+* Avoids heating when prices are high
+* Goes to neutral mode when stable
+* Disables heating when it's warm outside (summer mode)
+* Lowers target temp to 16 °C during holidays
+* Learns over time how your house reacts and adjusts settings (if `autotune_inertia` is enabled)
+
+All control is done locally without any cloud dependency.
 
 ---
 
-## 🧪 Observera
+## 🛠️ Logging
 
-Detta är ett hobbyprojekt byggt med hjälp av ChatGPT, Copilot och mycket tålamod. Feedback, förbättringar och förslag är alltid välkomna.
+* Errors and warnings are logged in Home Assistant
+* Sensor shows `unavailable` when data is missing
+* ML data is stored in `pumpsteer_ml_data.json` (max 100 sessions)
+* Auto-tuned `inertia` is saved in `adaptive_state.json`
 
 ---
 
-## 🔗 Länkar
+## 🧪 Note
 
-* 🔗 [GitHub-repo](https://github.com/JohanAlvedal/PumpSteer)
-* 🐞 [Skapa Issue](https://github.com/JohanAlvedal/PumpSteer/issues)
+This is a hobby project built with the help of ChatGPT, Copilot, and a lot of patience. Feedback and improvement ideas are always welcome.
+
+---
+
+## 🔗 Links
+
+* 🔗 [GitHub repo](https://github.com/JohanAlvedal/PumpSteer)
+* 🐞 [Create Issue](https://github.com/JohanAlvedal/PumpSteer/issues)
 
 ---
 
