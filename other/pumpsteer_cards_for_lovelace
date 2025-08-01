@@ -1,6 +1,191 @@
-# Enkla PumpSteer Lovelace Cards - Korrekt Syntax
+# PumpSteer Lovelace Cards
 
-Här är enkla kort som använder rätt syntax för attribut med `type: attribute`.
+type: entities
+title: 🔧 PumpSteer – Drift & Status
+show_header_toggle: false
+entities:
+  - entity: sensor.pumpsteer
+    name: Fejkad utetemperatur
+    secondary_info: last-changed
+  - entity: sensor.pumpsteer_ml_analysis
+  - entity: sensor.pumpsteer_operating_mode
+    name: Driftläge
+    secondary_info: last-changed
+  - entity: sensor.pumpsteer_is_preboosting
+    name: Preboost aktiv
+    secondary_info: last-changed
+  - entity: sensor.pumpsteer_is_braking
+    secondary_info: last-changed
+  - type: divider
+  - entity: sensor.real_outdoor_temperature
+    name: Ute (verklig)
+    secondary_info: last-changed
+  - entity: sensor.shelly_h_t_temp_temperature
+  - type: divider
+  - entity: input_number.pumpsteer_aggressiveness
+  - entity: input_number.house_inertia
+  - entity: input_number.indoor_target_temperature
+  - entity: input_number.pumpsteer_summer_threshold
+  - entity: input_text.hourly_forecast_temperatures
+    name: Forecast Data (raw)
+    secondary_info: last-changed
+  - entity: input_select.pumpsteer_price_model
+  - entity: sensor.pumpsteer_price_category
+  - entity: sensor.pumpsteer_operating_mode
+  - entity: sensor.pumpsteer_status_summary
+  - entity: sensor.pumpsteer_efficiency_score
+  - entity: input_boolean.autotune_inertia
+
+###### Attributes #####
+
+type: entities
+title: PumpSteer
+entities:
+  - entity: sensor.pumpsteer
+    name: Status
+    attribute: Status
+    icon: mdi:check-circle
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Mode
+    name: Mode
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Fake Outdoor Temperature
+    name: Fake Outdoor Temp (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Price Category
+    name: Price Category
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Current Price
+    name: Current Price (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Max Price
+    name: Max Price (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Aggressiveness
+    name: Aggressiveness
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Inertia
+    name: Inertia
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Target Temperature
+    name: Target Temp (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Indoor Temperature
+    name: Indoor Temp (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Outdoor Temperature
+    name: Outdoor Temp (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Braking Threshold (%)
+    name: Braking Threshold (%)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Price Factor (%)
+    name: Price Factor (%)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Holiday Mode
+    name: Holiday Mode
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Last Updated
+    name: Last Updated
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Temp Error (°C)
+    name: Temp Error (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: To Summer Threshold (°C)
+    name: To Summer Threshold (°C)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Next 3 Hours Prices
+    name: Next 3h Prices (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Saving Potential (SEK/kWh)
+    name: Saving Potential (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: Decision Reason
+    name: Decision Reason
+
+
+
+####### Apexchart #####
+
+type: custom:apexcharts-card
+graph_span: 24h
+header:
+  show: true
+  title: 24 Timmar - Temperatur & Elpris
+  show_states: true
+yaxis:
+  - id: temp
+    min: auto
+    max: auto
+    decimals: 1
+    apex_config:
+      tickAmount: 5
+      labels:
+        formatter: |
+          EVAL:function(val) {
+            return val.toFixed(1) + ' °C';
+          }
+      title:
+        text: Temperatur (°C)
+  - id: price
+    min: auto
+    max: auto
+    decimals: 2
+    opposite: true
+    apex_config:
+      tickAmount: 5
+      labels:
+        formatter: |
+          EVAL:function(val) {
+            return val.toFixed(2) + ' öre';
+          }
+      title:
+        text: Elpris (öre/kWh)
+series:
+  - entity: sensor.pumpsteer
+    name: Pumpstyrning
+    type: line
+    yaxis_id: temp
+    color: "#00bcd4"
+    stroke_width: 2
+  - entity: sensor.yttertemp_no
+    name: Temperatur Nu
+    type: line
+    yaxis_id: temp
+    color: "#ff9800"
+    stroke_width: 2
+  - entity: sensor.shelly_h_t_temp_temperature
+    name: Temp Hall Nere
+    type: line
+    yaxis_id: temp
+    color: "#4caf50"
+    stroke_width: 2
+  - entity: sensor.nordpool_kwh_se3_sek_3_10_025
+    name: Nordpool Tibber
+    type: line
+    yaxis_id: price
+    color: "#f44336"
+    stroke_width: 2
+
 
 ## 1. Enkel huvudstatus
 
