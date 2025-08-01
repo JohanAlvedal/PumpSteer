@@ -20,6 +20,7 @@ HARDCODED_ENTITIES = {
     "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
     "holiday_start_datetime_entity": "input_datetime.holiday_start",
     "holiday_end_datetime_entity": "input_datetime.holiday_end",
+    "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
     "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures"
 }
 
