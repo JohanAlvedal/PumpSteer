@@ -1,8 +1,23 @@
 import voluptuous as vol
+import logging
+
 from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+
+_LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
+
+# Samma hårdkodade entiteter som i config_flow
+HARDCODED_ENTITIES = {
+    "target_temp_entity": "input_number.indoor_target_temperature",
+    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold", 
+    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
+    "holiday_start_datetime_entity": "input_datetime.holiday_start",
+    "holiday_end_datetime_entity": "input_datetime.holiday_end",
+    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures"
+}
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
@@ -11,31 +26,112 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
+        errors = {}
+        
         if user_input is not None:
-            # Update the existing config_entry.data with the user's changes.
-            # This ensures that any fields not explicitly in user_input (e.g., if we had optional fields)
-            # retain their previous values.
-            updated_data = self.config_entry.data.copy()
-            updated_data.update(user_input)
-            return self.async_create_entry(title="PumpSteer Options", data=updated_data)
+            # Kombinera med hårdkodade entiteter
+            combined_data = {**user_input, **HARDCODED_ENTITIES}
+            
+            # Validera entities
+            errors = await self._validate_entities(combined_data)
+            
+            if not errors:
+                # Uppdatera befintlig data med nya värden (inkl. hårdkodade)
+                updated_data = self.config_entry.data.copy()
+                updated_data.update(combined_data)
+                
+                # Uppdatera config entry
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data=updated_data
+                )
+                
+                return self.async_create_entry(title="", data={})
 
-        # Fetch current values from config_entry.data for defaults in the form
-        # Only fetch the entities that *are* configurable via this UI flow.
-        current_indoor_temp = self.config_entry.data.get("indoor_temp_entity")
-        current_real_outdoor = self.config_entry.data.get("real_outdoor_entity")
-        current_electricity_price = self.config_entry.data.get("electricity_price_entity")
-        current_hourly_forecast = self.config_entry.data.get("hourly_forecast_temperatures_entity")
-
-        # The schema now only includes the sensor entities that the user needs to select.
-        # Control parameters like target_temp, summer_threshold, aggressiveness, inertia,
-        # and holiday mode entities are assumed to be fixed or managed by other HA helpers
-        # (e.g., input_number, input_boolean, input_datetime) and are not part of this flow.
+        # Hämta nuvarande värden från config_entry.data för standardvärden
+        current_data = self.config_entry.data
+        
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required("indoor_temp_entity", default=current_indoor_temp): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("real_outdoor_entity", default=current_real_outdoor): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("electricity_price_entity", default=current_electricity_price): selector({"entity": {"domain": "sensor"}}),
-                vol.Required("hourly_forecast_temperatures_entity", default=current_hourly_forecast): selector({"entity": {"domain": "input_text"}}),
-            })
+                vol.Required(
+                    "indoor_temp_entity", 
+                    default=current_data.get("indoor_temp_entity")
+                ): selector({
+                    "entity": {
+                        "domain": "sensor",
+                        "device_class": "temperature"
+                    }
+                }),
+                vol.Required(
+                    "real_outdoor_entity", 
+                    default=current_data.get("real_outdoor_entity")
+                ): selector({
+                    "entity": {
+                        "domain": "sensor", 
+                        "device_class": "temperature"
+                    }
+                }),
+                vol.Required(
+                    "electricity_price_entity", 
+                    default=current_data.get("electricity_price_entity")
+                ): selector({
+                    "entity": {"domain": "sensor"}
+                }),
+            }),
+            errors=errors
         )
+
+    async def _validate_entities(self, user_input):
+        """Validate that entities exist and are available."""
+        errors = {}
+        
+        # Endast de entiteter som användaren kan ändra
+        user_configurable_entities = {
+            "indoor_temp_entity": "Indoor temperature sensor",
+            "real_outdoor_entity": "Outdoor temperature sensor",
+            "electricity_price_entity": "Electricity price sensor"
+        }
+        
+        # Hårdkodade entiteter som alltid ska finnas
+        hardcoded_entities = {
+            "hourly_forecast_temperatures_entity": "Temperature forecast input_text",
+            "target_temp_entity": "Target temperature input_number",
+            "summer_threshold_entity": "Summer threshold input_number",
+            "holiday_mode_boolean_entity": "Holiday mode boolean",
+            "holiday_start_datetime_entity": "Holiday start datetime", 
+            "holiday_end_datetime_entity": "Holiday end datetime"
+        }
+        
+        # Kontrollera användarvalda entiteter (blockerar om de saknas)
+        for field, description in user_configurable_entities.items():
+            entity_id = user_input.get(field)
+            if not entity_id:
+                errors[field] = f"Required: {description}"
+                continue
+                
+            if not await self._entity_exists(entity_id):
+                errors[field] = f"Entity not found: {entity_id}"
+            elif not await self._entity_available(entity_id):
+                errors[field] = f"Entity unavailable: {entity_id}"
+        
+        # Kontrollera hårdkodade entiteter (bara logga varningar)
+        for field, description in hardcoded_entities.items():
+            entity_id = user_input.get(field)
+            if entity_id:
+                if not await self._entity_exists(entity_id):
+                    _LOGGER.warning(f"Hardcoded entity not found: {entity_id} ({description}) - Check package configuration")
+                elif not await self._entity_available(entity_id):
+                    _LOGGER.warning(f"Hardcoded entity unavailable: {entity_id} ({description}) - Check package configuration")
+        
+        return errors
+
+    async def _entity_exists(self, entity_id: str) -> bool:
+        """Check if entity exists."""
+        return self.hass.states.get(entity_id) is not None
+
+    async def _entity_available(self, entity_id: str) -> bool:
+        """Check if entity is available."""
+        entity = self.hass.states.get(entity_id)
+        if not entity:
+            return False
+        return entity.state not in [STATE_UNAVAILABLE, STATE_UNKNOWN, 'unavailable', 'unknown']
