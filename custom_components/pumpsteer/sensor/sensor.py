@@ -1,4 +1,4 @@
-# sensor.py - Korrigerad version med säkra imports
+# sensor.py - Städad version med enkel ML
 
 import logging
 from datetime import datetime, timedelta
@@ -14,11 +14,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
 # Importera befintliga moduler
-from .pre_boost import check_combined_preboost
-from .holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
-from .temp_control_logic import calculate_temperature_output
-from .electricity_price import async_hybrid_classify_with_history, classify_prices
-from .settings import (
+from ..pre_boost import check_combined_preboost
+from ..holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
+from ..temp_control_logic import calculate_temperature_output
+from ..electricity_price import async_hybrid_classify_with_history, classify_prices
+from ..settings import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
     BRAKING_MODE_TEMP,
@@ -26,36 +26,27 @@ from .settings import (
     AGGRESSIVENESS_SCALING_FACTOR,
     PREBOOST_OUTPUT_TEMP
 )
-from .utils import (
+from ..utils import (
     safe_float, get_state, get_attr,
     safe_get_price_data, safe_parse_temperature_forecast,
     validate_required_entities, safe_get_entity_state_with_description,
     safe_array_slice
 )
 
-# SÄKER IMPORT AV FÖRBÄTTRAD ML (definiera _LOGGER först!)
 _LOGGER = logging.getLogger(__name__)
 
-# Nu kan vi säkert importera ML-funktioner
+# Enkel ML-import
 try:
-    from .enhanced_ml_adaptive import EnhancedPumpSteerMLCollector
-    ENHANCED_ML_AVAILABLE = True
-    _LOGGER.info("Enhanced ML features available")
+    from .ml_adaptive import PumpSteerMLCollector
+    ML_AVAILABLE = True
+    _LOGGER.info("ML features available")
 except ImportError as e:
-    ENHANCED_ML_AVAILABLE = False
-    _LOGGER.info(f"Enhanced ML features disabled: {e}")
-    # Fallback till original ML om den finns
-    try:
-        from .ml_adaptive import PumpSteerMLCollector
-        ML_AVAILABLE = True
-        _LOGGER.info("Using original ML features as fallback")
-    except ImportError:
-        ML_AVAILABLE = False
-        _LOGGER.info("No ML features available")
+    ML_AVAILABLE = False
+    _LOGGER.info(f"ML features disabled: {e}")
 
 DOMAIN = "pumpsteer"
 
-# Hardcoded entities (som i din ursprungliga fil)
+# Hardcoded entities
 HARDCODED_ENTITIES = {
     "target_temp_entity": "input_number.indoor_target_temperature",
     "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
@@ -70,7 +61,7 @@ HARDCODED_ENTITIES = {
 
 NEUTRAL_TEMP_THRESHOLD = 0.5
 DEFAULT_SUMMER_THRESHOLD = 18.0
-DEFAULT_AGGRESSIVENESS = 0.0
+DEFAULT_AGGRESSIVENESS = 3.0
 
 def safe_get_current_price_and_category(
     prices: List[float],
@@ -115,39 +106,23 @@ class PumpSteerSensor(Entity):
             name="PumpSteer",
             manufacturer="Custom",
             model="Heat Pump Controller",
-            sw_version="1.2.0"  # Uppdaterad version
+            sw_version="1.2.0"
         )
 
-        # ML-initialisering med säker fallback
+        # Enkel ML-initialisering
         self.ml_collector = None
         self._ml_session_started = False
         self._ml_session_start_mode = None
         self._last_price_category = "unknown"
-        self._enhanced_ml = False
-        self._adaptive_mode = False
 
-        # Försök sätta upp ML (förbättrat först, sedan fallback)
-        if ENHANCED_ML_AVAILABLE:
-            try:
-                self.ml_collector = EnhancedPumpSteerMLCollector(hass)
-                self._enhanced_ml = True
-                self._adaptive_mode = True
-                _LOGGER.info("PumpSteer: Enhanced ML system enabled")
-            except Exception as e:
-                _LOGGER.warning(f"PumpSteer: Enhanced ML initialization failed: {e}")
-                self.ml_collector = None
-        
-        # Fallback till original ML om enhanced ML inte fungerar
-        if not self.ml_collector and ML_AVAILABLE:
+        if ML_AVAILABLE:
             try:
                 self.ml_collector = PumpSteerMLCollector(hass)
-                self._enhanced_ml = False
-                _LOGGER.info("PumpSteer: Basic ML system enabled")
+                _LOGGER.info("PumpSteer: ML system enabled")
             except Exception as e:
-                _LOGGER.warning(f"PumpSteer: Basic ML initialization failed: {e}")
+                _LOGGER.warning(f"PumpSteer: ML initialization failed: {e}")
                 self.ml_collector = None
-
-        if not self.ml_collector:
+        else:
             _LOGGER.info("PumpSteer: Running without ML features")
 
         config_entry.add_update_listener(self.async_options_update_listener)
@@ -208,8 +183,6 @@ class PumpSteerSensor(Entity):
         self._config_entry = entry
         await self.async_update()
 
-    # === BEFINTLIGA METODER (din ursprungliga kod) ===
-    
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Hämta sensordata från Home Assistant."""
         return {
@@ -318,6 +291,7 @@ class PumpSteerSensor(Entity):
                 "outdoor_temp": sensor_data.get('outdoor_temp'),
                 "target_temp": sensor_data.get('target_temp'),
                 "aggressiveness": sensor_data.get('aggressiveness', 0),
+                "inertia": sensor_data.get('inertia'),
                 "mode": mode,
                 "fake_temp": fake_temp,
                 "price_category": self._last_price_category,
@@ -347,23 +321,9 @@ class PumpSteerSensor(Entity):
             ml_status = self.ml_collector.get_status()
             self._attributes.update({
                 "ML_Available": True,
-                "ML_Enhanced": self._enhanced_ml,
                 "ML_Status": "Collecting data" if ml_status["collecting_data"] else "Ready",
-                "ML_Sessions_Collected": ml_status["sessions_collected"],
-                "Adaptive_Mode": self._adaptive_mode
+                "ML_Sessions_Collected": ml_status["sessions_collected"]
             })
-
-            # Lägg till enhanced ML attribut om tillgängligt
-            if self._enhanced_ml and hasattr(self.ml_collector, 'get_enhanced_insights'):
-                try:
-                    insights = self.ml_collector.get_enhanced_insights()
-                    if insights.get("status") == "analyzing":
-                        self._attributes.update({
-                            "ML_Success_Rate": f"{insights['overall_performance']['success_rate']:.1f}%",
-                            "ML_Prediction_Accuracy": f"{insights['overall_performance']['prediction_accuracy']:.1f}%"
-                        })
-                except Exception as e:
-                    _LOGGER.debug(f"Error getting enhanced ML insights: {e}")
 
         except Exception as e:
             _LOGGER.debug(f"ML attributes error (non-critical): {e}")
@@ -480,23 +440,6 @@ class PumpSteerSensor(Entity):
         }
 
         return attributes
-
-    # === FÖRBÄTTRADE ML-METODER (bara om enhanced ML finns) ===
-    
-    def get_enhanced_ml_insights(self) -> Dict[str, Any]:
-        """Hämta förbättrade ML-insikter."""
-        if self.ml_collector and self._enhanced_ml:
-            try:
-                return self.ml_collector.get_enhanced_insights()
-            except Exception as e:
-                _LOGGER.error(f"Error getting enhanced ML insights: {e}")
-                return {"error": str(e)}
-        elif self.ml_collector:
-            return self.ml_collector.get_learning_insights()
-        else:
-            return {"error": "ML collector not available"}
-
-    # === HUVUD UPDATE-METOD ===
 
     async def async_update(self) -> None:
         """Uppdatera sensordata."""
