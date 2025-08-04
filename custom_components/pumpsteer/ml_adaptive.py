@@ -32,6 +32,7 @@ class PumpSteerMLCollector:
         self.learning_sessions = []
         self.current_session = None
         self.last_inertia_adjustment = None  # Spåra senaste justering
+        self.last_gain_adjustment = None  # Spåra senaste gain-justering
         _LOGGER.info("PumpSteer Enhanced ML Collector initialized (observation + analysis + auto-tune mode)")
 
     async def async_load_data(self) -> None:
@@ -294,6 +295,10 @@ class PumpSteerMLCollector:
                 auto_tune_result = self._check_auto_tune_inertia()
                 if auto_tune_result:
                     recommendations.extend(auto_tune_result.get("notifications", []))
+                
+                gain_tune_result = self._check_auto_tune_integral_gain()
+                if gain_tune_result:
+                    recommendations.extend(gain_tune_result.get("notifications", []))
 
             return {
                 "ml_status": status,
@@ -309,117 +314,109 @@ class PumpSteerMLCollector:
                 "ml_status": self.get_status()
             }
 
-    def _check_auto_tune_inertia(self) -> Optional[Dict[str, Any]]:
-        """Kontrollera om house_inertia behöver justeras och utför vid behov."""
+    def _check_auto_tune_integral_gain(self) -> Optional[Dict[str, Any]]:
+        """Auto-tune av integral gain baserat på historik."""
         try:
-            # Hämta auto-tune setting
             auto_tune_state = self.hass.states.get("input_boolean.autotune_inertia")
             auto_tune_enabled = auto_tune_state and auto_tune_state.state == "on"
-            
-            # Hämta nuvarande inertia
-            current_inertia_state = self.hass.states.get("input_number.house_inertia")
-            if not current_inertia_state:
+
+            gain_entity = self.hass.states.get("input_number.pumpsteer_integral_gain")
+            if not gain_entity:
+                return None
+
+            current_gain = float(gain_entity.state)
+            heating_sessions = [s for s in self.learning_sessions[-10:]
+                                if s.get("summary", {}).get("mode") == "heating"]
+
+            if len(heating_sessions) < 3:
+                return None
+
+            # Undvik för frekventa justeringar (max var 2:e dag)
+            if (
+                self.last_gain_adjustment and
+                (dt_util.now() - datetime.fromisoformat(self.last_gain_adjustment)).days < 2
+            ):
                 return None
             
-            current_inertia = float(current_inertia_state.state)
+            errors = []
+            for s in heating_sessions:
+                updates = s.get("updates", [])
+                if not updates:
+                    continue
+                start = updates[0]["data"]
+                end = updates[-1]["data"]
+                error_start = start.get("target_temp", 0) - start.get("indoor_temp", 0)
+                error_end = end.get("target_temp", 0) - end.get("indoor_temp", 0)
+                errors.append(error_end - error_start)
             
-            # Analysera senaste 10 heating sessions
-            recent_heating = [s for s in self.learning_sessions[-10:] 
-                            if s.get("summary", {}).get("mode") == "heating"]
-            
-            if len(recent_heating) < 3:
+            if not errors:
                 return None
-                
-            # Analysera prestanda-mönster
-            avg_duration = statistics.mean([s["summary"]["duration_minutes"] 
-                                          for s in recent_heating 
-                                          if s.get("summary", {}).get("duration_minutes", 0) > 0])
-            
-            # Bestäm om justering behövs
-            suggested_inertia = current_inertia
+
+            avg_drift = statistics.mean(errors)
+
+            suggested_gain = current_gain
             reason = ""
             action_needed = False
-            
-            if avg_duration > 90 and current_inertia < 3.0:  # Långa sessions
-                suggested_inertia = min(current_inertia + 0.3, 5.0)
-                reason = f"Heating tar i snitt {avg_duration:.1f}min - ditt hus verkar tröghare än inställt"
+
+            if avg_drift > 0.3 and current_gain < 1.0:
+                suggested_gain = min(current_gain + 0.05, 1.0)
+                reason = f"Systemet ackumulerar värmefel över tid (drift={avg_drift:.2f})."
                 action_needed = True
-                
-            elif avg_duration < 25 and current_inertia > 0.5:  # Mycket korta sessions
-                # Kontrollera om det är överskjutning (skulle kräva mer analys)
-                suggested_inertia = max(current_inertia - 0.2, 0.1)
-                reason = f"Mycket korta heating-sessions ({avg_duration:.1f}min) - huset reagerar snabbare än förväntat"
+            elif avg_drift < -0.3 and current_gain > 0.01:
+                suggested_gain = max(current_gain - 0.05, 0.0)
+                reason = f"Systemet överskjuter (drift={avg_drift:.2f})."
                 action_needed = True
-            
+
             if not action_needed:
                 return None
-                
-            # Undvik för frekventa justeringar
-            if (self.last_inertia_adjustment and 
-                (dt_util.now() - datetime.fromisoformat(self.last_inertia_adjustment)).days < 2):
-                return None
-            
+
             notifications = []
-            
+
             if auto_tune_enabled:
-                # AUTOMATISK JUSTERING
                 try:
                     self.hass.services.call(
                         "input_number", "set_value",
                         {
-                            "entity_id": "input_number.house_inertia", 
-                            "value": round(suggested_inertia, 1)
+                            "entity_id": "input_number.pumpsteer_integral_gain",
+                            "value": round(suggested_gain, 3)
                         }
                     )
-                    
-                    # Skicka notification
-                    notification_msg = (f"🤖 Auto-Tune: Justerade house_inertia "
-                                      f"{current_inertia} → {suggested_inertia:.1f}. "
-                                      f"Orsak: {reason}. Övervakar prestanda...")
-                    
+                    msg = f"🤖 Auto-Tune: Justerade integral_gain {current_gain} → {suggested_gain:.3f}. {reason}"
                     self.hass.services.call(
                         "persistent_notification", "create",
                         {
-                            "title": "PumpSteer ML Auto-Tune",
-                            "message": notification_msg,
-                            "notification_id": "pumpsteer_autotune"
+                            "title": "PumpSteer ML Auto-Tune (Gain)",
+                            "message": msg,
+                            "notification_id": "pumpsteer_autotune_gain"
                         }
                     )
-                    
-                    notifications.append(f"✅ AUTO-JUSTERAT: house_inertia {current_inertia} → {suggested_inertia:.1f}")
-                    self.last_inertia_adjustment = dt_util.now().isoformat()
-                    
-                    _LOGGER.info(f"PumpSteer Auto-Tune: Adjusted house_inertia {current_inertia} → {suggested_inertia:.1f}")
-                    
+                    notifications.append(f"✅ AUTO-JUSTERAT: integral_gain {current_gain} → {suggested_gain:.3f}")
+                    _LOGGER.info(msg)
+                    self.last_gain_adjustment = dt_util.now().isoformat()
                 except Exception as e:
-                    _LOGGER.error(f"Auto-tune failed: {e}")
-                    notifications.append(f"❌ Auto-tune misslyckades: {e}")
+                    _LOGGER.error(f"Auto-tune (gain) failed: {e}")
+                    notifications.append(f"❌ Gain auto-tune misslyckades: {e}")
             else:
-                # BARA TIPS/REKOMMENDATION
-                tip_msg = (f"💡 TIP: Överväg att ändra house_inertia "
-                          f"{current_inertia} → {suggested_inertia:.1f}. "
-                          f"Orsak: {reason}")
-                
-                notifications.append(f"💡 REKOMMENDATION: house_inertia {current_inertia} → {suggested_inertia:.1f} ({reason})")
-                
-                # Även skicka som persistent notification för synlighet
+                tip_msg = f"💡 TIP: Överväg att ändra integral_gain {current_gain} → {suggested_gain:.3f}. {reason}"
                 self.hass.services.call(
                     "persistent_notification", "create",
                     {
-                        "title": "PumpSteer ML Rekommendation", 
+                        "title": "PumpSteer ML Rekommendation (Gain)",
                         "message": tip_msg,
-                        "notification_id": "pumpsteer_recommendation"
+                        "notification_id": "pumpsteer_recommendation_gain"
                     }
                 )
-            
+                notifications.append(f"💡 REKOMMENDATION: integral_gain {current_gain} → {suggested_gain:.3f} ({reason})")
+
             return {
                 "action": "auto_tune" if auto_tune_enabled else "recommendation",
-                "old_value": current_inertia,
-                "new_value": suggested_inertia,
+                "old_value": current_gain,
+                "new_value": suggested_gain,
                 "reason": reason,
                 "notifications": notifications
             }
-            
+
         except Exception as e:
-            _LOGGER.error(f"Error in auto-tune check: {e}")
+            _LOGGER.error(f"Error in gain auto-tune check: {e}")
             return None
+
