@@ -37,7 +37,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Enkel ML-import
 try:
-    from ..ml_adaptive import PumpSteerMLCollector
+    from .ml_adaptive import PumpSteerMLCollector
     ML_AVAILABLE = True
     _LOGGER.info("ML features available")
 except ImportError as e:
@@ -117,7 +117,7 @@ class PumpSteerSensor(Entity):
 
         if ML_AVAILABLE:
             try:
-                self..ml_collector = PumpSteerMLCollector(hass)
+                self.ml_collector = PumpSteerMLCollector(hass)
                 _LOGGER.info("PumpSteer: ML system enabled")
             except Exception as e:
                 _LOGGER.warning(f"PumpSteer: ML initialization failed: {e}")
@@ -490,6 +490,9 @@ class PumpSteerSensor(Entity):
             self._last_update_time = update_time
 
         except Exception as e:
+            if not self.ml_collector:
+                self._attributes["ML_Available"] = False
+                self._attributes["ML_Error"] = "ML Collector not initialized"
             _LOGGER.error(f"Error during update: {e}", exc_info=True)
             self._state = STATE_UNAVAILABLE
             self._attributes = {
