@@ -18,6 +18,7 @@ from ..pre_boost import check_combined_preboost
 from ..holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
+from ..ml_adaptive import PumpSteerMLCollector
 from ..settings import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
@@ -275,6 +276,31 @@ class PumpSteerSensor(Entity):
                 outdoor_temp,
                 aggressiveness
             )
+            
+        
+            current_error = target_temp - indoor_temp
+            dt_hours = 1  # Gissar att sensorn körs timvis, ändra annars
+            delta = current_error * dt_hours
+        
+            prev_integral = safe_float(get_state(self.hass, "input_number.integral_temp_error")) or 0.0
+            new_integral = prev_integral + delta
+            new_integral = max(-1000, min(1000, new_integral))  # Begränsa
+        
+            # Skriv tillbaka till Home Assistant
+            self.hass.services.call(
+                "input_number", "set_value",
+                {"entity_id": "input_number.integral_temp_error", "value": round(new_integral, 2)},
+                blocking=False
+            )
+        
+            gain = safe_float(get_state(self.hass, "input_number.pumpsteer_integral_gain")) or 0.0
+            if gain > 0:
+                adjustment = gain * new_integral
+                fake_temp += adjustment
+                _LOGGER.debug(f"Integral control: error={current_error:.2f}, sum={new_integral:.2f}, gain={gain:.2f}, adj={adjustment:.2f}")
+        except Exception as e:
+            _LOGGER.warning(f"Integral logic failed: {e}")
+
             return fake_temp, mode
         except Exception as e:
             _LOGGER.error(f"Error in temperature calculation: {e}")
@@ -311,22 +337,6 @@ class PumpSteerSensor(Entity):
 
         except Exception as e:
             _LOGGER.debug(f"ML data collection error (non-critical): {e}")
-
-    def _add_ml_attributes(self) -> None:
-        """Lägg till ML-attribut till sensor attributen."""
-        if not self.ml_collector:
-            return
-
-        try:
-            ml_status = self.ml_collector.get_status()
-            self._attributes.update({
-                "ML_Available": True,
-                "ML_Status": "Collecting data" if ml_status["collecting_data"] else "Ready",
-                "ML_Sessions_Collected": ml_status["sessions_collected"]
-            })
-
-        except Exception as e:
-            _LOGGER.debug(f"ML attributes error (non-critical): {e}")
 
     async def _get_price_data(
         self,
@@ -485,9 +495,6 @@ class PumpSteerSensor(Entity):
 
             if self.ml_collector:
                 self._collect_ml_data(sensor_data, mode, fake_temp)
-                self._add_ml_attributes()
-
-            self._last_update_time = update_time
 
         except Exception as e:
             if not self.ml_collector:
