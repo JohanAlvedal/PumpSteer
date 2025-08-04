@@ -1,5 +1,4 @@
 # PumpSteer Package - Komplett konfiguration
-# Lägg denna fil i packages/pumpsteer.yaml
 
 input_number:
   pumpsteer_aggressiveness:
@@ -58,6 +57,11 @@ input_text:
     name: Hourly Forecast Temperatures
     max: 500
     initial: ""
+    
+  last_gain_adjustment:
+    name: Last Gain Adjustment
+    initial: "-"
+    max: 50
 
 input_boolean:
   holiday_mode:
