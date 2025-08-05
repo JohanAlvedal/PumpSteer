@@ -66,6 +66,19 @@ MAX_REASONABLE_TEMP: Final[float] = 50.0       # °C - Maximum reasonable temper
 MIN_REASONABLE_PRICE: Final[float] = -2.0      # SEK/kWh - Minimum reasonable electricity price (negative prices occur)
 MAX_REASONABLE_PRICE: Final[float] = 15.0      # SEK/kWh - Maximum reasonable electricity price
 
+# === PRE-BOOST SEVERITY CALCULATION CONSTANTS ===
+TEMP_SEVERITY_DIVISOR: Final[float] = 3.0          # Divisor for temperature severity calculation
+PRICE_SEVERITY_BASE: Final[float] = 0.7            # Base threshold for price severity (70% of max)
+PRICE_SEVERITY_DIVISOR: Final[float] = 0.2         # Divisor for price severity calculation
+DURATION_SEVERITY_DIVISOR: Final[float] = 3.0      # Divisor for duration severity calculation
+MAX_TEMP_SEVERITY: Final[float] = 2.0              # Maximum temperature severity score
+MAX_PRICE_SEVERITY: Final[float] = 2.0             # Maximum price severity score
+MAX_DURATION_SEVERITY: Final[float] = 1.5          # Maximum duration severity score
+DEFAULT_PRICE_RATIO: Final[float] = 0.5            # Default price ratio when max_price is invalid
+MAX_DURATION_LOOKAHEAD: Final[int] = 4             # Max hours to look ahead for peak duration
+MIN_ADVANCE_SAFETY_MARGIN: Final[float] = 0.5      # Safety margin when min > max advance time
+EXTREME_PRICE_ERROR_THRESHOLD: Final[int] = 5      # Max extreme values before validation fails
+
 # Basic validation of settings
 def validate_core_settings() -> None:
     """Validate core settings for consistency and logical values."""
