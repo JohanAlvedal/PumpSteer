@@ -3,7 +3,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-# === VERSIONSINFO ===
+# === VERSION INFO ===
 PUMPSTEER_VERSION: Final[str] = "1.2.1"
 
 # === HOUSE CONTROL SETTINGS ===
@@ -48,30 +48,30 @@ BASE_PRICE_THRESHOLD_RATIO: Final[float] = 0.9
 MAX_PREBOOST_HOURS: Final[int] = 6             # How many hours ahead to look for pre-boost
 PREBOOST_TEMP_THRESHOLD: Final[float] = 2.0    # °C - How many degrees colder than target to trigger pre-boost
 
-# === FÖRBÄTTRADE PRE-BOOST TIMING KONSTANTER ===
+# === IMPROVED PRE-BOOST TIMING CONSTANTS ===
 PREBOOST_MIN_ADVANCE_FACTOR: Final[float] = 0.5   # Min advance = inertia * 0.5
 PREBOOST_MAX_ADVANCE_FACTOR: Final[float] = 1.2   # Max advance = inertia * 1.2
-PREBOOST_MIN_ADVANCE_HOURS: Final[float] = 1.0    # Absolut minimum förhandstid
-PREBOOST_MAX_ADVANCE_HOURS: Final[float] = 3.0    # Absolut maximum förhandstid
-SEVERITY_ADJUSTMENT_FACTOR: Final[float] = 0.3    # Hur mycket severity påverkar timing
+PREBOOST_MIN_ADVANCE_HOURS: Final[float] = 1.0    # Absolute minimum advance time
+PREBOOST_MAX_ADVANCE_HOURS: Final[float] = 3.0    # Absolute maximum advance time
+SEVERITY_ADJUSTMENT_FACTOR: Final[float] = 0.3    # How much severity affects timing
 
-# === NYA PRE-BOOST KRAV ===
-PREBOOST_REQUIRE_VERY_CHEAP_NOW: Final[bool] = True     # Aktivera krav på mycket billigt just nu
-PREBOOST_MIN_DURATION_HOURS: Final[int] = 2             # Minsta peak-längd som krävs för att trigga preboost
-PREBOOST_CHEAP_NOW_MULTIPLIER: Final[float] = 0.6       # T.ex. 60% av maxpris = "väldigt billigt"
+# === NEW PRE-BOOST REQUIREMENTS ===
+PREBOOST_REQUIRE_VERY_CHEAP_NOW: Final[bool] = True     # Enable requirement for very cheap prices right now
+PREBOOST_MIN_DURATION_HOURS: Final[int] = 2             # Minimum peak duration required to trigger preboost
+PREBOOST_CHEAP_NOW_MULTIPLIER: Final[float] = 0.6       # E.g. 60% of max price = "very cheap"
 
-# === VALIDERINGS-KONSTANTER ===
-MIN_REASONABLE_TEMP: Final[float] = -50.0      # °C - Minimum rimlig temperatur
-MAX_REASONABLE_TEMP: Final[float] = 50.0       # °C - Maximum rimlig temperatur
-MIN_REASONABLE_PRICE: Final[float] = -2.0      # SEK/kWh - Minimum rimligt elpris (negativa priser förekommer)
-MAX_REASONABLE_PRICE: Final[float] = 15.0      # SEK/kWh - Maximum rimligt elpris
+# === VALIDATION CONSTANTS ===
+MIN_REASONABLE_TEMP: Final[float] = -50.0      # °C - Minimum reasonable temperature
+MAX_REASONABLE_TEMP: Final[float] = 50.0       # °C - Maximum reasonable temperature
+MIN_REASONABLE_PRICE: Final[float] = -2.0      # SEK/kWh - Minimum reasonable electricity price (negative prices occur)
+MAX_REASONABLE_PRICE: Final[float] = 15.0      # SEK/kWh - Maximum reasonable electricity price
 
-# Grundläggande validering av inställningar
+# Basic validation of settings
 def validate_core_settings() -> None:
-    """Validera grundläggande inställningar."""
+    """Validate core settings for consistency and logical values."""
     errors = []
     
-    # Validera percentiler
+    # Validate percentiles
     if len(DEFAULT_PERCENTILES) != 4:
         errors.append("Exactly 4 percentiles required for 5-category classification")
     
@@ -81,27 +81,27 @@ def validate_core_settings() -> None:
     if DEFAULT_PERCENTILES != sorted(DEFAULT_PERCENTILES):
         errors.append("Percentiles must be in ascending order")
     
-    # Validera priskategorier
+    # Validate price categories
     if len(PRICE_CATEGORIES) != 5:
         errors.append("Exactly 5 price categories required")
     
-    # Validera temperaturintervall
+    # Validate temperature range
     if MIN_FAKE_TEMP >= MAX_FAKE_TEMP:
         errors.append("Min fake temp must be less than max fake temp")
     
-    # Validera multiplikatorer är i logisk ordning
+    # Validate multipliers are in logical order
     multipliers = [VERY_CHEAP_MULTIPLIER, CHEAP_MULTIPLIER, NORMAL_MULTIPLIER, EXPENSIVE_MULTIPLIER]
     if multipliers != sorted(multipliers):
         errors.append("Price multipliers must be in ascending order")
     
-    # Validera pre-boost timing konstanter
+    # Validate pre-boost timing constants
     if PREBOOST_MIN_ADVANCE_FACTOR >= PREBOOST_MAX_ADVANCE_FACTOR:
         errors.append("Min advance factor must be less than max advance factor")
     
     if PREBOOST_MIN_ADVANCE_HOURS >= PREBOOST_MAX_ADVANCE_HOURS:
         errors.append("Min advance hours must be less than max advance hours")
     
-    # Validera rimliga värden
+    # Validate reasonable values
     if MIN_REASONABLE_TEMP >= MAX_REASONABLE_TEMP:
         errors.append("Min reasonable temp must be less than max reasonable temp")
     
@@ -113,7 +113,7 @@ def validate_core_settings() -> None:
         _LOGGER.error(error_msg)
         raise ValueError(error_msg)
 
-# Kör validering vid import
+# Run validation on import
 try:
     validate_core_settings()
     _LOGGER.debug(f"PumpSteer core settings loaded successfully (version {PUMPSTEER_VERSION})")
