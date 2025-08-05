@@ -1,614 +1,264 @@
-# sensor.py - Städad version med enkel ML
+# ml_sensor.py – Improved ML analysis sensor for PumpSteer
 
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import Entity
-from homeassistant.const import STATE_UNAVAILABLE, Platform
-from homeassistant.helpers.typing import StateType
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.const import STATE_UNAVAILABLE
 import homeassistant.util.dt as dt_util
 
-# Importera befintliga moduler
-from ..pre_boost import check_combined_preboost
-from ..holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
-from ..temp_control_logic import calculate_temperature_output
-from ..electricity_price import async_hybrid_classify_with_history, classify_prices
 from ..ml_adaptive import PumpSteerMLCollector
-from ..settings import (
-    DEFAULT_HOUSE_INERTIA,
-    HOLIDAY_TEMP,
-    BRAKING_MODE_TEMP,
-    PREBOOST_MAX_OUTDOOR_TEMP,
-    AGGRESSIVENESS_SCALING_FACTOR,
-    PREBOOST_OUTPUT_TEMP
-)
-from ..utils import (
-    safe_float, get_state, get_attr,
-    safe_get_price_data, safe_parse_temperature_forecast,
-    validate_required_entities, safe_get_entity_state_with_description,
-    safe_array_slice
-)
+from ..utils import safe_float, get_state
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "pumpsteer"
-
-# Hardcoded entities
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-    "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
-    "house_inertia_entity": "input_number.house_inertia",
-    "price_model_entity": "input_select.pumpsteer_price_model"
+# Important ML-related entities - these are critical for PumpSteer control
+ML_RELATED_ENTITIES = {
+    # Core ML control entities
+    "autotune_boolean": "input_boolean.autotune_inertia",           # Enable/disable auto-tuning
+    "house_inertia": "input_number.house_inertia",                 # House thermal inertia
+    
+    # Integral control entities (critical for temperature regulation)
+    "integral_error": "input_number.integral_temp_error",          # Accumulated temperature error
+    "integral_gain": "input_number.pumpsteer_integral_gain",       # Integral control gain
+    
+    # Status tracking
+    "last_gain_adjustment": "input_text.last_gain_adjustment"      # Last automatic adjustment info
 }
 
-NEUTRAL_TEMP_THRESHOLD = 0.5
-DEFAULT_SUMMER_THRESHOLD = 18.0
-DEFAULT_AGGRESSIVENESS = 3.0
 
-def safe_get_current_price_and_category(
-    prices: List[float],
-    categories: List[str],
-    hour: int,
-    mode: str = "unknown"
-) -> Tuple[float, str]:
-    """Säkert hämta aktuellt pris och kategori för given timme."""
-    if not prices or hour >= len(prices) or hour < 0:
-        _LOGGER.warning(f"Invalid price data access: hour={hour}, prices_len={len(prices) if prices else 0}")
-        return 0.0, "unknown"
-
-    current_price = prices[hour]
-
-    if not categories or hour >= len(categories):
-        _LOGGER.warning(f"Invalid category data access: hour={hour}, categories_len={len(categories) if categories else 0}")
-        price_category = "unknown"
-    else:
-        price_category = f"{categories[hour]} ({mode})"
-
-    return current_price, price_category
-
-class PumpSteerSensor(Entity):
-    """PumpSteer sensor för värmepumpskontroll."""
+class PumpSteerMLSensor(Entity):
+    """Sensor that displays insights from the PumpSteer ML system."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
-        """Initialisera PumpSteer-sensorn."""
+        """Initialize ML sensor."""
         self.hass = hass
-        self._config_entry = config_entry
-        self._state = None
+        self._attr_name = "PumpSteer ML Analysis"
+        self._attr_unique_id = f"{config_entry.entry_id}_ml_analysis"
+        self._state = "initializing"
         self._attributes = {}
-        self._name = "PumpSteer"
-        self._last_update_time = None
+        self.ml = None
+        self._last_error = None
 
-        self._attr_unit_of_measurement = "°C"
-        self._attr_device_class = "temperature"
-        self._attr_state_class = "measurement"
-        self._attr_unique_id = config_entry.entry_id
+        self._attr_device_info = {
+            "identifiers": {("pumpsteer", config_entry.entry_id)},
+            "name": "PumpSteer",
+            "manufacturer": "Custom", 
+            "model": "PumpSteer ML",
+            "sw_version": "1.2.0"
+        }
 
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, config_entry.entry_id)},
-            name="PumpSteer",
-            manufacturer="Custom",
-            model="Heat Pump Controller",
-            sw_version="1.2.0"
-        )
-
-        # ML-initialisering
-        self.ml_collector = None
-        self._ml_session_started = False
-        self._ml_session_start_mode = None
-        self._last_price_category = "unknown"
-
+        # Initialize ML collector with error handling
         try:
-            self.ml_collector = PumpSteerMLCollector(hass)
-            _LOGGER.info("PumpSteer: ML system enabled")
+            self.ml = PumpSteerMLCollector(hass)
+            _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized")
         except Exception as e:
-            _LOGGER.warning(f"PumpSteer: ML initialization failed: {e}")
-            self.ml_collector = None
-
-        config_entry.add_update_listener(self.async_options_update_listener)
-        _LOGGER.debug("PumpSteerSensor: Initialization complete")
+            _LOGGER.error(f"ML sensor: Failed to initialize ML collector: {e}")
+            self.ml = None
+            self._last_error = f"Initialization failed: {e}"
 
     @property
-    def name(self) -> str:
-        return self._name
+    def name(self):
+        return self._attr_name
 
     @property
-    def unique_id(self) -> str:
+    def unique_id(self):
         return self._attr_unique_id
 
     @property
-    def state(self) -> StateType:
+    def state(self):
         return self._state
 
     @property
-    def extra_state_attributes(self) -> dict:
-        return {
-            **self._attributes,
-            "friendly_name": "PumpSteer"
-        }
-
-    @property
-    def unit_of_measurement(self) -> str:
-        return self._attr_unit_of_measurement
-
-    @property
-    def device_class(self) -> str:
-        return self._attr_device_class
-
-    @property
-    def icon(self) -> str:
-        return "mdi:thermostat-box"
+    def extra_state_attributes(self):
+        return self._attributes
 
     @property
     def available(self) -> bool:
-        return self._state != STATE_UNAVAILABLE
+        """Sensor is available if ML collector is working."""
+        return self.ml is not None and self._state != STATE_UNAVAILABLE
 
     @property
-    def should_poll(self) -> bool:
-        return True
+    def icon(self) -> str:
+        """Icon for ML sensor."""
+        if self._state == "error":
+            return "mdi:alert-circle"
+        elif self._state == "collecting":
+            return "mdi:database-search"
+        elif isinstance(self._state, str) and self._state.endswith("%"):
+            return "mdi:chart-line"
+        else:
+            return "mdi:brain"
 
-    async def async_added_to_hass(self) -> None:
-        """Kallas när entiteten läggs till i Home Assistant."""
-        if self.ml_collector and hasattr(self.ml_collector, 'async_load_data'):
+    async def async_added_to_hass(self):
+        """Load ML data when sensor is added."""
+        if self.ml and hasattr(self.ml, 'async_load_data'):
             try:
-                await self.ml_collector.async_load_data()
-                _LOGGER.debug("ML data loaded successfully")
+                await self.ml.async_load_data()
+                _LOGGER.debug("ML sensor: Data loaded successfully")
             except Exception as e:
-                _LOGGER.error(f"Failed to load ML data: {e}")
-                self.ml_collector = None
-        
-        await super().async_added_to_hass()
+                _LOGGER.error(f"ML sensor: Failed to load data: {e}")
+                self._last_error = f"Data loading failed: {e}"
 
-    async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self._config_entry = entry
-        await self.async_update()
-
-    def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Hämta sensordata från Home Assistant."""
-        return {
-            'indoor_temp': safe_float(get_state(self.hass, config.get("indoor_temp_entity"))),
-            'outdoor_temp': safe_float(get_state(self.hass, config.get("real_outdoor_entity"))),
-            'target_temp': safe_float(get_state(self.hass, HARDCODED_ENTITIES["target_temp_entity"])),
-            'summer_threshold': safe_float(get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])) or DEFAULT_SUMMER_THRESHOLD,
-            'aggressiveness': safe_float(get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])) or DEFAULT_AGGRESSIVENESS,
-            'inertia': safe_float(get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])) or DEFAULT_HOUSE_INERTIA,
-            'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"]
-        }
-
-    def _validate_required_data(self, sensor_data: Dict[str, Any], prices: List[float]) -> Optional[List[str]]:
-        """Validera att all nödvändig data finns tillgänglig."""
-        missing = []
-
-        if sensor_data['indoor_temp'] is None:
-            missing.append("Indoor temperature")
-        if sensor_data['outdoor_temp'] is None:
-            missing.append("Outdoor temperature")
-        if sensor_data['target_temp'] is None:
-            missing.append("Target temperature")
-        if not prices:
-            missing.append("Electricity prices")
-        if sensor_data['outdoor_temp_forecast_entity'] and get_state(self.hass, sensor_data['outdoor_temp_forecast_entity']) is None:
-            missing.append("Outdoor temperature forecast entity data not available")
-        elif not sensor_data['outdoor_temp_forecast_entity']:
-            _LOGGER.debug("Outdoor temperature forecast entity not configured, skipping pre-boost temperature forecast check.")
-
-        return missing if missing else None
-
-    async def _calculate_output_temperature(
-        self,
-        sensor_data: Dict[str, Any],
-        prices: List[float],
-        price_category: str,
-        now_hour: int
-    ) -> Tuple[float, str]:
-        """
-        Beräkna uttemperatur baserat på aktuella förhållanden.
-        
-        Args:
-            sensor_data: Dictionary med sensordata
-            prices: Lista med elpriser
-            price_category: Priskategori för aktuell timme
-            now_hour: Aktuell timme
-            
-        Returns:
-            Tuple med (fake_temp, mode)
-        """
-        indoor_temp = sensor_data['indoor_temp']
-        outdoor_temp = sensor_data['outdoor_temp']
-        target_temp = sensor_data['target_temp']
-        summer_threshold = sensor_data['summer_threshold']
-        aggressiveness = sensor_data['aggressiveness']
-        inertia = sensor_data['inertia']
-        outdoor_temp_forecast_entity = sensor_data['outdoor_temp_forecast_entity']
-
-        # Pre-boost kontroll
-        preboost_mode = None
-        temp_forecast_csv = None
-
-        if outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
-            if outdoor_temp_forecast_entity:
-                temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
-
-            if temp_forecast_csv:
-                try:
-                    preboost_mode = check_combined_preboost(
-                        temp_csv=temp_forecast_csv,
-                        prices=prices,
-                        cold_threshold=target_temp - 2.0,
-                        aggressiveness=aggressiveness,
-                        inertia=inertia
-                    )
-                except Exception as e:
-                    _LOGGER.error(f"Error in pre-boost check: {e}")
-                    preboost_mode = None
-            else:
-                _LOGGER.debug("No temperature forecast available for pre-boost check.")
-
-        # Kontrollera olika modes i prioritetsordning
-        if preboost_mode == "preboost":
-            _LOGGER.info(f"Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
-            return PREBOOST_OUTPUT_TEMP, "preboost"
-
-        if outdoor_temp >= summer_threshold:
-            return outdoor_temp, "summer_mode"
-
-        if "expensive" in price_category or "very_expensive" in price_category:
-            _LOGGER.info(f"Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {BRAKING_MODE_TEMP} °C)")
-            return BRAKING_MODE_TEMP, "braking_by_price"
-
-        # Kontrollera temperaturskillnad för neutral mode
-        temp_diff = indoor_temp - target_temp
-        if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
-            return outdoor_temp, "neutral"
-
-        # Beräkna temperatur med huvudlogik + integralkontroll
+    def _get_control_system_data(self) -> Dict[str, Any]:
+        """Get data from Home Assistant control system entities."""
         try:
-            # Beräkna grundtemperatur
-            fake_temp, mode = calculate_temperature_output(
-                indoor_temp,
-                target_temp,
-                outdoor_temp,
-                aggressiveness
-            )
+            # Auto-tune status
+            autotune_state = self.hass.states.get(ML_RELATED_ENTITIES["autotune_boolean"])
+            autotune_on = autotune_state.state == "on" if autotune_state else False
             
-            # Lägg till integralkontroll
-            fake_temp = await self._apply_integral_control(fake_temp, target_temp, indoor_temp)
+            # Get all critical control values
+            integral_error = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_error"])) or 0.0
+            integral_gain = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_gain"])) or 0.0
+            house_inertia = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["house_inertia"]))
+            last_adjustment = get_state(self.hass, ML_RELATED_ENTITIES["last_gain_adjustment"])
             
-            return fake_temp, mode
+            _LOGGER.debug(f"ML sensor control data: autotune={autotune_on}, "
+                         f"inertia={house_inertia}, integral_gain={integral_gain}, "
+                         f"integral_error={integral_error}")
             
+            return {
+                "autotune_active": autotune_on,
+                "integral_error": integral_error,
+                "integral_gain": integral_gain,
+                "inertia": house_inertia,
+                "last_gain_adjustment": last_adjustment
+            }
         except Exception as e:
-            _LOGGER.error(f"Error in temperature calculation: {e}")
-            return outdoor_temp, "error"
-
-    async def _apply_integral_control(self, base_temp: float, target_temp: float, indoor_temp: float) -> float:
-        """
-        Applicera integralkontroll på bastemperaturen.
-        
-        Args:
-            base_temp: Grundtemperatur från huvudlogiken
-            target_temp: Måltemperatur
-            indoor_temp: Aktuell inomhustemperatur
-            
-        Returns:
-            Justerad temperatur med integralkontroll
-        """
-        try:
-            # Beräkna aktuellt fel och integral
-            current_error = target_temp - indoor_temp
-            dt_hours = 1  # Antag att sensorn körs en gång per timme
-            delta = current_error * dt_hours
-        
-            # Hämta tidigare integral-värde
-            prev_integral = safe_float(get_state(self.hass, "input_number.integral_temp_error")) or 0.0
-            new_integral = prev_integral + delta
-            
-            # Begränsa integral för att undvika windup
-            new_integral = max(-1000, min(1000, new_integral))
-        
-            # Uppdatera integral-värdet i Home Assistant (async)
-            await self.hass.services.async_call(
-                "input_number", "set_value",
-                {"entity_id": "input_number.integral_temp_error", "value": round(new_integral, 2)},
-                blocking=False
-            )
-        
-            # Applicera integral-justering
-            gain = safe_float(get_state(self.hass, "input_number.pumpsteer_integral_gain")) or 0.0
-            if gain > 0:
-                adjustment = gain * new_integral
-                adjusted_temp = base_temp + adjustment
-                
-                _LOGGER.debug(
-                    f"Integral control applied: error={current_error:.2f}°C, "
-                    f"integral={new_integral:.2f}, gain={gain:.3f}, "
-                    f"adjustment={adjustment:.2f}°C, "
-                    f"temp: {base_temp:.1f}°C → {adjusted_temp:.1f}°C"
-                )
-                
-                return adjusted_temp
-            
-            return base_temp
-            
-        except Exception as e:
-            _LOGGER.warning(f"Integral control failed: {e}")
-            return base_temp
-
-    def _collect_ml_data(self, sensor_data: Dict[str, Any], mode: str, fake_temp: float) -> None:
-        """Samla data för maskininlärning med förbättrad loggning."""
-        if not self.ml_collector:
-            return
-
-        try:
-            ml_data = {
-                "indoor_temp": sensor_data.get('indoor_temp'),
-                "outdoor_temp": sensor_data.get('outdoor_temp'),
-                "target_temp": sensor_data.get('target_temp'),
-                "aggressiveness": sensor_data.get('aggressiveness', 0),
-                "inertia": sensor_data.get('inertia'),
-                "mode": mode,
-                "fake_temp": fake_temp,
-                "price_category": self._last_price_category,
-                "timestamp": dt_util.now().isoformat()
+            _LOGGER.warning(f"ML sensor: Error getting control system data: {e}")
+            return {
+                "autotune_active": False,
+                "integral_error": 0.0,
+                "integral_gain": 0.0,
+                "inertia": None,
+                "last_gain_adjustment": None
             }
 
-            # Starta ny session om det behövs
-            if not self._ml_session_started:
-                self.ml_collector.start_session(ml_data)
-                self._ml_session_started = True
-                self._ml_session_start_mode = mode
-                _LOGGER.debug(f"ML: Started new session with mode '{mode}'")
+    def _determine_state(self, insights: Dict[str, Any], control_data: Dict[str, Any]) -> str:
+        """Determine sensor state based on ML insights and system status."""
+        if not insights:
+            return "no data"
+            
+        # Check ML status first
+        status = insights.get("ml_status", {})
+        if not isinstance(status, dict):
+            status = {}
+            
+        if status.get("collecting_data"):
+            return "collecting"
+            
+        # Try to show success rate if available
+        perf = insights.get("performance", {})
+        if isinstance(perf, dict):
+            success = perf.get("success_rate")
+            if isinstance(success, (int, float)) and 0 <= success <= 100:
+                return f"{success:.0f}%"
+        
+        # Fallback states
+        if status.get("ml_status") == "ready":
+            return "ready"
+        elif insights.get("sessions_collected", 0) == 0:
+            return "no data"
+        else:
+            return "analyzing"
 
-            # Uppdatera pågående session
-            self.ml_collector.update_session(ml_data)
-
-            # Avsluta session vid mode-byte till neutral/summer
-            if (self._ml_session_start_mode != mode and mode in ['neutral', 'summer_mode']):
-                self.ml_collector.end_session("mode_change", ml_data)
-                self._ml_session_started = False
-                _LOGGER.debug(f"ML: Session ended due to mode change: {self._ml_session_start_mode} → {mode}")
-
-        except Exception as e:
-            _LOGGER.debug(f"ML data collection error (non-critical): {e}")
-
-    def _add_ml_attributes(self) -> None:
-        """Lägg till ML-attribut till sensor attributen."""
-        if not self.ml_collector:
-            self._attributes["ml_available"] = False
-            return
-
-        try:
-            ml_status = self.ml_collector.get_status()
-            self._attributes.update({
-                "ml_available": True,
-                "ml_status": "Collecting data" if ml_status["collecting_data"] else "Ready",
-                "ml_sessions_collected": ml_status["sessions_collected"]
-            })
-
-        except Exception as e:
-            _LOGGER.debug(f"ML attributes error (non-critical): {e}")
-            self._attributes["ml_available"] = False
-            self._attributes["ml_error"] = str(e)
-
-    async def _get_price_data(
-        self,
-        config: Dict[str, Any],
-        now_hour: int
-    ) -> Tuple[List[float], float, str, List[str]]:
-        """Hämta prisdata och klassificera priser."""
-        entity_id = config.get("electricity_price_entity")
-
-        if not entity_id:
-            _LOGGER.error("No electricity price entity configured")
-            return [], 0.0, "unknown", []
-
-        prices_raw = get_attr(self.hass, entity_id, "today") or get_attr(self.hass, entity_id, "raw_today")
-        if not prices_raw:
-            _LOGGER.warning(f"Could not retrieve electricity prices from {entity_id}")
-            return [], 0.0, "unknown", []
-
-        try:
-            prices = [float(p) for p in prices_raw if isinstance(p, (float, int)) and p is not None]
-        except (ValueError, TypeError) as e:
-            _LOGGER.error(f"Error converting prices to float: {e}")
-            return [], 0.0, "unknown", []
-
-        if not prices:
-            _LOGGER.warning("No valid prices found after conversion")
-            return [], 0.0, "unknown", []
-
-        mode = get_state(self.hass, HARDCODED_ENTITIES["price_model_entity"]) or "hybrid"
-        categories = []
-
-        try:
-            if mode == "percentiles":
-                categories = classify_prices(prices)
-            else:
-                categories = await async_hybrid_classify_with_history(
-                    self.hass,
-                    price_list=prices,
-                    price_entity_id=entity_id,
-                    trailing_hours=72
-                )
-        except Exception as e:
-            _LOGGER.error(f"Error classifying prices: {e}")
-            categories = ["unknown"] * len(prices)
-
-        current_price, price_category = safe_get_current_price_and_category(
-            prices, categories, now_hour, mode
-        )
-
-        return prices, current_price, price_category, categories
-
-    def _build_attributes(
-        self,
-        sensor_data: Dict[str, Any],
-        prices: List[float],
-        current_price: float,
-        price_category: str,
-        mode: str,
-        holiday: bool,
-        categories: List[str],
-        now_hour: int
-    ) -> Dict[str, Any]:
-        """Bygg attribut-dictionary för sensorn med engelska attributnamn."""
-        max_price = max(prices) if prices else 1.0
-        price_factor = current_price / max_price if max_price > 0 else 0
-        braking_threshold_ratio = 1.0 - (sensor_data['aggressiveness'] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
-
-        decision_triggers = {
-            'braking_by_price': 'price',
-            'braking_by_temp': 'temperature',
-            'heating': 'temperature',
-            'cooling': 'temperature',
-            'summer_mode': 'summer',
-            'neutral': 'neutral',
-            'preboost': 'pre-boost (cold & expensive forecast)',
-            'error': 'error in calculation',
-        }
-
-        decision_reason = f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
-        next_3_hours_prices = safe_array_slice(prices, now_hour, 3)
-
-        # Konsekvent engelska för alla attributnamn
+    def _build_attributes(self, insights: Dict[str, Any], control_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Build comprehensive attributes dictionary."""
+        # Safely extract performance data
+        perf = insights.get("performance", {}) if isinstance(insights.get("performance"), dict) else {}
+        status = insights.get("ml_status", {}) if isinstance(insights.get("ml_status"), dict) else {}
+        recs = insights.get("recommendations", [])
+        
+        # Ensure recommendations is a list
+        if not isinstance(recs, list):
+            recs = []
+            
+        # Format recommendations
+        recommendations_text = recs if recs else "Still collecting data…"
+        
+        # Build attributes with safe access
         attributes = {
-            "mode": mode,
-            "fake_outdoor_temperature": self._state,
-            "price_category": price_category,
-            "status": "OK",
-            "current_price": round(current_price, 3),
-            "max_price": round(max_price, 3),
-            "aggressiveness": sensor_data['aggressiveness'],
-            "inertia": sensor_data['inertia'],
-            "target_temperature": sensor_data['target_temp'],
-            "indoor_temperature": sensor_data['indoor_temp'],
-            "outdoor_temperature": sensor_data['outdoor_temp'],
-            "summer_threshold": sensor_data['summer_threshold'],
-            "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
-            "price_factor_percent": round(price_factor * 100, 1),
-            "holiday_mode": holiday,
+            # ML Performance
+            "success_rate": round(perf.get("success_rate"), 2) if isinstance(perf.get("success_rate"), (int, float)) else None,
+            "avg_heating_duration": perf.get("avg_heating_duration"),
+            "most_used_aggressiveness": perf.get("most_used_aggressiveness"),
+            "total_heating_sessions": perf.get("total_heating_sessions") or 0,
+            
+            # Recommendations
+            "recommendations": recommendations_text,
+            
+            # Control System Status
+            "auto_tune_active": control_data.get("autotune_active", False),
+            "inertia": round(control_data["inertia"], 3) if isinstance(control_data.get("inertia"), (int, float)) else None,
+            "integral_temp_error": round(control_data["integral_error"], 2),
+            "integral_gain": round(control_data["integral_gain"], 3),
+            "last_gain_adjustment": control_data.get("last_gain_adjustment") if control_data.get("last_gain_adjustment") not in [None, "unknown", ""] else "-",
+            
+            # ML System Status
+            "ml_status": status.get("ml_status", "unknown"),
+            "collecting_data": status.get("collecting_data", False),
+            "sessions_collected": status.get("sessions_collected", 0),
+            
+            # Meta
             "last_updated": dt_util.now().isoformat(),
-            "temperature_error": round(sensor_data['indoor_temp'] - sensor_data['target_temp'], 2),
-            "to_summer_threshold": round(sensor_data['summer_threshold'] - sensor_data['outdoor_temp'], 2),
-            "next_3_hours_prices": next_3_hours_prices,
-            "saving_potential": round(max_price - current_price, 3),
-            "decision_reason": decision_reason,
-            "price_categories_all_hours": categories,
-            "current_hour": now_hour,
-            "data_quality": {
-                "prices_count": len(prices),
-                "categories_count": len(categories),
-                "forecast_available": bool(sensor_data['outdoor_temp_forecast_entity'])
-            }
+            "last_error": self._last_error
         }
+        
+        # Remove None values to keep attributes clean
+        return {k: v for k, v in attributes.items() if v is not None}
 
-        return attributes
-
-    async def async_update(self) -> None:
-        """Uppdatera sensordata."""
-        try:
-            update_time = dt_util.now()
-            now_hour = update_time.hour
-
-            config = {**self._config_entry.data, **self._config_entry.options}
-            sensor_data = self._get_sensor_data(config)
-            prices, current_price, price_category, categories = await self._get_price_data(config, now_hour)
-            self._last_price_category = price_category
-
-            # === Fallback om elpriser saknas ===
-            if not prices:
-                _LOGGER.warning("No electricity prices available – entering fallback mode.")
-                fake_temp = sensor_data.get("outdoor_temp", BRAKING_MODE_TEMP) or BRAKING_MODE_TEMP
-                self._state = round(fake_temp, 1)
-
-                self._attributes = {
-                    "status": "Fallback due to missing price data",
-                    "mode": "fallback_no_price",
-                    "fake_outdoor_temperature": self._state,
-                    "indoor_temperature": sensor_data.get("indoor_temp"),
-                    "outdoor_temperature": sensor_data.get("outdoor_temp"),
-                    "target_temperature": sensor_data.get("target_temp"),
-                    "aggressiveness": sensor_data.get("aggressiveness"),
-                    "inertia": sensor_data.get("inertia"),
-                    "decision_reason": "Fallback – no price data available",
-                    "last_updated": update_time.isoformat(),
-                    "current_hour": now_hour
-                }
-                
-                # Lägg till ML-attribut även i fallback
-                self._add_ml_attributes()
-                
-                # Samla ML-data även i fallback
-                if self.ml_collector:
-                    self._collect_ml_data(sensor_data, "fallback_no_price", fake_temp)
-                
-                return
-
-            missing = self._validate_required_data(sensor_data, prices)
-            if missing:
-                self._state = STATE_UNAVAILABLE
-                self._attributes = {
-                    "status": f"Missing: {', '.join(missing)}",
-                    "last_updated": update_time.isoformat(),
-                    "current_hour": now_hour
-                }
-                
-                # Lägg till ML-attribut även när data saknas
-                self._add_ml_attributes()
-                return
-
-            holiday = is_holiday_mode_active(
-                self.hass,
-                HARDCODED_ENTITIES["holiday_mode_boolean_entity"],
-                HARDCODED_ENTITIES["holiday_start_datetime_entity"],
-                HARDCODED_ENTITIES["holiday_end_datetime_entity"]
-            )
-
-            if holiday:
-                sensor_data['target_temp'] = HOLIDAY_TEMP
-
-            fake_temp, mode = await self._calculate_output_temperature(
-                sensor_data, prices, price_category, now_hour
-            )
-            self._state = round(fake_temp, 1)
-
-            self._attributes = self._build_attributes(
-                sensor_data, prices, current_price, price_category,
-                mode, holiday, categories, now_hour
-            )
-
-            # Lägg till ML-attribut
-            self._add_ml_attributes()
-
-            # Samla ML-data
-            if self.ml_collector:
-                self._collect_ml_data(sensor_data, mode, fake_temp)
-
-        except Exception as e:
-            _LOGGER.error(f"Error during update: {e}", exc_info=True)
+    async def async_update(self):
+        """Update ML sensor with comprehensive error handling."""
+        if not self.ml:
             self._state = STATE_UNAVAILABLE
             self._attributes = {
-                "status": f"Error: {str(e)}",
-                "last_updated": dt_util.now().isoformat(),
-                "error_details": str(e)
+                "error": "ML collector not available",
+                "last_error": self._last_error,
+                "last_updated": dt_util.now().isoformat()
             }
+            return
+
+        try:
+            # Get ML insights with validation
+            insights = self.ml.get_learning_insights()
+            if not isinstance(insights, dict):
+                _LOGGER.warning("ML sensor: get_learning_insights() returned invalid data")
+                insights = {}
             
-            # Lägg till ML-attribut även vid fel
-            self._add_ml_attributes()
+            # Get control system data
+            control_data = self._get_control_system_data()
+            
+            # Determine state
+            self._state = self._determine_state(insights, control_data)
+            
+            # Build attributes
+            self._attributes = self._build_attributes(insights, control_data)
+            
+            # Clear error if update was successful
+            if self._last_error:
+                _LOGGER.info("ML sensor: Recovered from previous error")
+                self._last_error = None
+
+        except Exception as e:
+            _LOGGER.error(f"ML sensor update failed: {e}", exc_info=True)
+            self._state = "error"
+            self._last_error = str(e)
+            self._attributes = {
+                "error": str(e),
+                "last_error": self._last_error,
+                "last_updated": dt_util.now().isoformat(),
+                "error_count": self._attributes.get("error_count", 0) + 1
+            }
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Sätt upp sensorn."""
-    sensor = PumpSteerSensor(hass, config_entry)
-    async_add_entities([sensor], update_before_add=True)
+    """Set up ML sensor."""
+    ml_sensor = PumpSteerMLSensor(hass, config_entry)
+    async_add_entities([ml_sensor], update_before_add=True)
