@@ -1,4 +1,4 @@
-# Fil: pre_boost.py
+# File: pre_boost.py
 import logging
 from typing import Optional, List, Tuple
 
@@ -30,6 +30,7 @@ def calculate_optimal_preboost_timing(
     inertia: float,
     peak_severity: float = 1.0
 ) -> Tuple[float, float]:
+    """Calculate optimal preboost timing based on system inertia and peak severity."""
     inertia = max(0.5, min(5.0, inertia))
     peak_severity = max(0.5, min(3.0, peak_severity))
 
@@ -56,6 +57,7 @@ def calculate_peak_severity(
     price_ratio: float,
     duration_hours: int = 1
 ) -> float:
+    """Calculate the severity of a cold/expensive peak."""
     temp_severity = min(2.0, abs(temp_drop) / 3.0)
     price_severity = min(2.0, (price_ratio - 0.7) / 0.2)
     duration_severity = min(1.5, duration_hours / 3.0)
@@ -70,6 +72,7 @@ def find_cold_expensive_peaks(
     price_threshold: float,
     max_hours: int
 ) -> List[Tuple[int, float, float, int]]:
+    """Find peaks where temperature is cold and prices are expensive."""
     peaks = []
     max_price = max(prices[:max_hours]) if prices else 1.0
     check_hours = min(max_hours, len(temps), len(prices))
@@ -112,6 +115,22 @@ def check_combined_preboost(
     aggressiveness: float = 0.0,
     inertia: float = 1.0
 ) -> Optional[str]:
+    """
+    Check if preboost should be activated based on combined temperature and price forecasts.
+    
+    Args:
+        temp_csv: CSV string of temperature forecasts
+        prices: List of price forecasts
+        lookahead_hours: Hours to look ahead in forecast
+        cold_threshold: Temperature threshold for considering "cold"
+        price_threshold_ratio: Price ratio threshold for considering "expensive"
+        min_peak_hits: Minimum number of peaks required
+        aggressiveness: Aggressiveness factor (0.0-1.0)
+        inertia: System thermal inertia factor
+        
+    Returns:
+        "preboost" if preboost should be activated, None otherwise
+    """
     _LOGGER.debug(
         f"Pre-boost check (IMPROVED): lookahead={lookahead_hours}h, "
         f"cold_threshold={cold_threshold}°C, aggressiveness={aggressiveness:.2f}, "
@@ -199,9 +218,9 @@ def check_combined_preboost(
     return None
 
 
-# Behåll befintliga utility-funktioner
+# Utility functions
 def parse_temperature_csv_safe(temp_csv: str) -> Optional[List[float]]:
-    """Säkert parsa CSV-temperaturdata (befintlig implementation)"""
+    """Safely parse CSV temperature data."""
     if not temp_csv or not isinstance(temp_csv, str):
         _LOGGER.warning("Pre-boost: Received empty or invalid temperature forecast CSV")
         return None
@@ -225,7 +244,7 @@ def parse_temperature_csv_safe(temp_csv: str) -> Optional[List[float]]:
 
 
 def validate_temperature_data(temps: List[float], max_hours: int) -> bool:
-    """Validera temperaturdata (befintlig implementation)"""
+    """Validate temperature data for reasonableness."""
     if not temps:
         return False
     
@@ -239,7 +258,7 @@ def validate_temperature_data(temps: List[float], max_hours: int) -> bool:
 
 
 def validate_price_data(prices: List[float], max_hours: int) -> bool:
-    """Validera prisdata (befintlig implementation)"""
+    """Validate price data for reasonableness."""
     if not prices:
         return False
     
@@ -252,7 +271,7 @@ def validate_price_data(prices: List[float], max_hours: int) -> bool:
 
 
 def check_future_warming_trend(temps: List[float], lookahead_hours: int) -> bool:
-    """Kontrollera värmande trend (befintlig implementation)"""
+    """Check if there's a warming trend in the forecast."""
     if len(temps) < 2:
         return False
     
@@ -264,7 +283,7 @@ def check_future_warming_trend(temps: List[float], lookahead_hours: int) -> bool
 
 
 def calculate_adjusted_thresholds(aggressiveness: float, max_price: float) -> Tuple[float, float]:
-    """Beräkna justerade trösklar (befintlig implementation)"""
+    """Calculate adjusted price thresholds based on aggressiveness factor."""
     aggressiveness = max(0.0, min(1.0, aggressiveness))
     
     adjusted_ratio = max(
