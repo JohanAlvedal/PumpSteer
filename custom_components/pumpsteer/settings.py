@@ -55,6 +55,11 @@ PREBOOST_MIN_ADVANCE_HOURS: Final[float] = 1.0    # Absolut minimum förhandstid
 PREBOOST_MAX_ADVANCE_HOURS: Final[float] = 3.0    # Absolut maximum förhandstid
 SEVERITY_ADJUSTMENT_FACTOR: Final[float] = 0.3    # Hur mycket severity påverkar timing
 
+# === NYA PRE-BOOST KRAV ===
+PREBOOST_REQUIRE_VERY_CHEAP_NOW: Final[bool] = True     # Aktivera krav på mycket billigt just nu
+PREBOOST_MIN_DURATION_HOURS: Final[int] = 2             # Minsta peak-längd som krävs för att trigga preboost
+PREBOOST_CHEAP_NOW_MULTIPLIER: Final[float] = 0.6       # T.ex. 60% av maxpris = "väldigt billigt"
+
 # === VALIDERINGS-KONSTANTER ===
 MIN_REASONABLE_TEMP: Final[float] = -50.0      # °C - Minimum rimlig temperatur
 MAX_REASONABLE_TEMP: Final[float] = 50.0       # °C - Maximum rimlig temperatur
