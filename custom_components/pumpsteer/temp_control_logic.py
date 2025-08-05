@@ -8,11 +8,12 @@ from .settings import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def calculate_temperature_output(
     indoor_temp: float,
     actual_target_temp_for_logic: float,
     real_outdoor_temp: float,
-    aggressiveness: float
+    aggressiveness: float,
 ) -> tuple[float, str]:
     """
     Calculates the virtual outdoor temperature (fake_temp) and operating mode
@@ -31,7 +32,15 @@ def calculate_temperature_output(
     """
 
     # Validate input types
-    if not all(isinstance(x, (int, float)) for x in [indoor_temp, actual_target_temp_for_logic, real_outdoor_temp, aggressiveness]):
+    if not all(
+        isinstance(x, (int, float))
+        for x in [
+            indoor_temp,
+            actual_target_temp_for_logic,
+            real_outdoor_temp,
+            aggressiveness,
+        ]
+    ):
         _LOGGER.error("Invalid input types for temperature calculation")
         return real_outdoor_temp, "error"
 
@@ -45,7 +54,9 @@ def calculate_temperature_output(
     if aggressiveness == 0:
         fake_temp = real_outdoor_temp
         mode = "passthrough"
-        _LOGGER.debug(f"TempControl: Passthrough (fake temp: {fake_temp:.1f} °C) - Mode: {mode}")
+        _LOGGER.debug(
+            f"TempControl: Passthrough (fake temp: {fake_temp:.1f} °C) - Mode: {mode}"
+        )
         return fake_temp, mode
 
     # SCALING WITH AGGRESSIVENESS
@@ -62,7 +73,9 @@ def calculate_temperature_output(
         # Now: use global safety limits
         fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
         mode = "heating"
-        _LOGGER.debug(f"TempControl: Heating (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}")
+        _LOGGER.debug(
+            f"TempControl: Heating (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}"
+        )
 
     # BRAKING mode (too warm indoors)
     # If indoor temperature is significantly above target, activate braking.
@@ -71,7 +84,9 @@ def calculate_temperature_output(
         fake_temp = real_outdoor_temp + (diff * scaling_factor * 4)
         fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), BRAKE_FAKE_TEMP)
         mode = "braking_by_temp"
-        _LOGGER.debug(f"TempControl: Braking (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}")
+        _LOGGER.debug(
+            f"TempControl: Braking (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}"
+        )
 
     # NEUTRAL mode
     # If indoor temperature is within the comfort zone of the target, remain neutral.
@@ -79,11 +94,14 @@ def calculate_temperature_output(
     else:
         fake_temp = real_outdoor_temp
         mode = "neutral"
-        _LOGGER.debug(f"TempControl: Within comfort zone (diff: {diff:.2f}) - Mode: {mode}")
+        _LOGGER.debug(
+            f"TempControl: Within comfort zone (diff: {diff:.2f}) - Mode: {mode}"
+        )
 
     # EXTRA: log if safety limit is hit
     if fake_temp <= MIN_FAKE_TEMP or fake_temp >= MAX_FAKE_TEMP:
-        _LOGGER.warning(f"TempControl: Fake temp reached safety limit: {fake_temp:.1f} °C (Mode: {mode})")
+        _LOGGER.warning(
+            f"TempControl: Fake temp reached safety limit: {fake_temp:.1f} °C (Mode: {mode})"
+        )
 
     return fake_temp, mode
-

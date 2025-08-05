@@ -5,6 +5,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .sensor import PumpSteerSensor
 from .ml_sensor import PumpSteerMLSensor
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
