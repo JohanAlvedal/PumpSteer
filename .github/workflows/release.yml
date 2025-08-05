@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  validate_and_release:
+    name: Validate and Release
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Validate with hassfest
+      uses: home-assistant/actions/hassfest@master
+    
+    - name: Update version in manifest.json
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/pumpsteer/manifest.json
+    
+    - name: Create ZIP for release
+      run: |
+        cd custom_components
+        zip -r ../pumpsteer.zip pumpsteer/
+    
+    - name: Upload release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./pumpsteer.zip
+        asset_name: pumpsteer.zip
+        asset_content_type: application/zip
