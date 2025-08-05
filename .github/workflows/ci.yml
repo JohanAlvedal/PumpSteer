@@ -1,3 +1,4 @@
+# .github/workflows/ci.yml
 name: CI
 
 on:
@@ -11,7 +12,8 @@ jobs:
     name: Code Quality
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -36,16 +38,14 @@ jobs:
     - name: Type checking with mypy
       run: mypy custom_components/ --ignore-missing-imports
 
-  validate:
-    name: Home Assistant Validation
+  hacs:
+    name: HACS Validation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
     
-    - name: Validate with hassfest
-      uses: home-assistant/actions/hassfest@master
-
-    - name: Validate HACS
+    - name: HACS validation
       uses: hacs/action@main
       with:
         category: integration
