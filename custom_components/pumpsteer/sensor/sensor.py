@@ -37,13 +37,13 @@ from ..utils import (
 _LOGGER = logging.getLogger(__name__)
 
 # Enkel ML-import
-try:
-    from .ml_adaptive import PumpSteerMLCollector
-    ML_AVAILABLE = True
-    _LOGGER.info("ML features available")
-except ImportError as e:
-    ML_AVAILABLE = False
-    _LOGGER.info(f"ML features disabled: {e}")
+#try:
+#    from .ml_adaptive import PumpSteerMLCollector
+#    ML_AVAILABLE = True
+#    _LOGGER.info("ML features available")
+#except ImportError as e:
+#    ML_AVAILABLE = False
+#    _LOGGER.info(f"ML features disabled: {e}")
 
 DOMAIN = "pumpsteer"
 
@@ -461,6 +461,28 @@ class PumpSteerSensor(Entity):
             sensor_data = self._get_sensor_data(config)
             prices, current_price, price_category, categories = await self._get_price_data(config, now_hour)
             self._last_price_category = price_category
+
+                        # === Fallback om elpriser saknas ===
+            if not prices:
+                _LOGGER.warning("No electricity prices available – entering fallback mode.")
+                fake_temp = sensor_data.get("outdoor_temp", BRAKING_MODE_TEMP) or BRAKING_MODE_TEMP
+                self._state = round(fake_temp, 1)
+
+                self._attributes = {
+                    "Status": "Fallback due to missing price data",
+                    "Mode": "fallback_no_price",
+                    "Fake Outdoor Temperature": self._state,
+                    "Indoor Temperature": sensor_data.get("indoor_temp"),
+                    "Outdoor Temperature": sensor_data.get("outdoor_temp"),
+                    "Target Temperature": sensor_data.get("target_temp"),
+                    "Aggressiveness": sensor_data.get("aggressiveness"),
+                    "Inertia": sensor_data.get("inertia"),
+                    "Decision Reason": "Fallback – no price data available",
+                    "Last Updated": update_time.isoformat(),
+                    "Current Hour": now_hour,
+                    "ML_Available": self.ml_collector is not None
+                }
+                return
 
             missing = self._validate_required_data(sensor_data, prices)
             if missing:
