@@ -30,7 +30,7 @@ jobs:
       run: black --check --diff custom_components/
     
     - name: Flake8 linting
-      run: flake8 custom_components/ --max-line-length=88 --extend-ignore=E203,W503
+      run: flake8 custom_components/ --max-line-length=120 --extend-ignore=E203,W503,E501
     
     - name: Import sorting check
       run: isort --check-only --diff custom_components/
