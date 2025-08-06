@@ -324,7 +324,7 @@ async def async_get_forecast_prices(
 
         # from datetime import datetime
 
-        recorder = get_instance(hass)
+#        recorder = get_instance(hass)
 
         # Get entity's attributes which often contain future prices
         state = hass.states.get(price_entity_id)
