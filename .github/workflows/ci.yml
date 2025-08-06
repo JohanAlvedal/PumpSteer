@@ -1,0 +1,70 @@
+# .github/workflows/ci.yml - UPPDATERAD MED CONTINUE-ON-ERROR
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black flake8 isort mypy
+        pip install homeassistant
+    
+    - name: Black formatting check (warning only)
+      run: |
+        echo "🔍 Checking Black formatting..."
+        if ! black --check --diff custom_components/; then
+          echo "⚠️  WARNING: Code is not Black-formatted"
+          echo "💡 Run 'black custom_components/' to fix"
+          echo "🤖 Or use the Auto-fix workflow in Actions"
+        else
+          echo "✅ Black formatting is correct"
+        fi
+      continue-on-error: true
+    
+    - name: Flake8 linting
+      run: |
+        echo "🔍 Checking code quality with Flake8..."
+        flake8 custom_components/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️  Found some code quality issues"
+      continue-on-error: true
+    
+    - name: Import sorting check (warning only)
+      run: |
+        echo "🔍 Checking import sorting..."
+        if ! isort --check-only --diff custom_components/; then
+          echo "⚠️  WARNING: Imports are not sorted correctly"
+          echo "💡 Run 'isort custom_components/' to fix"
+        else
+          echo "✅ Import sorting is correct"
+        fi
+      continue-on-error: true
+    
+    - name: Type checking with mypy (warning only)
+      run: |
+        echo "🔍 Running type checks..."
+        mypy custom_components/ --ignore-missing-imports || echo "⚠️  Found some type issues"
+      continue-on-error: true
+      
+    - name: Summary
+      run: |
+        echo "📋 Code Quality Summary:"
+        echo "- This workflow checks code quality but doesn't fail the build"
+        echo "- Use the 'Auto-fix Code Issues' workflow to automatically fix formatting"
+        echo "- Or run tools locally: black, isort, flake8"

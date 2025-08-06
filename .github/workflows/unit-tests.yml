@@ -1,0 +1,30 @@
+name: Run Unit Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # Uppdaterad till v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest homeassistant
+          
+      - name: Run tests (if available)
+        run: |
+          if [ -d "tests" ]; then
+            echo "📁 Tests directory found - running tests..."
+            pytest tests/ -v
+          else
+            echo "ℹ️  No tests directory found - skipping tests for now"
+            echo "📝 Consider adding tests in tests/ directory for better code quality!"
+            echo "✅ Test step completed successfully (no tests to run)"
+          fi

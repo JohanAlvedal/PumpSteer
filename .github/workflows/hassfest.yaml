@@ -1,17 +1,39 @@
+# .github/workflows/hassfest.yml
 name: Hassfest
 
 on:
   push:
+    branches: [ main, develop ]  # Lägg till branch-filter
     paths:
       - 'custom_components/**'
+      - 'manifest.json'  # Inkludera manifest-ändringar
   pull_request:
+    branches: [ main ]  # Validera bara PR mot main
     paths:
       - 'custom_components/**'
+      - 'manifest.json'
+  schedule:
+    - cron: '0 6 * * 1'  # Veckovis kontroll måndag morgon
 
 jobs:
   hassfest:
-    name: Hassfest
+    name: Hassfest Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: home-assistant/actions/hassfest@master
+      - name: Checkout repository
+        uses: actions/checkout@v4  # Uppdatera till v4
+        
+      - name: Run Hassfest
+        uses: home-assistant/actions/hassfest@master
+        
+      - name: Comment on PR (if failed)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Hassfest validation failed. Please check the logs and fix the issues.'
+            })
