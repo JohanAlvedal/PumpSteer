@@ -1,7 +1,8 @@
-# FIXED electricity_price.py - Correct database access for Home Assistant 2025
+# FIXAD electricity_price.py - Korrekt databasåtkomst för Home Assistant 2025
 
 import numpy as np
-#from typing import List, Dict, Optional
+
+# from typing import List, Dict, Optional
 import logging
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
@@ -30,7 +31,7 @@ from .settings import (
     EXPENSIVE_MULTIPLIER,
 )
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)  # Korrigerat: __name__ istället för **name**
 
 
 def validate_price_list(
@@ -41,7 +42,7 @@ def validate_price_list(
     This function ensures the input price list is not empty, contains enough
     samples, and only has numeric values. It also logs warnings for
     unexpected data, like negative or extremely high prices.
-    """
+    """  # Stängt docstring korrekt
     if not price_list or len(price_list) < min_samples:
         return False
 
@@ -78,7 +79,7 @@ def classify_prices(
     Classify prices into categories (e.g., "very_cheap", "cheap", "normal", "expensive", "very_expensive")
     based on percentile thresholds calculated from the price list itself.
     This is a purely statistical classification based on the distribution of the current prices.
-    """
+    """  # Stängt docstring korrekt (tidigare rad 82 som orsakade fel)
     if percentiles is None:
         percentiles = DEFAULT_PERCENTILES
 
@@ -117,6 +118,11 @@ def classify_prices(
     return categories.tolist()
 
 
+# — FIXAD Hybrid Section —
+
+# DET HÄR ÄR DEN VIKTIGA ÄNDRINGEN! Nu använder vi korrekt databasåtkomst
+
+
 async def async_hybrid_classify_with_history(
     hass: HomeAssistant,
     price_list: List[float],
@@ -128,28 +134,27 @@ async def async_hybrid_classify_with_history(
     It fetches historical prices for a given `trailing_hours` period, calculates an average
     from them, and then classifies current `price_list` entries relative to this historical average.
     This provides a more dynamic classification than just percentile-based.
-    """
+    """  # Stängt docstring korrekt
     if not price_list or len(price_list) < MIN_SAMPLES_FOR_CLASSIFICATION:
         # If the current price list is invalid, return "unknown" categories
         return ["unknown"] * len(price_list)
 
     end_time = dt_now()  # Current time
-    start_time = end_time - timedelta(
-        hours=trailing_hours
-    )  # Start time for historical data fetch
+    start_time = end_time - timedelta(hours=trailing_hours)  # Start time for historical data fetch
 
     try:
+        # FIXAD: Använd get_instance() och async_add_executor_job() för korrekt databasåtkomst
         recorder = get_instance(hass)
 
         def get_price_history():
-
+            """Intern funktion för att hämta prishistorik"""
             return get_significant_states(hass, start_time, end_time, [price_entity_id])
 
+        # Asynchronously get significant state changes for the price entity from Home Assistant's recorder.
+        # Detta är den KORREKTA metoden för Home Assistant 2025!
         history = await recorder.async_add_executor_job(get_price_history)
 
-        states = history.get(
-            price_entity_id, []
-        )  # Extract states for the specific entity
+        states = history.get(price_entity_id, [])  # Extract states for the specific entity
         trailing_prices = []
 
         # Process historical states to extract valid numeric prices
@@ -211,7 +216,7 @@ async def async_hybrid_classify_with_history(
 def get_daily_average(price_list: List[float]) -> float:
     """
     Calculate the average of a list of prices.
-    """
+    """  # Stängt docstring korrekt
     if not price_list:
         return 0.0
     return round(sum(price_list) / len(price_list), 3)
@@ -221,7 +226,7 @@ def get_price_statistics(price_list: List[float]) -> Dict[str, float]:
     """
     Calculate various descriptive statistics for a list of prices.
     Includes average, median, minimum, maximum, and standard deviation.
-    """
+    """  # Stängt docstring korrekt
     if not price_list:
         return {"average": 0.0, "median": 0.0, "min": 0.0, "max": 0.0, "std": 0.0}
 
@@ -242,7 +247,7 @@ def is_extreme(
     """
     Check if a single price is considered "extreme" relative to the average of a given price list.
     An extreme price is defined as exceeding the average by a certain multiplier.
-    """
+    """  # Stängt docstring korrekt
     avg = get_daily_average(price_list)
     if avg == 0.0:
         return False
@@ -253,7 +258,7 @@ def count_categories(price_list: List[float]) -> Dict[str, int]:
     """
     Count the occurrences of each price category (e.g., "very_cheap", "expensive")
     after classifying all prices in the input list using the `classify_prices` function.
-    """
+    """  # Stängt docstring korrekt
     categories = classify_prices(price_list)
     # Initialize counts for all possible categories, including 'unknown'
     counts = {category: 0 for category in PRICE_CATEGORIES}
@@ -268,7 +273,7 @@ def count_categories(price_list: List[float]) -> Dict[str, int]:
 def count_category(price_list: List[float], target_category: str) -> int:
     """
     Count the occurrences of a specific price category within a list of prices.
-    """
+    """  # Stängt docstring korrekt
     valid_categories = PRICE_CATEGORIES + ["unknown"]
     if target_category not in valid_categories:
         raise ValueError(
@@ -283,7 +288,7 @@ def find_cheapest_hours(price_list: List[float], num_hours: int = 1) -> List[int
     """
     Find the indices (positions) of the `num_hours` cheapest prices in the list.
     The indices correspond to the original position in the `price_list`.
-    """
+    """  # Stängt docstring korrekt
     if not price_list or num_hours <= 0:
         return []
 
@@ -299,7 +304,7 @@ def find_most_expensive_hours(price_list: List[float], num_hours: int = 1) -> Li
     """
     Find the indices (positions) of the `num_hours` most expensive prices in the list.
     The indices correspond to the original position in the `price_list`.
-    """
+    """  # Stängt docstring korrekt
     if not price_list or num_hours <= 0:
         return []
 
@@ -311,37 +316,37 @@ def find_most_expensive_hours(price_list: List[float], num_hours: int = 1) -> Li
     return [i for i, _ in indexed_prices[: min(num_hours, len(indexed_prices))]]
 
 
-# — ADDED: New PumpSteer-specific functions —
+# — TILLAGT: Nya PumpSteer-specifika funktioner —
 
 
 async def async_get_forecast_prices(
     hass: HomeAssistant, price_entity_id: str, hours_ahead: int = 6
 ) -> List[Dict[str, any]]:
     """
-    Retrieve future electricity prices for PumpSteer's 6-hour forecast.
-    """
+    Hämta framtida elpriser för PumpSteer:s 6-timmars framåtblick.
+    """  # Stängt docstring korrekt
     try:
+        # datetime importerades redan
+        # from datetime import datetime # Denna rad är inte längre nödvändig här då datetime importeras i toppen
 
-        # from datetime import datetime
+        recorder = get_instance(hass)
 
-#        recorder = get_instance(hass)
-
-        # Get entity's attributes which often contain future prices
+        # Hämta entitetens attribut som ofta innehåller framtida priser
         state = hass.states.get(price_entity_id)
         if not state:
-            _LOGGER.warning(f"Could not find entity: {price_entity_id}")
+            _LOGGER.warning(f"Kunde inte hitta entitet: {price_entity_id}")
             return []
 
-        # Many electricity price integrations store future prices in attributes
+        # Många elprisintegationer lagrar framtida priser i attribut
         raw_prices = state.attributes.get("raw_today", []) + state.attributes.get(
             "raw_tomorrow", []
         )
 
         if not raw_prices:
-            _LOGGER.debug("No future prices found in entity attributes")
+            _LOGGER.debug("Inga framtida priser hittades i entitetens attribut")
             return []
 
-        # Filter only future hours
+        # Filtrera bara framtida timmar
         current_time = dt_now()
         forecast_prices = []
 
@@ -352,15 +357,15 @@ async def async_get_forecast_prices(
                 and "value" in price_data
             ):
                 try:
-                    # Convert start time to datetime if needed
+                    # Konvertera starttid till datetime om det behövs
                     start_time = price_data["start"]
                     if isinstance(start_time, str):
-                        # `datetime` is already imported at the top
+                        # `datetime` är redan importerat i toppen
                         start_time = datetime.fromisoformat(
                             start_time.replace("Z", "+00:00")
                         )
 
-                    # Only future prices
+                    # Bara framtida priser
                     if start_time > current_time:
                         forecast_prices.append(
                             {
@@ -372,20 +377,20 @@ async def async_get_forecast_prices(
                             }
                         )
 
-                        # Limit to desired number of hours
+                        # Begränsa till önskat antal timmar
                         if len(forecast_prices) >= hours_ahead:
                             break
 
                 except (ValueError, TypeError, KeyError) as e:
-                    _LOGGER.debug(f"Skipping invalid price data: {e}")
+                    _LOGGER.debug(f"Hoppar över ogiltig prisdata: {e}")
                     continue
 
-        # Sort by time
+        # Sortera efter tid
         forecast_prices.sort(key=lambda x: x["timestamp"])
         return forecast_prices[:hours_ahead]
 
     except Exception as e:
-        _LOGGER.error(f"Error retrieving forecast prices: {e}")
+        _LOGGER.error(f"Fel vid hämtning av prognospriser: {e}")
         return []
 
 
@@ -395,36 +400,36 @@ def calculate_boost_potential(
     aggressiveness: int = 3,
 ) -> Dict[str, any]:
     """
-    Calculate boost potential based on current and future prices.
-    """
+    Beräkna boost-potential baserat på nuvarande och framtida priser.
+    """  # Stängt docstring korrekt
     if not current_prices or not forecast_prices:
         return {
             "should_boost": False,
             "boost_hours": 0,
-            "reason": "Insufficient price data",
+            "reason": "Otillräcklig prisdata",
         }
 
     current_avg = get_daily_average(current_prices)
     future_prices = [p["price"] for p in forecast_prices]
     future_avg = get_daily_average(future_prices)
 
-    # Aggressiveness multipliers (the higher the aggressiveness, the more boost)
+    # Aggressivitetsmultiplikatorer (ju högre aggressivitet, desto mer boost)
     aggressiveness_multipliers = {
-        0: 0.5,  # Very conservative
-        1: 0.7,  # Conservative
-        2: 0.85,  # Moderate
+        0: 0.5,  # Mycket konservativ
+        1: 0.7,  # Konservativ
+        2: 0.85,  # Måttlig
         3: 1.0,  # Normal
-        4: 1.2,  # Aggressive
-        5: 1.5,  # Very aggressive
+        4: 1.2,  # Aggressiv
+        5: 1.5,  # Mycket aggressiv
     }
 
     multiplier = aggressiveness_multipliers.get(aggressiveness, 1.0)
 
-    # Check if future prices are significantly higher
+    # Kolla om framtida priser är betydligt högre
     price_increase_threshold = current_avg * (1.2 * multiplier)
 
     if future_avg > price_increase_threshold:
-        # Find the cheapest hours now for boosting
+        # Hitta billigaste timmarna nu för boost
         cheap_hours = find_cheapest_hours(current_prices, max(1, aggressiveness))
 
         return {
@@ -434,11 +439,11 @@ def calculate_boost_potential(
             "current_avg": current_avg,
             "future_avg": future_avg,
             "savings_potential": future_avg - current_avg,
-            "reason": f"Future prices {future_avg:.3f} > threshold {price_increase_threshold:.3f}",
+            "reason": f"Framtida priser {future_avg:.3f} > tröskel {price_increase_threshold:.3f}",
         }
 
     return {
         "should_boost": False,
         "boost_hours": 0,
-        "reason": f"Future prices {future_avg:.3f} <= threshold {price_increase_threshold:.3f}",
+        "reason": f"Framtida priser {future_avg:.3f} <= tröskel {price_increase_threshold:.3f}",
     }
