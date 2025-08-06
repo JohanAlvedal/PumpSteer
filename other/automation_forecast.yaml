@@ -1,6 +1,5 @@
 ##
-## This is the automation i use for pre-boost. 
-## And for forcast temperatures in input_text.hourly_forecast_temperatures sensor
+## This is my automation for forcast temperatures in input_text.hourly_forecast_temperatures sensor
 ##
 alias: Uppdatera Timvis Temperatur i Text
 description: ""

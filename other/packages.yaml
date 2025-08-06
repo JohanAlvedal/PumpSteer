@@ -1,0 +1,414 @@
+# PumpSteer Package - Komplett konfiguration
+
+input_number:
+  pumpsteer_aggressiveness:
+    name: PumpSteer Aggressiveness
+    min: 0
+    max: 5
+    step: 1
+    unit_of_measurement: "level"
+    icon: mdi:lightning-bolt-circle
+    mode: box
+
+  pumpsteer_summer_threshold:
+    name: Summer Mode Threshold
+    min: 0
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: box
+
+  indoor_target_temperature:
+    name: Indoor Target Temperature
+    min: 16
+    max: 27
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    mode: box
+
+  house_inertia:
+    name: House Inertia
+    min: 0
+    max: 5.0
+    step: 0.1
+    icon: mdi:home-thermometer
+    mode: box
+
+  integral_temp_error:
+    name: "Integral Temperature Error"
+    min: -1000
+    max: 1000
+    step: 0.1
+    unit_of_measurement: "°C·h"
+    mode: box
+
+  pumpsteer_integral_gain:
+    name: "PumpSteer Integral Gain"
+    min: 0.01
+    max: 1.0
+    step: 0.01
+    mode: slider
+    unit_of_measurement: ""
+    icon: mdi:tune
+
+input_text:
+  hourly_forecast_temperatures:
+    name: Hourly Forecast Temperatures
+    max: 500
+    initial: ""
+    
+  last_gain_adjustment:
+    name: Last Gain Adjustment
+    initial: "-"
+    max: 50
+
+input_boolean:
+  holiday_mode:
+    name: Semestermode aktivt
+    icon: mdi:beach
+    initial: false
+
+  autotune_inertia:
+    name: Autotune inertia
+    icon: mdi:beach
+
+input_datetime:
+  holiday_start:
+    name: Semester börjar
+    has_date: true
+    has_time: true
+
+  holiday_end:
+    name: Semester slutar
+    has_date: true
+    has_time: true
+
+input_select:
+  pumpsteer_price_model:
+    name: "PumpSteer Price Model"
+    options:
+      - "hybrid"
+      - "percentiles"
+    icon: mdi:chart-line
+
+template:
+  - sensor:
+      - name: "Real Outdoor Temperature"
+        state: >
+          {% set temp = state_attr('sensor.pumpsteer', 'Outdoor Temperature') %}
+          {{ temp if temp is not none else 'unavailable' }}
+        unit_of_measurement: "°C"
+        device_class: temperature
+        availability: >
+          {{ state_attr('sensor.pumpsteer', 'Outdoor Temperature') is not none }}
+
+      - name: "PumpSteer Indoor Target Diff"
+        state: >
+          {% set actual = state_attr('sensor.pumpsteer', 'Indoor Temperature') %}
+          {% set target = state_attr('sensor.pumpsteer', 'Target Temperature') %}
+          {% if actual is not none and target is not none %}
+            {{ (actual | float(0) - target | float(0)) | round(1) }}
+          {% else %}
+            unavailable
+          {% endif %}
+        unit_of_measurement: "°C"
+        icon: mdi:home-thermometer-outline
+        availability: >
+          {{ state_attr('sensor.pumpsteer', 'Indoor Temperature') is not none and
+             state_attr('sensor.pumpsteer', 'Target Temperature') is not none }}
+
+      - name: "PumpSteer Operating Mode"
+        state: >
+          {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
+          {{ (mode | default('unknown') | title) if mode is not none else 'Starting...' }}
+        icon: >
+          {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
+          {% if mode == 'preboost' %}
+            mdi:flash
+          {% elif mode == 'heating' %}
+            mdi:fire
+          {% elif mode == 'cooling' %}
+            mdi:snowflake
+          {% elif mode == 'neutral' %}
+            mdi:pause-circle
+          {% elif mode == 'summer_mode' %}
+            mdi:weather-sunny
+          {% elif mode in ['braking_by_price', 'braking_by_temp'] %}
+            mdi:car-brake-alert
+          {% elif mode == 'passthrough' %}
+            mdi:transit-connection-variant
+          {% elif mode == 'error' %}
+            mdi:alert-circle
+          {% else %}
+            mdi:help-circle
+          {% endif %}
+
+      - name: "PumpSteer Status Summary"
+        state: >
+          {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
+          {% set price_cat = state_attr('sensor.pumpsteer', 'Price Category') %}
+          {% set temp_diff = state_attr('sensor.pumpsteer', 'Temp Error (°C)') %}
+
+          {% if mode is none or price_cat is none or temp_diff is none %}
+            🔄 Startar upp...
+          {% else %}
+            {% set temp_diff = temp_diff | float(0) %}
+            {% if mode == 'preboost' %}
+              🔥 Pre-boost aktiv
+            {% elif mode == 'braking_by_price' %}
+              💰 Prisbromsning ({{ price_cat.split('(')[0].strip() if '(' in price_cat else price_cat }})
+            {% elif mode == 'braking_by_temp' %}
+              🌡️ Temperaturbromsning ({{ temp_diff | round(1) }}°C över mål)
+            {% elif mode == 'heating' %}
+              🔥 Uppvärmning ({{ temp_diff | round(1) }}°C under mål)
+            {% elif mode == 'cooling' %}
+              ❄️ Kylning ({{ temp_diff | round(1) }}°C över mål)
+            {% elif mode == 'summer_mode' %}
+              ☀️ Sommarläge
+            {% elif mode == 'neutral' %}
+              ⚖️ Neutral (±{{ temp_diff | abs | round(1) }}°C)
+            {% elif mode == 'holiday' %}
+              🏖️ Semesterläge
+            {% elif mode == 'initializing' %}
+              🔄 Initialiserar...
+            {% else %}
+              ❓ {{ mode | title }}
+            {% endif %}
+          {% endif %}
+
+      - name: "PumpSteer Inertia"
+        state: >
+          {% set inertia = state_attr('sensor.pumpsteer', 'Inertia') %}
+          {{ inertia if inertia is not none else 0 }}
+        icon: mdi:speedometer
+        state_class: measurement
+
+      - name: "PumpSteer Aggressiveness"
+        state: >
+          {% set agg = state_attr('sensor.pumpsteer', 'Aggressiveness') %}
+          {{ agg if agg is not none else 0 }}
+        icon: mdi:target
+        state_class: measurement
+
+      - name: "PumpSteer Is Preboosting"
+        state: >
+          {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
+          {{ mode == 'preboost' if mode is not none else false }}
+        icon: mdi:fire
+
+      - name: "PumpSteer Is Braking"
+        state: >
+          {% set mode = state_attr('sensor.pumpsteer', 'Mode') %}
+          {{ mode in ['braking_by_price', 'braking_by_temp'] if mode is not none else false }}
+        icon: mdi:car-brake-alert
+
+      - name: "PumpSteer Current Price Level"
+        unit_of_measurement: "%"
+        state: >
+          {% set price = state_attr('sensor.pumpsteer', 'Current Price') %}
+          {% set max_price = state_attr('sensor.pumpsteer', 'Max Price') %}
+          {% if price is not none and max_price is not none and max_price | float(1) > 0 %}
+            {{ (price | float(0) / max_price | float(1) * 100) | round(0) }}
+          {% else %}
+            0
+          {% endif %}
+        icon: mdi:cash-percent
+        availability: >
+          {{ state_attr('sensor.pumpsteer', 'Current Price') is not none and
+             state_attr('sensor.pumpsteer', 'Max Price') is not none }}
+
+      - name: "PumpSteer Price Category"
+        state: >
+          {% set category = state_attr('sensor.pumpsteer', 'Price Category') %}
+          {% if category is not none and category != 'unknown' %}
+            {% if '(' in category %}
+              {{ category.split('(')[0].strip() | title }}
+            {% else %}
+              {{ category | title }}
+            {% endif %}
+          {% else %}
+            Unknown
+          {% endif %}
+        icon: >
+          {% set category = state_attr('sensor.pumpsteer', 'Price Category') %}
+          {% if category is not none %}
+            {% if 'very_cheap' in category %}
+              mdi:currency-usd-off
+            {% elif 'cheap' in category %}
+              mdi:cash-minus
+            {% elif 'expensive' in category %}
+              mdi:cash-plus
+            {% elif 'very_expensive' in category %}
+              mdi:cash-remove
+            {% else %}
+              mdi:cash
+            {% endif %}
+          {% else %}
+            mdi:help-circle
+          {% endif %}
+
+      - name: "PumpSteer Next Hour Prediction"
+        state: >
+          {% set prices = state_attr('sensor.pumpsteer', 'Next 3 Hours Prices') %}
+          {% set current_price = state_attr('sensor.pumpsteer', 'Current Price') %}
+
+          {% if prices is not none and current_price is not none and prices | length > 0 %}
+            {% set next_price = prices[0] | float(0) %}
+            {% set current_price = current_price | float(0) %}
+            {% if current_price > 0 %}
+              {% set change = ((next_price - current_price) / current_price * 100) | round(0) %}
+              {% if change > 10 %}
+                📈 Pris stiger ({{ change }}%)
+              {% elif change < -10 %}
+                📉 Pris sjunker ({{ change }}%)
+              {% else %}
+                ➡️ Stabilt pris ({{ change }}%)
+              {% endif %}
+            {% else %}
+              ➡️ Ingen prisändring
+            {% endif %}
+          {% else %}
+            ❓ Ingen prognos
+          {% endif %}
+
+      - name: "PumpSteer Efficiency Score"
+        unit_of_measurement: "%"
+        state: >
+          {% set temp_error = state_attr('sensor.pumpsteer', 'Temp Error (°C)') %}
+          {% set saving_potential = state_attr('sensor.pumpsteer', 'Saving Potential (SEK/kWh)') %}
+
+          {% if temp_error is not none and saving_potential is not none %}
+            {% set temp_error = temp_error | abs | float(0) %}
+            {% set saving_potential = saving_potential | float(0) %}
+            
+            {% set comfort_score = 100 - (temp_error * 20) %}
+            {% set comfort_score = [0, comfort_score] | max %}
+            
+            {% set cost_score = (saving_potential * 25) | round(0) %}
+            {% set cost_score = [0, cost_score] | min(100) %}
+            
+            {{ ((comfort_score + cost_score) / 2) | round(0) }}
+          {% else %}
+            0
+          {% endif %}
+        icon: mdi:medal
+        state_class: measurement
+
+      - name: "PumpSteer Data Quality"
+        state: >
+          {% set data_quality = state_attr('sensor.pumpsteer', 'Data Quality') %}
+          {% if data_quality is not none %}
+            {% set prices_count = data_quality.get('prices_count', 0) %}
+            {% set categories_count = data_quality.get('categories_count', 0) %}
+            {% set forecast_available = data_quality.get('forecast_available', false) %}
+            
+            {% if prices_count >= 24 and categories_count >= 24 and forecast_available %}
+              🟢 Utmärkt
+            {% elif prices_count >= 12 and categories_count >= 12 %}
+              🟡 Bra
+            {% elif prices_count > 0 %}
+              🟠 Begränsad
+            {% else %}
+              🔴 Dålig
+            {% endif %}
+          {% else %}
+            🔄 Väntar på data
+          {% endif %}
+
+# AUTOMATIONER - NU KORREKT PLACERADE UTANFÖR TEMPLATE-SEKTIONEN
+automation:
+  #   - alias: "PumpSteer - Update Temperature Forecast"
+  #     description: "Uppdatera temperaturprognos för PumpSteer pre-boost"
+  #     trigger:
+  #       - platform: time_pattern
+  #         minutes: "/30"
+  #       - platform: homeassistant
+  #         event: start
+  #     condition:
+  #       - condition: template
+  #         value_template: >
+  #           {{ has_value('weather.home') or has_value('weather.forecast') }}
+  #     action:
+  #       - service: input_text.set_value
+  #         target:
+  #           entity_id: input_text.hourly_forecast_temperatures
+  #         data:
+  #           value: >
+  #             {% if state_attr('weather.home', 'forecast') %}
+  #               {% set forecast = state_attr('weather.home', 'forecast') %}
+  #             {% elif state_attr('weather.forecast', 'forecast') %}
+  #               {% set forecast = state_attr('weather.forecast', 'forecast') %}
+  #             {% else %}
+  #               {% set forecast = [] %}
+  #             {% endif %}
+
+  #             {% set temps = [] %}
+  #             {% for item in forecast[:24] %}
+  #               {% if item.temperature is defined %}
+  #                 {% set temps = temps + [item.temperature] %}
+  #               {% endif %}
+  #             {% endfor %}
+
+  #             {% if temps | length > 0 %}
+  #               {{ temps | join(',') }}
+  #             {% else %}
+  #               {{ states('input_text.hourly_forecast_temperatures') }}
+  #             {% endif %}
+
+  - alias: "PumpSteer - High Price Alert"
+    description: "Notifiering vid mycket höga elpriser"
+    trigger:
+      - platform: template
+        value_template: >
+          {% set price_cat = state_attr('sensor.pumpsteer', 'Price Category') %}
+          {{ price_cat is not none and 'very_expensive' in price_cat }}
+    condition:
+      - condition: template
+        value_template: >
+          {% set old_cat = trigger.from_state.attributes.get('Price Category') if trigger.from_state else none %}
+          {% set new_cat = trigger.to_state.attributes.get('Price Category') if trigger.to_state else none %}
+          {{ old_cat != new_cat }}
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "⚡ Mycket högt elpris!"
+          message: >
+            PumpSteer har aktiverat prisbromsning.
+
+            💰 Pris: {{ state_attr('sensor.pumpsteer', 'Current Price') | default('N/A') }} SEK/kWh
+            📊 Kategori: {{ state_attr('sensor.pumpsteer', 'Price Category') | default('N/A') }}
+            🏠 Läge: {{ state_attr('sensor.pumpsteer', 'Mode') | default('N/A') | title }}
+          notification_id: "pumpsteer_high_price"
+
+  - alias: "PumpSteer - Pre-boost Notification"
+    description: "Notifiering när pre-boost aktiveras"
+    trigger:
+      - platform: state
+        entity_id: sensor.pumpsteer_operating_mode
+        to: "Preboost"
+    action:
+      - service: persistent_notification.create
+        data:
+          title: "🔥 PumpSteer Pre-boost Aktiverad"
+          message: >
+            Pre-boost har startats för att förbereda för kommande kall och dyr period.
+
+            🌡️ Aktuell temp: {{ state_attr('sensor.pumpsteer', 'Outdoor Temperature') | default('N/A') }}°C
+            🎯 Virtuell temp: {{ states('sensor.pumpsteer') | default('N/A') }}°C
+            ⏰ Inertia: {{ state_attr('sensor.pumpsteer', 'Inertia') | default('N/A') }}h
+          notification_id: "pumpsteer_preboost"
+
+# Utility meters för statistik
+utility_meter:
+  pumpsteer_daily_efficiency:
+    source: sensor.pumpsteer_efficiency_score
+    cycle: daily
+
+  pumpsteer_weekly_efficiency:
+    source: sensor.pumpsteer_efficiency_score
+    cycle: weekly
+
+  pumpsteer_monthly_efficiency:
+    source: sensor.pumpsteer_efficiency_score
+    cycle: monthly

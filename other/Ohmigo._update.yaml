@@ -1,0 +1,13 @@
+alias: Update Ohmigo sensor
+description: ""
+triggers:
+  - trigger: time_pattern
+    minutes: /5
+conditions: []
+actions:
+  - data:
+      value: "{{ states('sensor.pumpsteer') | float }}"
+    target:
+      entity_id: number.ohmigohass_temperature
+    action: number.set_value
+mode: single
