@@ -1,8 +1,7 @@
 # ml_sensor.py – Improved ML analysis sensor for PumpSteer
 
 import logging
-from typing import Optional, Dict, Any
-
+from typing import Dict, Any
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import Entity
