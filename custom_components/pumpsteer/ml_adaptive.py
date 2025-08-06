@@ -1,4 +1,4 @@
-# ml_adaptive.py - Förbättrad men enkel version
+# ml_adaptive.py - Improved but simple version
 
 import json
 import logging
@@ -7,7 +7,7 @@ from typing import Optional, Dict, List, Any
 from pathlib import Path
 import statistics
 
-# Importera HomeAssistant och dt_util för asynkron körning och korrekt tidsstämpling
+# Import HomeAssistant and dt_util for async execution and accurate timestamps
 from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
 
@@ -16,8 +16,8 @@ _LOGGER = logging.getLogger(__name__)
 
 class PumpSteerMLCollector:
     """
-    Samlar data för maskininlärning och ger grundläggande analys.
-    Förbättrad version med enkla rekommendationer och trender.
+    Collects data for machine learning and provides basic analysis.
+    Improved version with simple recommendations and trends.
     """
 
     def __init__(
@@ -26,24 +26,24 @@ class PumpSteerMLCollector:
         data_file_path: str = "/config/pumpsteer_ml_data.json",
     ):
         """
-        Initialiserar ML-datainsamlaren.
+        Initializes the ML data collector.
 
         Args:
-            hass: HomeAssistant-instansen för asynkron operationer.
-            data_file_path: Sökväg till JSON-filen för att spara/ladda data.
+            hass: HomeAssistant instance for asynchronous operations.
+            data_file_path: Path to the JSON file for saving/loading data.
         """
         self.hass = hass
         self.data_file = data_file_path
         self.learning_sessions = []
         self.current_session = None
-        self.last_inertia_adjustment = None  # Spåra senaste justering
-        self.last_gain_adjustment = None  # Spåra senaste gain-justering
+        self.last_inertia_adjustment = None  # Track last adjustment
+        self.last_gain_adjustment = None  # Track last gain adjustment
         _LOGGER.info(
             "PumpSteer Enhanced ML Collector initialized (observation + analysis + auto-tune mode)"
         )
 
     async def async_load_data(self) -> None:
-        """Ladda sparad data från fil asynkront."""
+        """Load saved data from file asynchronously."""
         try:
             await self.hass.async_add_executor_job(self._load_data_sync)
             _LOGGER.info(
@@ -54,7 +54,7 @@ class PumpSteerMLCollector:
             self.learning_sessions = []
 
     def _load_data_sync(self) -> None:
-        """Synkron logik för att ladda data, körs i executor."""
+        """Synchronous logic to load data, runs in executor."""
         if not Path(self.data_file).exists():
             _LOGGER.debug(
                 f"ML: No existing data file found at {self.data_file}, starting fresh."
@@ -67,7 +67,7 @@ class PumpSteerMLCollector:
         self.learning_sessions = data.get("sessions", [])
 
     async def async_save_data(self) -> None:
-        """Spara insamlad data till fil asynkront."""
+        """Save collected data to file asynchronously."""
         try:
             await self.hass.async_add_executor_job(self._save_data_sync)
             _LOGGER.debug(
@@ -77,13 +77,13 @@ class PumpSteerMLCollector:
             _LOGGER.error(f"ML: Error saving data asynchronously: {e}")
 
     def _save_data_sync(self) -> None:
-        """Synkron logik för att spara data, körs i executor."""
+        """Synchronous logic to save data, runs in executor."""
         data = {
             "version": "1.0",
             "created": dt_util.now().isoformat(),
             "sessions": self.learning_sessions[
                 -100:
-            ],  # Spara bara senaste 100 sessionerna
+            ],  # Save only the last 100 sessions
             "session_count": len(self.learning_sessions),
         }
         Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
@@ -91,7 +91,7 @@ class PumpSteerMLCollector:
             json.dump(data, f, indent=2)
 
     def start_session(self, initial_data: Dict[str, Any]) -> None:
-        """Starta en ny lärande session."""
+        """Start a new learning session."""
         if self.current_session is not None:
             self.end_session("interrupted")
 
@@ -107,7 +107,7 @@ class PumpSteerMLCollector:
         )
 
     def update_session(self, update_data: Dict[str, Any]) -> None:
-        """Uppdatera pågående session med ny data."""
+        """Update the ongoing session with new data."""
         if self.current_session is None:
             return
 
@@ -124,7 +124,7 @@ class PumpSteerMLCollector:
     def end_session(
         self, reason: str = "normal", final_data: Optional[Dict[str, Any]] = None
     ) -> None:
-        """Avsluta pågående session och spara resultatet."""
+        """End the ongoing session and save the result."""
         if self.current_session is None:
             return
 
@@ -132,14 +132,14 @@ class PumpSteerMLCollector:
         self.current_session["end_reason"] = reason
         self.current_session["end_result"] = final_data
 
-        # Analysera sessionen
+        # Basic analysis
         session_summary = self._analyze_session(self.current_session)
         self.current_session["summary"] = session_summary
 
         self.learning_sessions.append(self.current_session)
         self.current_session = None
 
-        # Spara till fil asynkront
+        # Save to file asynchronously
         self.hass.loop.create_task(self.async_save_data())
 
         _LOGGER.debug(
@@ -147,7 +147,7 @@ class PumpSteerMLCollector:
         )
 
     def _analyze_session(self, session: Dict[str, Any]) -> Dict[str, Any]:
-        """Analysera en avslutad session och extrahera lärdomar."""
+        """Analyze a finished session and extract lessons."""
         try:
             start_time = datetime.fromisoformat(session["start_time"])
             end_time = datetime.fromisoformat(session["end_time"])
@@ -156,7 +156,7 @@ class PumpSteerMLCollector:
             initial = session.get("initial", {})
             updates = session.get("updates", [])
 
-            # Grundläggande analys
+            # Basic analysis
             summary = {
                 "duration_minutes": round(duration_minutes, 1),
                 "mode": initial.get("mode", "unknown"),
@@ -167,15 +167,17 @@ class PumpSteerMLCollector:
                 - initial.get("target_temp", 0),
             }
 
-            # Klassificera session som framgångsrik eller inte
+            # Classify session as successful or not
+            # Under 2h for significant temperature difference
+            # Over 3h indicates a problem
             if (
                 duration_minutes < 120 and abs(summary["start_temp_diff"]) > 0.3
-            ):  # Under 2h för betydande temperaturskillnad
+            ):
                 summary["success"] = True
-            elif duration_minutes > 180:  # Över 3h indikerar problem
+            elif duration_minutes > 180:
                 summary["success"] = False
             else:
-                summary["success"] = None  # Neutral/oklart
+                summary["success"] = None
 
             return summary
 
@@ -184,7 +186,7 @@ class PumpSteerMLCollector:
             return {"duration_minutes": 0, "success": None, "mode": "error"}
 
     def get_status(self) -> Dict[str, Any]:
-        """Hämta aktuell status för ML-systemet."""
+        """Get current status for the ML system."""
         return {
             "collecting_data": True,
             "making_recommendations": len(self.learning_sessions) >= 5,
@@ -194,18 +196,18 @@ class PumpSteerMLCollector:
             "ready_for_insights": len(self.learning_sessions) >= 5,
         }
 
-    # === NYA FÖRBÄTTRADE FUNKTIONER ===
+    # === NEW IMPROVED FUNCTIONS ===
 
     def get_performance_summary(self) -> Dict[str, Any]:
-        """Hämta prestanda-sammanfattning baserat på insamlade sessions."""
+        """Get performance summary based on collected sessions."""
         if len(self.learning_sessions) < 3:
             return {
                 "status": "insufficient_data",
-                "message": f"Behöver minst 3 sessions för analys. Har {len(self.learning_sessions)}.",
+                "message": f"Need at least 3 sessions for analysis. Currently have {len(self.learning_sessions)}.",
             }
 
         try:
-            # Analysera alla sessions
+            # Analyze all sessions
             heating_sessions = [
                 s
                 for s in self.learning_sessions
@@ -215,10 +217,10 @@ class PumpSteerMLCollector:
             if not heating_sessions:
                 return {
                     "status": "no_heating_data",
-                    "message": "Inga heating-sessions att analysera än.",
+                    "message": "No heating sessions to analyze yet.",
                 }
 
-            # Beräkna statistik
+            # Calculate statistics
             durations = [
                 s["summary"]["duration_minutes"]
                 for s in heating_sessions
@@ -237,7 +239,7 @@ class PumpSteerMLCollector:
                 if s.get("summary", {}).get("success") is True
             ]
 
-            # Sammanställ resultat
+            # Compile results
             summary = {
                 "status": "analyzing",
                 "total_heating_sessions": len(heating_sessions),
@@ -262,16 +264,16 @@ class PumpSteerMLCollector:
             return {"status": "error", "message": str(e)}
 
     def get_recommendations(self) -> List[str]:
-        """Generera enkla rekommendationer baserat på insamlad data enligt korrekt design-filosofi."""
+        """Generate simple recommendations based on collected data according to correct design philosophy."""
         performance = self.get_performance_summary()
 
         if performance.get("status") != "analyzing":
-            return ["Samlar fortfarande data för att ge rekommendationer..."]
+            return ["Still collecting data to provide recommendations..."]
 
         recommendations = []
 
         try:
-            # Analysera sessions för att hitta mönster
+            # Analyze sessions to find patterns
             heating_sessions = [
                 s
                 for s in self.learning_sessions
@@ -279,90 +281,90 @@ class PumpSteerMLCollector:
             ]
 
             if not heating_sessions:
-                return ["Inga heating-sessions att analysera än."]
+                return ["No heating sessions to analyze yet."]
 
-            # Samla data för analys
+            # Gather data for analysis
             avg_duration = performance.get("avg_heating_duration", 0)
             success_rate = performance.get("success_rate", 0)
             most_used_agg = performance.get("most_used_aggressiveness", 3)
 
-            # Analysera inertia vs duration patterns
+            # Analyze inertia vs duration patterns
             inertia_values = [
                 s["summary"].get("inertia", 1.0) for s in heating_sessions[-10:]
             ]
             avg_inertia = statistics.mean(inertia_values) if inertia_values else 1.0
 
-            # AGGRESSIVENESS-rekommendationer (pengarbesparings-verktyg 0-5)
+            # AGGRESSIVENESS recommendations (money-saving tool 0-5)
             if most_used_agg == 0:
                 recommendations.append(
-                    "Aggressivitet 0: Ingen pengarbesparings-logik aktiv. Systemet fungerar som vanlig termostat."
+                    "Aggressiveness 0: No money-saving logic active. The system works as a regular thermostat."
                 )
             elif most_used_agg >= 4 and success_rate < 70:
                 recommendations.append(
-                    f"Aggressivitet {most_used_agg} ger hög besparing men låg komfort ({success_rate:.1f}% framgång). Överväg att minska till {most_used_agg-1} för bättre balans."
+                    f"Aggressiveness {most_used_agg} gives high savings but low comfort ({success_rate:.1f}% success). Consider decreasing to {most_used_agg-1} for better balance."
                 )
             elif most_used_agg <= 2 and avg_duration < 45:
                 recommendations.append(
-                    f"Aggressivitet {most_used_agg} prioriterar komfort. Du kan öka till {most_used_agg+1} för mer pengarbesparingar om komforten är acceptabel."
+                    f"Aggressiveness {most_used_agg} prioritizes comfort. You can increase to {most_used_agg+1} for more savings if comfort is acceptable."
                 )
 
-            # HOUSE_INERTIA-rekommendationer (husets tröghet 0-5)
+            # HOUSE_INERTIA recommendations (house inertia 0-5)
             if avg_duration > 120 and avg_inertia < 2.0:
                 recommendations.append(
-                    f"Heating tar lång tid ({avg_duration:.1f}min) med house_inertia {avg_inertia:.1f}. Ditt hus kanske är tröghare - testa att öka house_inertia till {avg_inertia + 0.5:.1f}."
+                    f"Heating takes a long time ({avg_duration:.1f}min) with house_inertia {avg_inertia:.1f}. Your house may be slower – try increasing house_inertia to {avg_inertia + 0.5:.1f}."
                 )
             elif avg_duration < 20 and avg_inertia > 2.0:
                 recommendations.append(
-                    f"Väldigt korta heating-sessions ({avg_duration:.1f}min) med house_inertia {avg_inertia:.1f}. Ditt hus reagerar snabbt - överväg att minska house_inertia till {avg_inertia - 0.5:.1f}."
+                    f"Very short heating sessions ({avg_duration:.1f}min) with house_inertia {avg_inertia:.1f}. Your house responds quickly – consider decreasing house_inertia to {avg_inertia - 0.5:.1f}."
                 )
 
-            # KOMBINATIONS-analys (aggressivitet + inertia)
+            # COMBINATION analysis (aggressiveness + inertia)
             if most_used_agg >= 4 and avg_inertia <= 1.0:
                 recommendations.append(
-                    "Hög aggressivitet (4-5) + låg house_inertia (0-1): Risk för temperatursvängningar i snabbt hus med hög besparing."
+                    "High aggressiveness (4-5) + low house_inertia (0-1): Risk of temperature fluctuations in a fast-reacting house with high savings."
                 )
             elif most_used_agg <= 1 and avg_inertia >= 4.0:
                 recommendations.append(
-                    "Låg aggressivitet (0-1) + hög house_inertia (4-5): Stabilt men dyrare i trögt hus med komfortprioritet."
+                    "Low aggressiveness (0-1) + high house_inertia (4-5): Stable but more expensive in a slow-reacting house with comfort priority."
                 )
 
-            # SUCCESS RATE-analys
+            # SUCCESS RATE analysis
             if success_rate > 85:
                 recommendations.append(
-                    f"Utmärkt balans mellan besparing och komfort ({success_rate:.1f}% framgång)! Nuvarande inställningar fungerar bra."
+                    f"Excellent balance between savings and comfort ({success_rate:.1f}% success)! Current settings work well."
                 )
             elif success_rate < 60:
                 recommendations.append(
-                    f"Låg framgångsgrad ({success_rate:.1f}%). Justera antingen aggressivitet (besparing/komfort-balans) eller house_inertia (husets tröghet)."
+                    f"Low success rate ({success_rate:.1f}%). Adjust either aggressiveness (savings/comfort balance) or house_inertia (house's inertia)."
                 )
 
-            # Generell rådgivning
+            # General advice
             if len(self.learning_sessions) < 10:
                 recommendations.append(
-                    "Systemet lär sig fortfarande. Vänta med större ändringar tills 10+ sessions samlats."
+                    "The system is still learning. Wait before making major changes until 10+ sessions are collected."
                 )
 
-            # DESIGN-FILOSOFI påminnelse
+            # DESIGN PHILOSOPHY reminder
             if len(recommendations) == 0:
                 recommendations.append(
-                    "Påminnelse: Aggressivitet (0-5) = pengarbesparingar vs komfort. House_inertia (0-5) = husets temperaturtröghet."
+                    "Reminder: Aggressiveness (0-5) = savings vs comfort. House_inertia (0-5) = the house's thermal inertia."
                 )
 
             return recommendations
 
         except Exception as e:
             _LOGGER.error(f"ML: Error generating recommendations: {e}")
-            return ["Fel vid generering av rekommendationer."]
+            return ["Error generating recommendations."]
 
     def get_learning_insights(self) -> Dict[str, Any]:
-        """Kombinera all information + kontrollera auto-tune möjligheter."""
+        """Combine all information + check auto-tune possibilities."""
         try:
             status = self.get_status()
             performance = self.get_performance_summary()
             recommendations = self.get_recommendations()
 
-            # Kontrollera om auto-tune ska köras
-            if len(self.learning_sessions) >= 5:  # Minst 5 sessions för auto-tune
+            # Check if auto-tune should run
+            if len(self.learning_sessions) >= 5:  # At least 5 sessions for auto-tune
                 auto_tune_result = self._check_auto_tune_inertia()
                 if auto_tune_result:
                     recommendations.extend(auto_tune_result.get("notifications", []))
@@ -383,7 +385,7 @@ class PumpSteerMLCollector:
             return {"error": str(e), "ml_status": self.get_status()}
 
     def _check_auto_tune_integral_gain(self) -> Optional[Dict[str, Any]]:
-        """Auto-tune av integral gain baserat på historik."""
+        """Auto-tune of integral gain based on history."""
         try:
             auto_tune_state = self.hass.states.get("input_boolean.autotune_inertia")
             auto_tune_enabled = auto_tune_state and auto_tune_state.state == "on"
@@ -402,7 +404,7 @@ class PumpSteerMLCollector:
             if len(heating_sessions) < 3:
                 return None
 
-            # Undvik för frekventa justeringar (max var 2:e dag)
+            # Avoid too frequent adjustments (max every 2 days)
             if (
                 self.last_gain_adjustment
                 and (
@@ -435,12 +437,12 @@ class PumpSteerMLCollector:
             if avg_drift > 0.3 and current_gain < 1.0:
                 suggested_gain = min(current_gain + 0.05, 1.0)
                 reason = (
-                    f"Systemet ackumulerar värmefel över tid (drift={avg_drift:.2f})."
+                    f"The system accumulates temperature error over time (drift={avg_drift:.2f})."
                 )
                 action_needed = True
             elif avg_drift < -0.3 and current_gain > 0.01:
                 suggested_gain = max(current_gain - 0.05, 0.0)
-                reason = f"Systemet överskjuter (drift={avg_drift:.2f})."
+                reason = f"The system overshoots (drift={avg_drift:.2f})."
                 action_needed = True
 
             if not action_needed:
@@ -458,7 +460,7 @@ class PumpSteerMLCollector:
                             "value": round(suggested_gain, 3),
                         },
                     )
-                    msg = f"🤖 Auto-Tune: Justerade integral_gain {current_gain} → {suggested_gain:.3f}. {reason}"
+                    msg = f"🤖 Auto-Tune: Adjusted integral_gain {current_gain} → {suggested_gain:.3f}. {reason}"
                     self.hass.services.call(
                         "persistent_notification",
                         "create",
@@ -469,26 +471,26 @@ class PumpSteerMLCollector:
                         },
                     )
                     notifications.append(
-                        f"✅ AUTO-JUSTERAT: integral_gain {current_gain} → {suggested_gain:.3f}"
+                        f"✅ AUTO-ADJUSTED: integral_gain {current_gain} → {suggested_gain:.3f}"
                     )
                     _LOGGER.info(msg)
                     self.last_gain_adjustment = dt_util.now().isoformat()
                 except Exception as e:
                     _LOGGER.error(f"Auto-tune (gain) failed: {e}")
-                    notifications.append(f"❌ Gain auto-tune misslyckades: {e}")
+                    notifications.append(f"❌ Gain auto-tune failed: {e}")
             else:
-                tip_msg = f"💡 TIP: Överväg att ändra integral_gain {current_gain} → {suggested_gain:.3f}. {reason}"
+                tip_msg = f"💡 TIP: Consider changing integral_gain {current_gain} → {suggested_gain:.3f}. {reason}"
                 self.hass.services.call(
                     "persistent_notification",
                     "create",
                     {
-                        "title": "PumpSteer ML Rekommendation (Gain)",
+                        "title": "PumpSteer ML Recommendation (Gain)",
                         "message": tip_msg,
                         "notification_id": "pumpsteer_recommendation_gain",
                     },
                 )
                 notifications.append(
-                    f"💡 REKOMMENDATION: integral_gain {current_gain} → {suggested_gain:.3f} ({reason})"
+                    f"💡 RECOMMENDATION: integral_gain {current_gain} → {suggested_gain:.3f} ({reason})"
                 )
 
             return {
