@@ -1,7 +1,7 @@
 # FIXED electricity_price.py - Correct database access for Home Assistant 2025
 
 import numpy as np
-from typing import List, Dict, Optional
+#from typing import List, Dict, Optional
 import logging
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
