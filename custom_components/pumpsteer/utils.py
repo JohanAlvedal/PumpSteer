@@ -6,10 +6,10 @@ from homeassistant.helpers.typing import StateType
 
 _LOGGER = logging.getLogger(__name__)
 
-# Konstanter för validering
+# Constants for validation
 MIN_REASONABLE_TEMP = -50.0
 MAX_REASONABLE_TEMP = 60.0
-MIN_REASONABLE_PRICE = -2.0  # Negativa priser kan förekomma
+MIN_REASONABLE_PRICE = -2.0  # Negative prices can occur
 MAX_REASONABLE_PRICE = 15.0
 
 
@@ -17,15 +17,15 @@ def safe_float(
     val: StateType, min_val: Optional[float] = None, max_val: Optional[float] = None
 ) -> Optional[float]:
     """
-    Säkert konvertera värde till float med valfria gränsvärden.
+    Safely convert value to float with optional min/max bounds.
 
     Args:
-        val: Värde att konvertera
-        min_val: Minimivärde (valfritt)
-        max_val: Maximivärde (valfritt)
+        val: Value to convert
+        min_val: Minimum value (optional)
+        max_val: Maximum value (optional)
 
     Returns:
-        Float-värde eller None om konvertering misslyckas
+        Float value or None if conversion fails
     """
     if val is None:
         return None
@@ -33,7 +33,7 @@ def safe_float(
     try:
         float_val = float(val)
 
-        # Kontrollera gränsvärden om de anges
+        # Check bounds if provided
         if min_val is not None and float_val < min_val:
             _LOGGER.warning(f"Value {float_val} below minimum {min_val}")
             return None
@@ -53,15 +53,15 @@ def get_state(
     hass: HomeAssistant, entity_id: str, default: Optional[str] = None
 ) -> Optional[str]:
     """
-    Hämta entity state med förbättrad felhantering och loggning.
+    Get entity state with improved error handling and logging.
 
     Args:
         hass: HomeAssistant instance
-        entity_id: Entity ID att hämta state från
-        default: Standardvärde om entity inte finns
+        entity_id: Entity ID to get state from
+        default: Default value if entity not found
 
     Returns:
-        Entity state eller default/None
+        Entity state or default/None
     """
     if not entity_id:
         _LOGGER.debug("No entity_id provided")
@@ -98,16 +98,16 @@ def get_attr(
     hass: HomeAssistant, entity_id: str, attribute: str, default: Any = None
 ) -> Any:
     """
-    Hämta entity attribut med förbättrad felhantering.
+    Get entity attribute with improved error handling.
 
     Args:
         hass: HomeAssistant instance
         entity_id: Entity ID
-        attribute: Attributnamn
-        default: Standardvärde om attribut inte finns
+        attribute: Attribute name
+        default: Default value if attribute not found
 
     Returns:
-        Attributvärde eller default
+        Attribute value or default
     """
     if not entity_id or not attribute:
         _LOGGER.debug(f"Missing entity_id or attribute: {entity_id}, {attribute}")
@@ -138,20 +138,20 @@ def safe_get_price_data(
     prices: List[Any], current_hour: Optional[int] = None
 ) -> Tuple[float, float, float]:
     """
-    Säkert extrahera prisdata med validering.
+    Safely extract price data with validation.
 
     Args:
-        prices: Lista med elpriser
-        current_hour: Aktuell timme (för att hämta nuvarande pris)
+        prices: List of electricity prices
+        current_hour: Current hour (to get current price)
 
     Returns:
-        Tuple med (current_price, max_price, price_factor)
+        Tuple of (current_price, max_price, price_factor)
     """
     if not prices or not isinstance(prices, list):
         _LOGGER.warning("No electricity prices available or invalid format")
         return 0.0, 0.0, 0.0
 
-    # Filtrera och konvertera till giltiga priser
+    # Filter and convert to valid prices
     valid_prices = []
     invalid_count = 0
 
@@ -160,12 +160,12 @@ def safe_get_price_data(
             try:
                 price_float = float(price)
 
-                # Grundläggande sanity check
+                # Basic sanity check
                 if MIN_REASONABLE_PRICE <= price_float <= MAX_REASONABLE_PRICE:
                     valid_prices.append(price_float)
                 else:
                     _LOGGER.warning(f"Extreme price at index {i}: {price_float}")
-                    valid_prices.append(price_float)  # Behåll ändå för beräkningar
+                    valid_prices.append(price_float)  # Still keep for calculations
 
             except (ValueError, TypeError):
                 _LOGGER.warning(f"Invalid price value at index {i}: {price}")
@@ -183,11 +183,11 @@ def safe_get_price_data(
             f"Found {invalid_count} invalid price values in list of {len(prices)}"
         )
 
-    # Beräkna aktuellt pris
+    # Calculate current price
     if current_hour is not None and 0 <= current_hour < len(valid_prices):
         current_price = valid_prices[current_hour]
     else:
-        current_price = valid_prices[0]  # Fallback till första priset
+        current_price = valid_prices[0]  # Fallback to first price
         if current_hour is not None:
             _LOGGER.warning(f"Invalid current_hour {current_hour}, using first price")
 
@@ -207,27 +207,27 @@ def safe_parse_temperature_forecast(
     hourly_temps_csv: str, max_hours: Optional[int] = None
 ) -> Optional[List[float]]:
     """
-    Säkert parsa CSV temperaturprognos med validering.
+    Safely parse CSV temperature forecast with validation.
 
     Args:
-        hourly_temps_csv: Komma-separerade temperaturvärden
-        max_hours: Maximalt antal timmar att parsa (valfritt)
+        hourly_temps_csv: Comma-separated temperature values
+        max_hours: Maximum number of hours to parse (optional)
 
     Returns:
-        Lista med temperaturer eller None om parsing misslyckas
+        List of temperatures or None if parsing fails
     """
     if not hourly_temps_csv or not isinstance(hourly_temps_csv, str):
         _LOGGER.warning("No temperature forecast data or invalid format")
         return None
 
     try:
-        # Rensa och splitta data
+        # Clean and split data
         temp_strings = [t.strip() for t in hourly_temps_csv.split(",") if t.strip()]
         if not temp_strings:
             _LOGGER.warning("Empty temperature forecast after parsing")
             return None
 
-        # Begränsa antal timmar om angivet
+        # Limit number of hours if specified
         if max_hours is not None and max_hours > 0:
             temp_strings = temp_strings[:max_hours]
 
@@ -239,7 +239,7 @@ def safe_parse_temperature_forecast(
             try:
                 temp = float(temp_str)
 
-                # Sanity check för temperaturer
+                # Sanity check for temperatures
                 if temp < MIN_REASONABLE_TEMP or temp > MAX_REASONABLE_TEMP:
                     extreme_temps.append((i, temp))
 
@@ -249,7 +249,7 @@ def safe_parse_temperature_forecast(
                 parse_errors.append((i, temp_str, str(e)))
                 continue
 
-        # Logga varningar för problem
+        # Log warnings for problems
         if parse_errors:
             _LOGGER.warning(f"Temperature parsing errors: {parse_errors}")
 
@@ -272,15 +272,15 @@ def validate_required_entities(
     hass: HomeAssistant, config: dict, strict: bool = True
 ) -> List[str]:
     """
-    Validera att alla nödvändiga entities finns och är tillgängliga.
+    Validate that all required entities exist and are available.
 
     Args:
         hass: HomeAssistant instance
-        config: Konfigurationsdictionary
-        strict: Om True, kontrollera även entity states
+        config: Configuration dictionary
+        strict: If True, also check entity states
 
     Returns:
-        Lista med felmeddelanden (tom om alla är giltiga)
+        List of error messages (empty if all are valid)
     """
     errors = []
 
@@ -299,7 +299,7 @@ def validate_required_entities(
         "holiday_end_datetime_entity": "Holiday End DateTime",
     }
 
-    # Kontrollera nödvändiga entities
+    # Check required entities
     for entity_key, description in required_entities.items():
         entity_id = config.get(entity_key)
         if not entity_id:
@@ -310,7 +310,7 @@ def validate_required_entities(
         if error:
             errors.append(error)
 
-    # Kontrollera valfria entities (logga bara varningar)
+    # Check optional entities (log warnings only)
     for entity_key, description in optional_entities.items():
         entity_id = config.get(entity_key)
         if entity_id:
@@ -325,16 +325,16 @@ def _validate_single_entity(
     hass: HomeAssistant, entity_id: str, description: str, check_state: bool
 ) -> Optional[str]:
     """
-    Validera en enskild entity.
+    Validate a single entity.
 
     Args:
         hass: HomeAssistant instance
-        entity_id: Entity ID att validera
-        description: Beskrivning för felmeddelanden
-        check_state: Om entity state ska kontrolleras
+        entity_id: Entity ID to validate
+        description: Description for error messages
+        check_state: Whether to check entity state
 
     Returns:
-        Felmeddelande eller None om OK
+        Error message or None if OK
     """
     if not entity_id or not isinstance(entity_id, str):
         return f"Invalid entity ID for {description}: {entity_id}"
@@ -365,16 +365,16 @@ def safe_get_entity_state_with_description(
     expected_type: Optional[type] = None,
 ) -> Optional[str]:
     """
-    Hämta entity state med beskrivande felmeddelanden och typkontroll.
+    Get entity state with descriptive error messages and type checking.
 
     Args:
         hass: HomeAssistant instance
-        entity_id: Entity ID att hämta state från
-        description: Läsbar beskrivning för felmeddelanden
-        expected_type: Förväntad typ för konvertering (valfritt)
+        entity_id: Entity ID to get state from
+        description: Readable description for error messages
+        expected_type: Expected type for conversion (optional)
 
     Returns:
-        Entity state eller None om otillgänglig
+        Entity state or None if unavailable
     """
     if not entity_id:
         _LOGGER.error(f"No entity_id provided for {description}")
@@ -398,7 +398,7 @@ def safe_get_entity_state_with_description(
 
         state = entity.state
 
-        # Typkontroll om angiven
+        # Type check if specified
         if expected_type is not None:
             try:
                 expected_type(state)
@@ -417,15 +417,15 @@ def safe_get_entity_state_with_description(
 
 def safe_array_slice(array: List[Any], start: int, length: int) -> List[Any]:
     """
-    Säkert slice:a en array med bounds checking.
+    Safely slice an array with bounds checking.
 
     Args:
-        array: Källarray
-        start: Startindex
-        length: Önskad längd
+        array: Source array
+        start: Start index
+        length: Desired length
 
     Returns:
-        Slice:ad array (kan vara kortare än begärd längd)
+        Sliced array (may be shorter than requested length)
     """
     if not array or not isinstance(array, list):
         return []
@@ -457,15 +457,15 @@ def safe_numeric_conversion(
     value: Any, target_type: type, default: Optional[Union[int, float]] = None
 ) -> Optional[Union[int, float]]:
     """
-    Säkert konvertera värde till numerisk typ.
+    Safely convert value to numeric type.
 
     Args:
-        value: Värde att konvertera
-        target_type: Måltyp (int eller float)
-        default: Standardvärde om konvertering misslyckas
+        value: Value to convert
+        target_type: Target type (int or float)
+        default: Default value if conversion fails
 
     Returns:
-        Konverterat värde eller default
+        Converted value or default
     """
     if value is None:
         return default
@@ -480,11 +480,11 @@ def safe_numeric_conversion(
 
 def log_entity_diagnostics(hass: HomeAssistant, entity_id: str) -> None:
     """
-    Logga diagnostisk information om en entity.
+    Log diagnostic information about an entity.
 
     Args:
         hass: HomeAssistant instance
-        entity_id: Entity ID att diagnostisera
+        entity_id: Entity ID to diagnose
     """
     try:
         entity = hass.states.get(entity_id)
@@ -500,7 +500,7 @@ def log_entity_diagnostics(hass: HomeAssistant, entity_id: str) -> None:
 
         if entity.attributes:
             _LOGGER.debug(f"  Attributes: {list(entity.attributes.keys())}")
-            # Logga några viktiga attribut
+            # Log some important attributes
             for attr in ["unit_of_measurement", "device_class", "friendly_name"]:
                 if attr in entity.attributes:
                     _LOGGER.debug(f"    {attr}: {entity.attributes[attr]}")
@@ -511,14 +511,14 @@ def log_entity_diagnostics(hass: HomeAssistant, entity_id: str) -> None:
 
 def create_error_summary(errors: List[str], max_display: int = 5) -> str:
     """
-    Skapa en sammanfattning av fel för visning.
+    Create a summary of errors for display.
 
     Args:
-        errors: Lista med felmeddelanden
-        max_display: Maximalt antal fel att visa
+        errors: List of error messages
+        max_display: Maximum number of errors to display
 
     Returns:
-        Formaterad felsträng
+        Formatted error string
     """
     if not errors:
         return "No errors"
@@ -533,13 +533,13 @@ def create_error_summary(errors: List[str], max_display: int = 5) -> str:
 
 def validate_config_completeness(config: dict) -> Tuple[bool, List[str]]:
     """
-    Validera att konfigurationen är komplett.
+    Validate that the configuration is complete.
 
     Args:
-        config: Konfigurationsdictionary
+        config: Configuration dictionary
 
     Returns:
-        Tuple med (is_valid, list_of_issues)
+        Tuple of (is_valid, list_of_issues)
     """
     issues = []
     required_keys = [
@@ -553,7 +553,7 @@ def validate_config_completeness(config: dict) -> Tuple[bool, List[str]]:
         if not config.get(key):
             issues.append(f"Missing required config key: {key}")
 
-    # Kontrollera att värden är strängar
+    # Check that values are strings
     for key, value in config.items():
         if key.endswith("_entity") and value is not None and not isinstance(value, str):
             issues.append(f"Config key {key} should be string, got {type(value)}")
