@@ -2,18 +2,21 @@ from datetime import datetime
 import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import as_datetime
-from homeassistant.const import STATE_ON # Import STATE_ON
+from homeassistant.const import STATE_ON  # Import STATE_ON
 
 _LOGGER = logging.getLogger(__name__)
 
 # Constants
-HOLIDAY_TARGET_TEMPERATURE = 16.0 # Celsius - This is the target temperature when Holiday Mode is active.
+HOLIDAY_TARGET_TEMPERATURE = (
+    16.0  # Celsius - This is the target temperature when Holiday Mode is active.
+)
+
 
 def is_holiday_mode_active(
     hass: HomeAssistant,
     holiday_mode_boolean_entity_id: str | None,
     holiday_start_datetime_entity_id: str | None,
-    holiday_end_datetime_entity_id: str | None
+    holiday_end_datetime_entity_id: str | None,
 ) -> bool:
     """
     Checks if the current time falls within the defined holiday period AND if the boolean switch is ON.
@@ -37,20 +40,26 @@ def is_holiday_mode_active(
         boolean_state = hass.states.get(holiday_mode_boolean_entity_id)
         # If the entity doesn't exist or its state is not 'on', holiday mode is not active.
         if not boolean_state or boolean_state.state != STATE_ON:
-            _LOGGER.debug(f"[PumpSteer - Holiday] Holiday mode boolean ({holiday_mode_boolean_entity_id}) is not ON. State: {boolean_state.state if boolean_state else 'N/A'}")
-            return False # Not active if the boolean is not ON
+            _LOGGER.debug(
+                f"[PumpSteer - Holiday] Holiday mode boolean ({holiday_mode_boolean_entity_id}) is not ON. State: {boolean_state.state if boolean_state else 'N/A'}"
+            )
+            return False  # Not active if the boolean is not ON
     else:
         # Important Note: If the boolean entity ID is not provided (None),
         # this code will proceed to check only the date range.
         # Consider if you want to enforce that the boolean must always be configured and return False here if it's None.
-        _LOGGER.debug("[PumpSteer - Holiday] Holiday mode boolean entity not configured. Skipping boolean check.")
-        pass # Continue to check the date range if the boolean is not configured
+        _LOGGER.debug(
+            "[PumpSteer - Holiday] Holiday mode boolean entity not configured. Skipping boolean check."
+        )
+        pass  # Continue to check the date range if the boolean is not configured
 
     # 2. Check Date Range (Existing Logic)
     # This part verifies if both start and end datetime entities are configured.
     # If not, it's impossible to determine a holiday period.
     if not holiday_start_datetime_entity_id or not holiday_end_datetime_entity_id:
-        _LOGGER.debug("[PumpSteer - Holiday] Holiday datetime entities not configured. Holiday mode inactive.")
+        _LOGGER.debug(
+            "[PumpSteer - Holiday] Holiday datetime entities not configured. Holiday mode inactive."
+        )
         return False
 
     holiday_start_state = hass.states.get(holiday_start_datetime_entity_id)

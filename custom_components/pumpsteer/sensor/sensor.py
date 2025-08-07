@@ -1,4 +1,4 @@
-# sensor.py - Städad version med enkel ML
+# sensor.py
 
 import logging
 from datetime import datetime, timedelta
@@ -13,12 +13,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
-# Importera befintliga moduler
+# Import existing modules
 from ..pre_boost import check_combined_preboost
 from ..holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
-from ..ml_adaptive import PumpSteerMLCollector
 from ..settings import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
@@ -36,7 +35,7 @@ from ..utils import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Enkel ML-import
+# Simple ML import
 try:
     from .ml_adaptive import PumpSteerMLCollector
     ML_AVAILABLE = True
@@ -70,7 +69,7 @@ def safe_get_current_price_and_category(
     hour: int,
     mode: str = "unknown"
 ) -> Tuple[float, str]:
-    """Säkert hämta aktuellt pris och kategori för given timme."""
+    """Safely get current price and category for a given hour."""
     if not prices or hour >= len(prices) or hour < 0:
         _LOGGER.warning(f"Invalid price data access: hour={hour}, prices_len={len(prices) if prices else 0}")
         return 0.0, "unknown"
@@ -86,10 +85,10 @@ def safe_get_current_price_and_category(
     return current_price, price_category
 
 class PumpSteerSensor(Entity):
-    """PumpSteer sensor för värmepumpskontroll."""
+    """PumpSteer sensor for heat pump control."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
-        """Initialisera PumpSteer-sensorn."""
+        """Initialize the PumpSteer sensor."""
         self.hass = hass
         self._config_entry = config_entry
         self._state = None
@@ -110,7 +109,7 @@ class PumpSteerSensor(Entity):
             sw_version="1.2.0"
         )
 
-        # Enkel ML-initialisering
+        # Simple ML initialization
         self.ml_collector = None
         self._ml_session_started = False
         self._ml_session_start_mode = None
@@ -169,7 +168,7 @@ class PumpSteerSensor(Entity):
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Kallas när entiteten läggs till i Home Assistant."""
+        """Called when the entity is added to Home Assistant."""
         if self.ml_collector and hasattr(self.ml_collector, 'async_load_data'):
             try:
                 await self.ml_collector.async_load_data()
@@ -181,11 +180,12 @@ class PumpSteerSensor(Entity):
         await super().async_added_to_hass()
 
     async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Handle options update event."""
         self._config_entry = entry
         await self.async_update()
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Hämta sensordata från Home Assistant."""
+        """Fetch sensor data from Home Assistant."""
         return {
             'indoor_temp': safe_float(get_state(self.hass, config.get("indoor_temp_entity"))),
             'outdoor_temp': safe_float(get_state(self.hass, config.get("real_outdoor_entity"))),
@@ -197,7 +197,7 @@ class PumpSteerSensor(Entity):
         }
 
     def _validate_required_data(self, sensor_data: Dict[str, Any], prices: List[float]) -> Optional[List[str]]:
-        """Validera att all nödvändig data finns tillgänglig."""
+        """Validate that all required data is available."""
         missing = []
 
         if sensor_data['indoor_temp'] is None:
@@ -222,7 +222,7 @@ class PumpSteerSensor(Entity):
         price_category: str,
         now_hour: int
     ) -> Tuple[float, str]:
-        """Beräkna uttemperatur baserat på aktuella förhållanden."""
+        """Calculate output temperature based on current conditions."""
         indoor_temp = sensor_data['indoor_temp']
         outdoor_temp = sensor_data['outdoor_temp']
         target_temp = sensor_data['target_temp']
@@ -276,38 +276,13 @@ class PumpSteerSensor(Entity):
                 outdoor_temp,
                 aggressiveness
             )
-            
-        
-            current_error = target_temp - indoor_temp
-            dt_hours = 1  # Gissar att sensorn körs timvis, ändra annars
-            delta = current_error * dt_hours
-        
-            prev_integral = safe_float(get_state(self.hass, "input_number.integral_temp_error")) or 0.0
-            new_integral = prev_integral + delta
-            new_integral = max(-1000, min(1000, new_integral))  # Begränsa
-        
-            # Skriv tillbaka till Home Assistant
-            self.hass.services.call(
-                "input_number", "set_value",
-                {"entity_id": "input_number.integral_temp_error", "value": round(new_integral, 2)},
-                blocking=False
-            )
-        
-            gain = safe_float(get_state(self.hass, "input_number.pumpsteer_integral_gain")) or 0.0
-            if gain > 0:
-                adjustment = gain * new_integral
-                fake_temp += adjustment
-                _LOGGER.debug(f"Integral control: error={current_error:.2f}, sum={new_integral:.2f}, gain={gain:.2f}, adj={adjustment:.2f}")
-        except Exception as e:
-            _LOGGER.warning(f"Integral logic failed: {e}")
-
             return fake_temp, mode
         except Exception as e:
             _LOGGER.error(f"Error in temperature calculation: {e}")
             return outdoor_temp, "error"
 
     def _collect_ml_data(self, sensor_data: Dict[str, Any], mode: str, fake_temp: float) -> None:
-        """Samla data för maskininlärning."""
+        """Collect data for machine learning."""
         if not self.ml_collector:
             return
 
@@ -338,12 +313,28 @@ class PumpSteerSensor(Entity):
         except Exception as e:
             _LOGGER.debug(f"ML data collection error (non-critical): {e}")
 
+    def _add_ml_attributes(self) -> None:
+        """Add ML attributes to sensor attributes."""
+        if not self.ml_collector:
+            return
+
+        try:
+            ml_status = self.ml_collector.get_status()
+            self._attributes.update({
+                "ML_Available": True,
+                "ML_Status": "Collecting data" if ml_status["collecting_data"] else "Ready",
+                "ML_Sessions_Collected": ml_status["sessions_collected"]
+            })
+
+        except Exception as e:
+            _LOGGER.debug(f"ML attributes error (non-critical): {e}")
+
     async def _get_price_data(
         self,
         config: Dict[str, Any],
         now_hour: int
     ) -> Tuple[List[float], float, str, List[str]]:
-        """Hämta prisdata och klassificera priser."""
+        """Fetch price data and classify prices."""
         entity_id = config.get("electricity_price_entity")
 
         if not entity_id:
@@ -399,7 +390,7 @@ class PumpSteerSensor(Entity):
         categories: List[str],
         now_hour: int
     ) -> Dict[str, Any]:
-        """Bygg attribut-dictionary för sensorn."""
+        """Build attribute dictionary for the sensor."""
         max_price = max(prices) if prices else 1.0
         price_factor = current_price / max_price if max_price > 0 else 0
         braking_threshold_ratio = 1.0 - (sensor_data['aggressiveness'] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
@@ -419,30 +410,30 @@ class PumpSteerSensor(Entity):
         next_3_hours_prices = safe_array_slice(prices, now_hour, 3)
 
         attributes = {
-            "Mode": mode,
-            "Fake Outdoor Temperature": self._state,
-            "Price Category": price_category,
-            "Status": "OK",
-            "Current Price": round(current_price, 3),
-            "Max Price": round(max_price, 3),
-            "Aggressiveness": sensor_data['aggressiveness'],
-            "Inertia": sensor_data['inertia'],
-            "Target Temperature": sensor_data['target_temp'],
-            "Indoor Temperature": sensor_data['indoor_temp'],
-            "Outdoor Temperature": sensor_data['outdoor_temp'],
-            "Summer Threshold": sensor_data['summer_threshold'],
-            "Braking Threshold (%)": round(braking_threshold_ratio * 100, 1),
-            "Price Factor (%)": round(price_factor * 100, 1),
-            "Holiday Mode": holiday,
-            "Last Updated": dt_util.now().isoformat(),
-            "Temp Error (°C)": round(sensor_data['indoor_temp'] - sensor_data['target_temp'], 2),
-            "To Summer Threshold (°C)": round(sensor_data['summer_threshold'] - sensor_data['outdoor_temp'], 2),
-            "Next 3 Hours Prices": next_3_hours_prices,
-            "Saving Potential (SEK/kWh)": round(max_price - current_price, 3),
-            "Decision Reason": decision_reason,
-            "Price Categories All Hours": categories,
-            "Current Hour": now_hour,
-            "Data Quality": {
+            "mode": mode,
+            "fake_outdoor_temperature": self._state,
+            "price_category": price_category,
+            "status": "ok",
+            "current_price": round(current_price, 3),
+            "max_price": round(max_price, 3),
+            "aggressiveness": sensor_data['aggressiveness'],
+            "inertia": sensor_data['inertia'],
+            "target_temperature": sensor_data['target_temp'],
+            "indoor_temperature": sensor_data['indoor_temp'],
+            "outdoor_temperature": sensor_data['outdoor_temp'],
+            "summer_threshold": sensor_data['summer_threshold'],
+            "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
+            "price_factor_percent": round(price_factor * 100, 1),
+            "holiday_mode": holiday,
+            "last_updated": dt_util.now().isoformat(),
+            "temp_error_c": round(sensor_data['indoor_temp'] - sensor_data['target_temp'], 2),
+            "to_summer_threshold_c": round(sensor_data['summer_threshold'] - sensor_data['outdoor_temp'], 2),
+            "next_3_hours_prices": next_3_hours_prices,
+            "saving_potential_sek_per_kwh": round(max_price - current_price, 3),
+            "decision_reason": decision_reason,
+            "price_categories_all_hours": categories,
+            "current_hour": now_hour,
+            "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
                 "forecast_available": bool(sensor_data['outdoor_temp_forecast_entity'])
@@ -452,7 +443,7 @@ class PumpSteerSensor(Entity):
         return attributes
 
     async def async_update(self) -> None:
-        """Uppdatera sensordata."""
+        """Update sensor data."""
         try:
             update_time = dt_util.now()
             now_hour = update_time.hour
@@ -495,6 +486,9 @@ class PumpSteerSensor(Entity):
 
             if self.ml_collector:
                 self._collect_ml_data(sensor_data, mode, fake_temp)
+                self._add_ml_attributes()
+
+            self._last_update_time = update_time
 
         except Exception as e:
             if not self.ml_collector:
@@ -514,6 +508,6 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Sätt upp sensorn."""
+    """Set up the PumpSteer sensor entity."""
     sensor = PumpSteerSensor(hass, config_entry)
     async_add_entities([sensor], update_before_add=True)
