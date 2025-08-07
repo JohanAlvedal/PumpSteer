@@ -1,5 +1,4 @@
 {
-  "brand_image": "https://brands.home-assistant.io/pumpsteer/logo.png",
   "codeowners": ["@johanalvedal"],
   "config_flow": true,
   "dependencies": ["recorder"],
