@@ -200,7 +200,7 @@ class PumpSteerMLSensor(Entity):
             recs = []
 
         # Format recommendations
-        recommendations_text = recs if recs else "Still collecting data…"
+        recommendations_text = recs if recs else "Collecting data…"
 
         # Build attributes with safe access
         attributes = {
