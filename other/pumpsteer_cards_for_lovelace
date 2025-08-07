@@ -15,26 +15,36 @@ entities:
     name: Preboost aktiv
     secondary_info: last-changed
   - entity: sensor.pumpsteer_is_braking
+    name: Broms aktiv
     secondary_info: last-changed
   - type: divider
   - entity: sensor.real_outdoor_temperature
-    name: Ute (verklig)
+    name: Outdoor (°C)
     secondary_info: last-changed
-  - entity: sensor.shelly_h_t_temp_temperature
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: indoor_temperature
+    name: Indoor (°C)
+  - entity: sensor.pumpsteer_current_price_level
+    name: Elprisnivå
+    icon: mdi:chart-bell-curve-cumulative
+    secondary_info: last-changed
   - type: divider
-  - entity: input_number.pumpsteer_aggressiveness
   - entity: input_number.house_inertia
+    secondary_info: last-changed
+  - entity: input_number.pumpsteer_aggressiveness
+    secondary_info: last-changed
   - entity: input_number.indoor_target_temperature
   - entity: input_number.pumpsteer_summer_threshold
   - entity: input_text.hourly_forecast_temperatures
     name: Forecast Data (raw)
     secondary_info: last-changed
-  - entity: input_select.pumpsteer_price_model
   - entity: sensor.pumpsteer_price_category
-  - entity: sensor.pumpsteer_operating_mode
   - entity: sensor.pumpsteer_status_summary
   - entity: sensor.pumpsteer_efficiency_score
   - entity: input_boolean.autotune_inertia
+  - entity: input_select.pumpsteer_price_model
+
 
 ###### Attributes #####
 
@@ -43,83 +53,83 @@ title: PumpSteer
 entities:
   - entity: sensor.pumpsteer
     name: Status
-    attribute: Status
+    attribute: status
     icon: mdi:check-circle
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Mode
+    attribute: mode
     name: Mode
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Fake Outdoor Temperature
+    attribute: fake_outdoor_temperature
     name: Fake Outdoor Temp (°C)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Price Category
+    attribute: price_category
     name: Price Category
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Current Price
+    attribute: current_price
     name: Current Price (SEK/kWh)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Max Price
+    attribute: max_price
     name: Max Price (SEK/kWh)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Aggressiveness
+    attribute: aggressiveness
     name: Aggressiveness
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Inertia
+    attribute: inertia
     name: Inertia
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Target Temperature
+    attribute: target_temperature
     name: Target Temp (°C)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Indoor Temperature
+    attribute: indoor_temperature
     name: Indoor Temp (°C)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Outdoor Temperature
+    attribute: outdoor_temperature
     name: Outdoor Temp (°C)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Braking Threshold (%)
+    attribute: braking_threshold_percent
     name: Braking Threshold (%)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Price Factor (%)
+    attribute: price_factor_percent
     name: Price Factor (%)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Holiday Mode
+    attribute: holiday_mode
     name: Holiday Mode
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Last Updated
+    attribute: last_updated
     name: Last Updated
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Temp Error (°C)
+    attribute: temp_error_c
     name: Temp Error (°C)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: To Summer Threshold (°C)
+    attribute: to_summer_threshold_c
     name: To Summer Threshold (°C)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Next 3 Hours Prices
-    name: Next 3h Prices (SEK/kWh)
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Saving Potential (SEK/kWh)
+    attribute: saving_potential_sek_per_kwh
     name: Saving Potential (SEK/kWh)
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Decision Reason
+    attribute: next_3_hours_prices
+    name: Next 3h Prices (SEK/kWh)
+  - type: attribute
+    entity: sensor.pumpsteer
+    attribute: decision_reason
     name: Decision Reason
 
 
@@ -186,38 +196,56 @@ series:
     color: "#f44336"
     stroke_width: 2
 
+####
+
+type: entities
+title: 🔧 PumpSteer – Semster
+show_header_toggle: false
+entities:
+  - entity: input_boolean.holiday_mode
+  - entity: input_datetime.holiday_start
+  - entity: input_datetime.holiday_end
+###################
+
 
 ## 1. Enkel huvudstatus
 
-```yaml
 type: entities
-title: 🔥 PumpSteer Status
+title: 🔧 PumpSteer – Drift & Status (Enkel)
 show_header_toggle: false
 entities:
   - entity: sensor.pumpsteer
-    name: Fake Utomhustemperatur
-    icon: mdi:thermometer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Mode
-    name: Läge
-    icon: mdi:cog
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Price Category
-    name: Priskategori
-    icon: mdi:flash
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Status
+    name: Fejkad utetemperatur
+    secondary_info: last-changed
+  - entity: sensor.pumpsteer_status_summary
     name: Status
-    icon: mdi:check-circle
+    secondary_info: last-changed
+  - entity: sensor.pumpsteer_is_preboosting
+    name: Preboost aktiv
+    secondary_info: last-changed
+  - entity: sensor.pumpsteer_is_braking
+    name: Broms aktiv
+    secondary_info: last-changed
+  - entity: sensor.real_outdoor_temperature
+    name: Ute (°C)
+    secondary_info: last-changed
   - type: attribute
     entity: sensor.pumpsteer
-    attribute: Decision Reason
-    name: Anledning
-    icon: mdi:lightbulb
-```
+    attribute: indoor_temperature
+    name: Inomhus Temp (°C)
+  - entity: input_number.pumpsteer_aggressiveness
+    name: Aggrevisitet
+  - entity: input_number.indoor_target_temperature
+    name: Måltemperatur
+  - entity: input_number.pumpsteer_summer_threshold
+    name: Sommartröskel
+  - entity: input_number.house_inertia
+    name: Husets Tröghet
+    secondary_info: last-changed
+  - entity: input_boolean.autotune_inertia
+    name: Autotune aktiverat
+  - entity: sensor.pumpsteer_data_quality
+
 
 ## 2. Temperaturer
 
