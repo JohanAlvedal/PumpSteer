@@ -67,12 +67,12 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         # Only the entities that the user actually selects
-        user_selected_entities = {
-            "indoor_temp_entity": "Indoor temperature sensor",
-            "real_outdoor_entity": "Outdoor temperature sensor",
-            "electricity_price_entity": "Electricity price sensor",
-        }
-
+        user_selected_entities = [
+            "indoor_temp_entity",
+            "real_outdoor_entity",
+            "electricity_price_entity",
+        ]
+        
         # Hardcoded entities that should always exist
         hardcoded_entities = {
             "hourly_forecast_temperatures_entity": "Temperature forecast input_text",
@@ -81,19 +81,20 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "holiday_mode_boolean_entity": "Holiday mode boolean",
             "holiday_start_datetime_entity": "Holiday start datetime",
             "holiday_end_datetime_entity": "Holiday end datetime",
+            "auto_tune_inertia_entity": "Autotune inertia boolean",
         }
 
         # Check user-selected entities (block if missing)
-        for field, description in user_selected_entities.items():
+        for field in user_selected_entities:
             entity_id = user_input.get(field)
             if not entity_id:
                 errors[field] = f"Required: {description}"
                 continue
 
             if not await self._entity_exists(entity_id):
-                errors[field] = f"Entity not found: {entity_id}"
+                errors[field] = "required"
             elif not await self._entity_available(entity_id):
-                errors[field] = f"Entity unavailable: {entity_id}"
+                errors[field] = "entity_unavailable"
 
         # Check hardcoded entities (warn only, do not block)
         for field, description in hardcoded_entities.items():

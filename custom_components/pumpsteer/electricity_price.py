@@ -1,7 +1,7 @@
 # FIXED electricity_price.py - Correct database access for Home Assistant 2025
 
 import numpy as np
-from typing import List, Dict, Optional
+from typing import List, Dict
 import logging
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
@@ -24,7 +24,6 @@ from .settings import (
     PRICE_CATEGORIES,
     DEFAULT_TRAILING_HOURS,
     MAX_PRICE_WARNING_THRESHOLD,
-    VERY_CHEAP_MULTIPLIER,
     CHEAP_MULTIPLIER,
     NORMAL_MULTIPLIER,
     EXPENSIVE_MULTIPLIER,
@@ -85,9 +84,6 @@ def classify_prices(price_list: List[float], percentiles: List[float] = None) ->
         raise ValueError("Exactly 4 percentiles required for 5-category classification")
         
     price_array = np.array(price_list)
-    
-    # First, handle negative prices
-    is_negative = price_array < 0
     
     # Filter out negative prices for percentile calculation
     positive_prices = price_array[price_array >= 0]
@@ -326,10 +322,6 @@ async def async_get_forecast_prices(
     """  
     try:
 
-        # from datetime import datetime  
-
-        recorder = get_instance(hass)
-        
         # Get entity's attributes which often contain future prices
         state = hass.states.get(price_entity_id)
         if not state:

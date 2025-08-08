@@ -4,13 +4,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.typing import StateType
 
-_LOGGER = logging.getLogger(__name__)
+from .settings import (
+    MIN_REASONABLE_TEMP,
+    MAX_REASONABLE_TEMP,
+    MIN_REASONABLE_PRICE,
+    MAX_REASONABLE_PRICE,
+)
 
-# Constants for validation
-MIN_REASONABLE_TEMP = -50.0
-MAX_REASONABLE_TEMP = 60.0
-MIN_REASONABLE_PRICE = -2.0  # Negative prices can occur
-MAX_REASONABLE_PRICE = 15.0
+_LOGGER = logging.getLogger(__name__)
 
 
 def safe_float(
@@ -146,33 +147,41 @@ def safe_get_price_data(
 
     Returns:
         Tuple of (current_price, max_price, price_factor)
+        where price_factor is normalized between 0 and 1 based on
+        the day's minimum and maximum prices
     """
     if not prices or not isinstance(prices, list):
         _LOGGER.warning("No electricity prices available or invalid format")
         return 0.0, 0.0, 0.0
 
-    # Filter and convert to valid prices
-    valid_prices = []
+    # Convert prices while preserving indices so that current_hour refers to
+    # the original position in the list.  Invalid entries are stored as None
+    # and excluded from statistics, preventing index shifts.
+    converted_prices: List[Optional[float]] = []
     invalid_count = 0
 
     for i, price in enumerate(prices):
-        if price is not None:
-            try:
-                price_float = float(price)
-
-                # Basic sanity check
-                if MIN_REASONABLE_PRICE <= price_float <= MAX_REASONABLE_PRICE:
-                    valid_prices.append(price_float)
-                else:
-                    _LOGGER.warning(f"Extreme price at index {i}: {price_float}")
-                    valid_prices.append(price_float)  # Still keep for calculations
-
-            except (ValueError, TypeError):
-                _LOGGER.warning(f"Invalid price value at index {i}: {price}")
-                invalid_count += 1
-                continue
-        else:
+        if price is None:
+            converted_prices.append(None)
             invalid_count += 1
+            continue
+
+        try:
+            price_float = float(price)
+
+            # Basic sanity check
+            if MIN_REASONABLE_PRICE <= price_float <= MAX_REASONABLE_PRICE:
+                converted_prices.append(price_float)
+            else:
+                _LOGGER.warning(f"Extreme price at index {i}: {price_float}")
+                converted_prices.append(price_float)
+
+        except (ValueError, TypeError):
+            _LOGGER.warning(f"Invalid price value at index {i}: {price}")
+            converted_prices.append(None)
+            invalid_count += 1
+
+    valid_prices = [p for p in converted_prices if p is not None]
 
     if not valid_prices:
         _LOGGER.error("No valid electricity prices found in list")
@@ -183,13 +192,19 @@ def safe_get_price_data(
             f"Found {invalid_count} invalid price values in list of {len(prices)}"
         )
 
-    # Calculate current price
-    if current_hour is not None and 0 <= current_hour < len(valid_prices):
-        current_price = valid_prices[current_hour]
+    # Calculate current price using the original index
+    if (
+        current_hour is not None
+        and 0 <= current_hour < len(converted_prices)
+        and converted_prices[current_hour] is not None
+    ):
+        current_price = converted_prices[current_hour]  # type: ignore[assignment]
     else:
-        current_price = valid_prices[0]  # Fallback to first price
+        current_price = valid_prices[0]  # Fallback to first valid price
         if current_hour is not None:
-            _LOGGER.warning(f"Invalid current_hour {current_hour}, using first price")
+            _LOGGER.warning(
+                f"Invalid current_hour {current_hour} or price missing, using first price"
+            )
 
     max_price = max(valid_prices)
     min_price = min(valid_prices)
