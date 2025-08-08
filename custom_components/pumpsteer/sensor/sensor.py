@@ -15,7 +15,7 @@ import homeassistant.util.dt as dt_util
 
 # Import existing modules
 from ..pre_boost import check_combined_preboost
-from ..holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
+from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
 from ..settings import (
