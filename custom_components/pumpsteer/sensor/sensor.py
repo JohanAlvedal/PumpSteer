@@ -37,12 +37,12 @@ _LOGGER = logging.getLogger(__name__)
 
 # Simple ML import
 try:
-    from .ml_adaptive import PumpSteerMLCollector
+    from ..ml_adaptive import PumpSteerMLCollector
     ML_AVAILABLE = True
     _LOGGER.info("ML features available")
 except ImportError as e:
     ML_AVAILABLE = False
-    _LOGGER.info(f"ML features disabled: {e}")
+    _LOGGER.warning(f"ML features disabled: {e}")
 
 DOMAIN = "pumpsteer"
 
