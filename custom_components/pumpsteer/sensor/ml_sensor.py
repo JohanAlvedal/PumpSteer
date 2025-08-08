@@ -55,7 +55,6 @@ class PumpSteerMLSensor(Entity):
         self.ml = None
         self._last_error = None
 
-        }
         self._attr_device_info = DeviceInfo(
             identifiers={("pumpsteer", config_entry.entry_id)},
             name="PumpSteer",
