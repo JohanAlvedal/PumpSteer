@@ -146,6 +146,8 @@ def safe_get_price_data(
 
     Returns:
         Tuple of (current_price, max_price, price_factor)
+        where price_factor is normalized between 0 and 1 based on
+        the day's minimum and maximum prices
     """
     if not prices or not isinstance(prices, list):
         _LOGGER.warning("No electricity prices available or invalid format")
@@ -194,6 +196,15 @@ def safe_get_price_data(
     max_price = max(valid_prices)
     min_price = min(valid_prices)
     price_factor = current_price / max_price if max_price > 0 else 0.0
+
+    price_range = max_price - min_price
+    if price_range > 0:
+        price_factor = (current_price - min_price) / price_range
+    else:
+        price_factor = 0.0
+
+    # Clamp to 0..1
+    price_factor = max(0.0, min(price_factor, 1.0))
 
     _LOGGER.debug(
         f"Price data: current={current_price:.3f}, max={max_price:.3f}, "
