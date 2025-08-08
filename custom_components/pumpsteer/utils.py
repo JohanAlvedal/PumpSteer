@@ -153,28 +153,34 @@ def safe_get_price_data(
         _LOGGER.warning("No electricity prices available or invalid format")
         return 0.0, 0.0, 0.0
 
-    # Filter and convert to valid prices
-    valid_prices = []
+    # Convert prices while preserving indices so that current_hour refers to
+    # the original position in the list.  Invalid entries are stored as None
+    # and excluded from statistics, preventing index shifts.
+    converted_prices: List[Optional[float]] = []
     invalid_count = 0
 
     for i, price in enumerate(prices):
-        if price is not None:
-            try:
-                price_float = float(price)
-
-                # Basic sanity check
-                if MIN_REASONABLE_PRICE <= price_float <= MAX_REASONABLE_PRICE:
-                    valid_prices.append(price_float)
-                else:
-                    _LOGGER.warning(f"Extreme price at index {i}: {price_float}")
-                    valid_prices.append(price_float)  # Still keep for calculations
-
-            except (ValueError, TypeError):
-                _LOGGER.warning(f"Invalid price value at index {i}: {price}")
-                invalid_count += 1
-                continue
-        else:
+        if price is None:
+            converted_prices.append(None)
             invalid_count += 1
+            continue
+
+        try:
+            price_float = float(price)
+
+            # Basic sanity check
+            if MIN_REASONABLE_PRICE <= price_float <= MAX_REASONABLE_PRICE:
+                converted_prices.append(price_float)
+            else:
+                _LOGGER.warning(f"Extreme price at index {i}: {price_float}")
+                converted_prices.append(price_float)
+
+        except (ValueError, TypeError):
+            _LOGGER.warning(f"Invalid price value at index {i}: {price}")
+            converted_prices.append(None)
+            invalid_count += 1
+
+    valid_prices = [p for p in converted_prices if p is not None]
 
     if not valid_prices:
         _LOGGER.error("No valid electricity prices found in list")
@@ -185,26 +191,23 @@ def safe_get_price_data(
             f"Found {invalid_count} invalid price values in list of {len(prices)}"
         )
 
-    # Calculate current price
-    if current_hour is not None and 0 <= current_hour < len(valid_prices):
-        current_price = valid_prices[current_hour]
+    # Calculate current price using the original index
+    if (
+        current_hour is not None
+        and 0 <= current_hour < len(converted_prices)
+        and converted_prices[current_hour] is not None
+    ):
+        current_price = converted_prices[current_hour]  # type: ignore[assignment]
     else:
-        current_price = valid_prices[0]  # Fallback to first price
+        current_price = valid_prices[0]  # Fallback to first valid price
         if current_hour is not None:
-            _LOGGER.warning(f"Invalid current_hour {current_hour}, using first price")
+            _LOGGER.warning(
+                f"Invalid current_hour {current_hour} or price missing, using first price"
+            )
 
     max_price = max(valid_prices)
     min_price = min(valid_prices)
     price_factor = current_price / max_price if max_price > 0 else 0.0
-
-    price_range = max_price - min_price
-    if price_range > 0:
-        price_factor = (current_price - min_price) / price_range
-    else:
-        price_factor = 0.0
-
-    # Clamp to 0..1
-    price_factor = max(0.0, min(price_factor, 1.0))
 
     _LOGGER.debug(
         f"Price data: current={current_price:.3f}, max={max_price:.3f}, "
