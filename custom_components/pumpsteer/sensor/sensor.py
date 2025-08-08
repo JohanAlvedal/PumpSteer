@@ -1,7 +1,8 @@
 # sensor.py
 
 import logging
-#from datetime import datetime, timedelta
+import json
+from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
@@ -45,6 +46,17 @@ except ImportError as e:
     _LOGGER.warning(f"ML features disabled: {e}")
 
 DOMAIN = "pumpsteer"
+
+def _get_version() -> str:
+    manifest_path = Path(__file__).resolve().parents[1] / "manifest.json"
+    try:
+        with open(manifest_path) as manifest_file:
+            return json.load(manifest_file).get("version", "1.3.4")
+    except FileNotFoundError:
+        return "1.3.4"
+
+
+SW_VERSION = _get_version()
 
 # Hardcoded entities
 HARDCODED_ENTITIES = {
@@ -106,7 +118,7 @@ class PumpSteerSensor(Entity):
             name="PumpSteer",
             manufacturer="Custom",
             model="Heat Pump Controller",
-            sw_version="1.2.0"
+            sw_version=SW_VERSION,
         )
 
         # Simple ML initialization
