@@ -3,14 +3,9 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import as_datetime
 from homeassistant.const import STATE_ON  # Import STATE_ON
+from .settings import HOLIDAY_TEMP
 
 _LOGGER = logging.getLogger(__name__)
-
-# Constants
-HOLIDAY_TARGET_TEMPERATURE = (
-    16.0  # Celsius - This is the target temperature when Holiday Mode is active.
-)
-
 
 def is_holiday_mode_active(
     hass: HomeAssistant,
@@ -20,7 +15,7 @@ def is_holiday_mode_active(
 ) -> bool:
     """
     Checks if the current time falls within the defined holiday period AND if the boolean switch is ON.
-
+    When active, the target temperature should be set to HOLIDAY_TEMP.
     Args:
         hass: The Home Assistant instance.
         holiday_mode_boolean_entity_id: The entity ID for the holiday mode boolean switch
@@ -96,7 +91,7 @@ def is_holiday_mode_active(
         if holiday_start_time <= current_time <= holiday_end_time:
             _LOGGER.debug(
                 f"[PumpSteer - Holiday] Holiday mode active (date range). Current: {current_time}, "
-                f"Start: {holiday_start_time}, End: {holiday_end_time}"
+                f"Start: {holiday_start_time}, End: {holiday_end_time}. Using target temperature {HOLIDAY_TEMP}°C"
             )
             return True
         else:
