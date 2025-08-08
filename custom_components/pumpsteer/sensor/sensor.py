@@ -1,13 +1,13 @@
 # sensor.py
 
 import logging
-from datetime import datetime, timedelta
+#from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
-from homeassistant.const import STATE_UNAVAILABLE, Platform
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,10 +27,10 @@ from ..settings import (
     PREBOOST_OUTPUT_TEMP
 )
 from ..utils import (
-    safe_float, get_state, get_attr,
-    safe_get_price_data, safe_parse_temperature_forecast,
-    validate_required_entities, safe_get_entity_state_with_description,
-    safe_array_slice
+    safe_float,
+    get_state,
+    get_attr,
+    safe_array_slice,
 )
 
 _LOGGER = logging.getLogger(__name__)
