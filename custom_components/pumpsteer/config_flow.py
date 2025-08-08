@@ -81,6 +81,7 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "holiday_mode_boolean_entity": "Holiday mode boolean",
             "holiday_start_datetime_entity": "Holiday start datetime",
             "holiday_end_datetime_entity": "Holiday end datetime",
+            "auto_tune_inertia_entity": "Autotune inertia boolean",
         }
 
         # Check user-selected entities (block if missing)
