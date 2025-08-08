@@ -392,7 +392,15 @@ class PumpSteerSensor(Entity):
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor."""
         max_price = max(prices) if prices else 1.0
-        price_factor = current_price / max_price if max_price > 0 else 0
+        min_price = min(prices) if prices else 0.0
+
+        price_range = max_price - min_price
+        if price_range > 0:
+            price_factor = (current_price - min_price) / price_range
+        else:
+            price_factor = 0.0
+
+        price_factor = max(0.0, min(price_factor, 1.0))
         braking_threshold_ratio = 1.0 - (sensor_data['aggressiveness'] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
 
         decision_triggers = {
