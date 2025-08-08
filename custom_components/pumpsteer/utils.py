@@ -4,13 +4,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.typing import StateType
 
-_LOGGER = logging.getLogger(__name__)
+from .settings import (
+    MIN_REASONABLE_TEMP,
+    MAX_REASONABLE_TEMP,
+    MIN_REASONABLE_PRICE,
+    MAX_REASONABLE_PRICE,
+)
 
-# Constants for validation
-MIN_REASONABLE_TEMP = -50.0
-MAX_REASONABLE_TEMP = 60.0
-MIN_REASONABLE_PRICE = -2.0  # Negative prices can occur
-MAX_REASONABLE_PRICE = 15.0
+_LOGGER = logging.getLogger(__name__)
 
 
 def safe_float(
