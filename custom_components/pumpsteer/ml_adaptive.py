@@ -311,11 +311,13 @@ class PumpSteerMLCollector:
             # HOUSE_INERTIA recommendations (house inertia 0-5)
             if avg_duration > 120 and avg_inertia < 2.0:
                 recommendations.append(
-                    f"Heating takes a long time ({avg_duration:.1f}min) with house_inertia {avg_inertia:.1f}. Your house may be slower – try increasing house_inertia to {avg_inertia + 0.5:.1f}."
+                    f"Heating takes a long time ({avg_duration:.1f}min) with house_inertia {avg_inertia:.1f}. "
+                    f"Your house may be slower – try increasing house_inertia to {avg_inertia + 0.5:.1f}."
                 )
             elif avg_duration < 20 and avg_inertia > 2.0:
                 recommendations.append(
-                    f"Very short heating sessions ({avg_duration:.1f}min) with house_inertia {avg_inertia:.1f}. Your house responds quickly – consider decreasing house_inertia to {avg_inertia - 0.5:.1f}."
+                    f"Very short heating sessions ({avg_duration:.1f}min) with house_inertia {avg_inertia:.1f}. "
+                    f"Your house responds quickly – consider decreasing house_inertia to {avg_inertia - 0.5:.1f}."
                 )
 
             # COMBINATION analysis (aggressiveness + inertia)
