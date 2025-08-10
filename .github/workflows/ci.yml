@@ -36,7 +36,7 @@ jobs:
           echo "🤖 Or use the Auto-fix workflow in Actions"
         else
           echo "✅ Black formatting is correct"
-        fi
+        fi        git add .github/workflows/ci.yml
       continue-on-error: true
     
     - name: Flake8 linting

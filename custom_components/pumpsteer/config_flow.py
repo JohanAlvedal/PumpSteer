@@ -88,7 +88,7 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         for field in user_selected_entities:
             entity_id = user_input.get(field)
             if not entity_id:
-                errors[field] = f"Required: {description}"
+                errors[field] = f"Required: {field}"
                 continue
 
             if not await self._entity_exists(entity_id):
