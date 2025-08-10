@@ -24,7 +24,11 @@ HARDCODED_ENTITIES = {
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
         """Initialize PumpSteer options flow."""
+<<<<<<< HEAD
         self.config_entry = config_entry
+=======
+        super().__init__(config_entry)
+>>>>>>> 1d73b956ba0af0a2aaf5aa56f54147abd97d682f
 
     async def async_step_init(self, user_input=None):
         """Manage the options flow."""
