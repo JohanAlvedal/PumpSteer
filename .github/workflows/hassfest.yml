@@ -37,3 +37,57 @@ jobs:
               repo: context.repo.repo,
               body: '❌ Hassfest validation failed. Please check the logs and fix the issues.'
             })
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate with hassfest
+      uses: home-assistant/actions/hassfest@master
+
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        flake8 custom_components/pumpsteer
+
+    # (Valfritt) Kör tester om du har några
+    # - name: Run unit tests
+    #   run: |
+    #     pip install pytest
+    #     pytest
+
+    - name: Update version in manifest.json
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/pumpsteer/manifest.json
+
+    - name: Create ZIP for release
+      run: |
+        cd custom_components
+        zip -r ../pumpsteer.zip pumpsteer/
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+
+    - name: Upload release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./pumpsteer.zip
+        asset_name: pumpsteer.zip
+        asset_content_type: application/zip
+
+    - name: Clean up
+      run: rm pumpsteer.zip

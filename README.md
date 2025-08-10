@@ -51,6 +51,10 @@ If PumpSteer is not yet available in HACS:
 5. Restart Home Assistant
 6. Follow the setup guide and select helper entities
 
+**For a complete step-by-step installation guide, including setting up helper entities and automations, please refer to our wiki:**
+
+[**PumpSteer - Installation och Grundkonfiguration**](https://github.com/JohanAlvedal/PumpSteer/wiki/PumpSteer-%E2%80%90-Installation-och-Grundkonfiguration)
+
 ---
 
 ## 📦 Helper Entities (via `pumpsteer_package.yaml`)
