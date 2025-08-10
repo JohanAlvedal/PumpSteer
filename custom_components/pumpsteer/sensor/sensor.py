@@ -211,7 +211,6 @@ class PumpSteerSensor(Entity):
         }
 
     def _validate_required_data(self, sensor_data: Dict[str, Any], prices: List[float]) -> Optional[List[str]]:
-        """Validate that all required data is available."""
         missing = []
 
         if sensor_data['indoor_temp'] is None:
@@ -222,7 +221,10 @@ class PumpSteerSensor(Entity):
             missing.append("Target temperature")
         if not prices:
             missing.append("Electricity prices")
-        if sensor_data['outdoor_temp_forecast_entity'] and get_state(self.hass, sensor_data['outdoor_temp_forecast_entity']) is None:
+
+        # Only require forecast data if preboost is enabled
+        if sensor_data.get('preboost_enabled') and sensor_data['outdoor_temp_forecast_entity'] \
+        and get_state(self.hass, sensor_data['outdoor_temp_forecast_entity']) is None:
             missing.append("Outdoor temperature forecast entity data not available")
         elif not sensor_data['outdoor_temp_forecast_entity']:
             _LOGGER.debug("Outdoor temperature forecast entity not configured, skipping pre-boost temperature forecast check.")
