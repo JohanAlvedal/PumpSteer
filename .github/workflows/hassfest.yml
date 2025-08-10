@@ -15,6 +15,10 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # Veckovis kontroll måndag morgon
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   hassfest:
     name: Hassfest Validation
@@ -26,10 +30,12 @@ jobs:
       - name: Run Hassfest
         uses: home-assistant/actions/hassfest@master
         
-      - name: Comment on PR (if failed)
+      
+        - name: Comment on PR (if failed)
         if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             github.rest.issues.createComment({
               issue_number: context.issue.number,
