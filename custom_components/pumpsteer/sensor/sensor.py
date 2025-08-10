@@ -68,7 +68,8 @@ HARDCODED_ENTITIES = {
     "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
     "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
     "house_inertia_entity": "input_number.house_inertia",
-    "price_model_entity": "input_select.pumpsteer_price_model"
+    "price_model_entity": "input_select.pumpsteer_price_model",
+    "preboost_enabled_entity": "input_boolean.pumpsteer_preboost_enabled",
 }
 
 NEUTRAL_TEMP_THRESHOLD = 0.5
@@ -205,7 +206,8 @@ class PumpSteerSensor(Entity):
             'summer_threshold': safe_float(get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])) or DEFAULT_SUMMER_THRESHOLD,
             'aggressiveness': safe_float(get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])) or DEFAULT_AGGRESSIVENESS,
             'inertia': safe_float(get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])) or DEFAULT_HOUSE_INERTIA,
-            'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"]
+            'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"],
+            'preboost_enabled': (get_state(self.hass, HARDCODED_ENTITIES["preboost_enabled_entity"]) == "on")
         }
 
     def _validate_required_data(self, sensor_data: Dict[str, Any], prices: List[float]) -> Optional[List[str]]:
@@ -246,7 +248,10 @@ class PumpSteerSensor(Entity):
         preboost_mode = None
         temp_forecast_csv = None
 
-        if outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
+        # Allow preboost only if switch is ON
+        preboost_allowed = bool(sensor_data.get('preboost_enabled', False))
+
+        if preboost_allowed and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
             if outdoor_temp_forecast_entity:
                 temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
 
@@ -264,6 +269,8 @@ class PumpSteerSensor(Entity):
                     preboost_mode = None
             else:
                 _LOGGER.debug("No temperature forecast available for pre-boost check.")
+        elif not preboost_allowed:
+            _LOGGER.debug("Pre-boost disabled by switch; skipping pre-boost evaluation.")
 
         if preboost_mode == "preboost":
             _LOGGER.info(f"Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
@@ -457,7 +464,8 @@ class PumpSteerSensor(Entity):
                 "prices_count": len(prices),
                 "categories_count": len(categories),
                 "forecast_available": bool(sensor_data['outdoor_temp_forecast_entity'])
-            }
+            },
+            "preboost_enabled": bool(sensor_data.get('preboost_enabled', False)),
         }
 
         return attributes
