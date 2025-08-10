@@ -1,18 +1,33 @@
 # ml_sensor.py – Improved ML analysis sensor for PumpSteer
 
 import logging
+import json
+from pathlib import Path
 from typing import Dict, Any
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.helpers.device_registry import DeviceInfo
 import homeassistant.util.dt as dt_util
 
 from ..ml_adaptive import PumpSteerMLCollector
 from ..utils import safe_float, get_state
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_version() -> str:
+    manifest_path = Path(__file__).resolve().parents[1] / "manifest.json"
+    try:
+        with open(manifest_path) as manifest_file:
+            return json.load(manifest_file).get("version", "1.3.4")
+    except FileNotFoundError:
+        return "1.3.4"
+
+
+SW_VERSION = _get_version()
 
 # Important ML-related entities - these are critical for PumpSteer control
 ML_RELATED_ENTITIES = {
@@ -40,13 +55,13 @@ class PumpSteerMLSensor(Entity):
         self.ml = None
         self._last_error = None
 
-        self._attr_device_info = {
-            "identifiers": {("pumpsteer", config_entry.entry_id)},
-            "name": "PumpSteer",
-            "manufacturer": "Custom",
-            "model": "PumpSteer ML",
-            "sw_version": "1.2.0",
-        }
+        self._attr_device_info = DeviceInfo(
+            identifiers={("pumpsteer", config_entry.entry_id)},
+            name="PumpSteer",
+            manufacturer="Custom",
+            model="PumpSteer ML",
+            sw_version=SW_VERSION,
+        )
 
         # Initialize ML collector with error handling
         try:

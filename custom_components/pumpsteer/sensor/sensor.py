@@ -1,13 +1,14 @@
 # sensor.py
 
 import logging
-from datetime import datetime, timedelta
+import json
+from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
-from homeassistant.const import STATE_UNAVAILABLE, Platform
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -15,7 +16,7 @@ import homeassistant.util.dt as dt_util
 
 # Import existing modules
 from ..pre_boost import check_combined_preboost
-from ..holiday import is_holiday_mode_active, HOLIDAY_TARGET_TEMPERATURE
+from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
 from ..settings import (
@@ -27,24 +28,35 @@ from ..settings import (
     PREBOOST_OUTPUT_TEMP
 )
 from ..utils import (
-    safe_float, get_state, get_attr,
-    safe_get_price_data, safe_parse_temperature_forecast,
-    validate_required_entities, safe_get_entity_state_with_description,
-    safe_array_slice
+    safe_float,
+    get_state,
+    get_attr,
+    safe_array_slice,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 # Simple ML import
 try:
-    from .ml_adaptive import PumpSteerMLCollector
+    from ..ml_adaptive import PumpSteerMLCollector
     ML_AVAILABLE = True
     _LOGGER.info("ML features available")
 except ImportError as e:
     ML_AVAILABLE = False
-    _LOGGER.info(f"ML features disabled: {e}")
+    _LOGGER.warning(f"ML features disabled: {e}")
 
 DOMAIN = "pumpsteer"
+
+def _get_version() -> str:
+    manifest_path = Path(__file__).resolve().parents[1] / "manifest.json"
+    try:
+        with open(manifest_path) as manifest_file:
+            return json.load(manifest_file).get("version", "1.3.4")
+    except FileNotFoundError:
+        return "1.3.4"
+
+
+SW_VERSION = _get_version()
 
 # Hardcoded entities
 HARDCODED_ENTITIES = {
@@ -56,7 +68,8 @@ HARDCODED_ENTITIES = {
     "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
     "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
     "house_inertia_entity": "input_number.house_inertia",
-    "price_model_entity": "input_select.pumpsteer_price_model"
+    "price_model_entity": "input_select.pumpsteer_price_model",
+    "preboost_enabled_entity": "input_boolean.pumpsteer_preboost_enabled",
 }
 
 NEUTRAL_TEMP_THRESHOLD = 0.5
@@ -106,7 +119,7 @@ class PumpSteerSensor(Entity):
             name="PumpSteer",
             manufacturer="Custom",
             model="Heat Pump Controller",
-            sw_version="1.2.0"
+            sw_version=SW_VERSION,
         )
 
         # Simple ML initialization
@@ -193,11 +206,11 @@ class PumpSteerSensor(Entity):
             'summer_threshold': safe_float(get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])) or DEFAULT_SUMMER_THRESHOLD,
             'aggressiveness': safe_float(get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])) or DEFAULT_AGGRESSIVENESS,
             'inertia': safe_float(get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])) or DEFAULT_HOUSE_INERTIA,
-            'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"]
+            'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"],
+            'preboost_enabled': (get_state(self.hass, HARDCODED_ENTITIES["preboost_enabled_entity"]) == "on")
         }
 
     def _validate_required_data(self, sensor_data: Dict[str, Any], prices: List[float]) -> Optional[List[str]]:
-        """Validate that all required data is available."""
         missing = []
 
         if sensor_data['indoor_temp'] is None:
@@ -208,7 +221,10 @@ class PumpSteerSensor(Entity):
             missing.append("Target temperature")
         if not prices:
             missing.append("Electricity prices")
-        if sensor_data['outdoor_temp_forecast_entity'] and get_state(self.hass, sensor_data['outdoor_temp_forecast_entity']) is None:
+
+        # Only require forecast data if preboost is enabled
+        if sensor_data.get('preboost_enabled') and sensor_data['outdoor_temp_forecast_entity'] \
+        and get_state(self.hass, sensor_data['outdoor_temp_forecast_entity']) is None:
             missing.append("Outdoor temperature forecast entity data not available")
         elif not sensor_data['outdoor_temp_forecast_entity']:
             _LOGGER.debug("Outdoor temperature forecast entity not configured, skipping pre-boost temperature forecast check.")
@@ -234,7 +250,10 @@ class PumpSteerSensor(Entity):
         preboost_mode = None
         temp_forecast_csv = None
 
-        if outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
+        # Allow preboost only if switch is ON
+        preboost_allowed = bool(sensor_data.get('preboost_enabled', False))
+
+        if preboost_allowed and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
             if outdoor_temp_forecast_entity:
                 temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
 
@@ -252,6 +271,8 @@ class PumpSteerSensor(Entity):
                     preboost_mode = None
             else:
                 _LOGGER.debug("No temperature forecast available for pre-boost check.")
+        elif not preboost_allowed:
+            _LOGGER.debug("Pre-boost disabled by switch; skipping pre-boost evaluation.")
 
         if preboost_mode == "preboost":
             _LOGGER.info(f"Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
@@ -392,7 +413,15 @@ class PumpSteerSensor(Entity):
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor."""
         max_price = max(prices) if prices else 1.0
-        price_factor = current_price / max_price if max_price > 0 else 0
+        min_price = min(prices) if prices else 0.0
+
+        price_range = max_price - min_price
+        if price_range > 0:
+            price_factor = (current_price - min_price) / price_range
+        else:
+            price_factor = 0.0
+
+        price_factor = max(0.0, min(price_factor, 1.0))
         braking_threshold_ratio = 1.0 - (sensor_data['aggressiveness'] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
 
         decision_triggers = {
@@ -437,7 +466,8 @@ class PumpSteerSensor(Entity):
                 "prices_count": len(prices),
                 "categories_count": len(categories),
                 "forecast_available": bool(sensor_data['outdoor_temp_forecast_entity'])
-            }
+            },
+            "preboost_enabled": bool(sensor_data.get('preboost_enabled', False)),
         }
 
         return attributes

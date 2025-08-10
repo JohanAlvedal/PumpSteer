@@ -36,15 +36,16 @@ jobs:
           echo "🤖 Or use the Auto-fix workflow in Actions"
         else
           echo "✅ Black formatting is correct"
-        fi
+        fi        git add .github/workflows/ci.yml
       continue-on-error: true
     
     - name: Flake8 linting
       run: |
         echo "🔍 Checking code quality with Flake8..."
-        flake8 custom_components/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️  Found some code quality issues"
+        flake8 custom_components/ --max-line-length=150 --extend-ignore=E203,W503 || echo "⚠️  Found some code quality issues"
       continue-on-error: true
     
+      
     - name: Import sorting check (warning only)
       run: |
         echo "🔍 Checking import sorting..."

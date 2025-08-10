@@ -109,7 +109,7 @@ Virtual (fake) outdoor temperature sent to your heat pump.
 | `Outdoor Temperature`        | Real outdoor temperature                            |
 | `Summer Threshold`           | Threshold for summer mode                           |
 | `Braking Threshold (%)`      | Percent threshold to trigger braking                |
-| `Price Factor (%)`           | Current vs max price ratio                          |
+| `Price Factor (%)`           | Position of current price within daily range (0% = min, 100% = max) |
 | `Holiday Mode`               | Whether holiday mode is active                      |
 | `Last Updated`               | Last update timestamp                               |
 | `Temp Error (°C)`            | Deviation from target indoor temperature            |

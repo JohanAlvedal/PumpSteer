@@ -76,6 +76,10 @@ input_boolean:
     name: Autotune Inertia
     icon: mdi:robot
 
+  pumpsteer_preboost_enabled:
+    name: PumpSteer Preboost
+    icon: mdi:rocket-launch
+
 input_datetime:
   holiday_start:
     name: Holiday Start

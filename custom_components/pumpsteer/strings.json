@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "config.step.user.title",
+        "data": {
+          "indoor_temp_entity": "config.step.user.data.indoor_temp_entity",
+          "real_outdoor_entity": "config.step.user.data.real_outdoor_entity",
+          "electricity_price_entity": "config.step.user.data.electricity_price_entity"
+        }
+      }
+    },
+    "error": {
+      "required": "config.error.required",
+      "entity_not_found": "config.error.entity_not_found",
+      "entity_unavailable": "config.error.entity_unavailable"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "options.step.init.title",
+        "data": {
+          "indoor_temp_entity": "options.step.init.data.indoor_temp_entity",
+          "real_outdoor_entity": "options.step.init.data.real_outdoor_entity",
+          "electricity_price_entity": "options.step.init.data.electricity_price_entity"
+        }
+      }
+    },
+    "error": {
+      "required": "options.error.required",
+      "entity_not_found": "options.error.entity_not_found",
+      "entity_unavailable": "options.error.entity_unavailable"
+    }
+  }
+}
