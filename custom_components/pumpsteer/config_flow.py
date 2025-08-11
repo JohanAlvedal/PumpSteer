@@ -2,7 +2,7 @@ import voluptuous as vol
 import logging
 
 from homeassistant import config_entries
-from homeassistant.core import callback 
+from homeassistant.core import callback
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
@@ -72,7 +72,7 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "real_outdoor_entity",
             "electricity_price_entity",
         ]
-        
+
         # Hardcoded entities that should always exist
         hardcoded_entities = {
             "hourly_forecast_temperatures_entity": "Temperature forecast input_text",
