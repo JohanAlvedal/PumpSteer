@@ -163,8 +163,8 @@ class PumpSteerMLCollector:
                 "aggressiveness": initial.get("aggressiveness", 0),
                 "inertia": initial.get("inertia", 1.0),
                 "update_count": len(updates),
-                "start_temp_diff": initial.get("indoor_temp", 0) -
-                    initial.get("target_temp", 0),
+                "start_temp_diff": initial.get("indoor_temp", 0)
+                                 - initial.get("target_temp", 0),
             }
 
             # Classify session as successful or not
