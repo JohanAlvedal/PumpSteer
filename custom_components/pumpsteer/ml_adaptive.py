@@ -19,7 +19,7 @@ class PumpSteerMLCollector:
     Collects data for machine learning and provides basic analysis.
     Improved version with simple recommendations and trends.
     """
-
+    
     def __init__(
         self,
         hass: HomeAssistant,
@@ -163,8 +163,8 @@ class PumpSteerMLCollector:
                 "aggressiveness": initial.get("aggressiveness", 0),
                 "inertia": initial.get("inertia", 1.0),
                 "update_count": len(updates),
-                "start_temp_diff": initial.get("indoor_temp", 0)
-                - initial.get("target_temp", 0),
+                "start_temp_diff": initial.get("indoor_temp", 0) -
+                    initial.get("target_temp", 0),
             }
 
             # Classify session as successful or not
@@ -301,11 +301,11 @@ class PumpSteerMLCollector:
                 )
             elif most_used_agg >= 4 and success_rate < 70:
                 recommendations.append(
-                    f"Aggressiveness {most_used_agg} gives high savings but low comfort ({success_rate:.1f}% success). Consider decreasing to {most_used_agg-1} for better balance."
+                    f"Aggressiveness {most_used_agg} gives high savings but low comfort ({success_rate:.1f}% success). Consider decreasing to {most_used_agg - 1} for better balance."
                 )
             elif most_used_agg <= 2 and avg_duration < 45:
                 recommendations.append(
-                    f"Aggressiveness {most_used_agg} prioritizes comfort. You can increase to {most_used_agg+1} for more savings if comfort is acceptable."
+                    f"Aggressiveness {most_used_agg} prioritizes comfort. You can increase to {most_used_agg + 1} for more savings if comfort is acceptable."
                 )
 
             # HOUSE_INERTIA recommendations (house inertia 0-5)
@@ -409,8 +409,8 @@ class PumpSteerMLCollector:
                 self.last_gain_adjustment
                 and (
                     dt_util.now() - datetime.fromisoformat(self.last_gain_adjustment)
-                ).days
-                < 2
+                ).days <
+                2
             ):
                 return None
 
