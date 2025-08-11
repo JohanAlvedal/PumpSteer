@@ -7,6 +7,7 @@ from .settings import HOLIDAY_TEMP
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def is_holiday_mode_active(
     hass: HomeAssistant,
     holiday_mode_boolean_entity_id: str | None,
