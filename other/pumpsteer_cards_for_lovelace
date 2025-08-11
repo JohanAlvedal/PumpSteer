@@ -18,13 +18,15 @@ entities:
     name: Broms aktiv
     secondary_info: last-changed
   - type: divider
+  - entity: sensor.atc_fe8e_temperature
   - entity: sensor.real_outdoor_temperature
-    name: Outdoor (°C)
+    name: Outdoor
     secondary_info: last-changed
   - type: attribute
     entity: sensor.pumpsteer
     attribute: indoor_temperature
-    name: Indoor (°C)
+    name: Indoor
+    suffix: °C
   - entity: sensor.pumpsteer_current_price_level
     name: Elprisnivå
     icon: mdi:chart-bell-curve-cumulative
@@ -43,13 +45,15 @@ entities:
   - entity: sensor.pumpsteer_status_summary
   - entity: sensor.pumpsteer_efficiency_score
   - entity: input_boolean.autotune_inertia
+  - entity: input_boolean.pumpsteer_preboost_enabled
   - entity: input_select.pumpsteer_price_model
+state_color: true
 
 
 ###### Attributes #####
 
 type: entities
-title: PumpSteer
+title: PumpSteer Attribute
 entities:
   - entity: sensor.pumpsteer
     name: Status
@@ -62,7 +66,8 @@ entities:
   - type: attribute
     entity: sensor.pumpsteer
     attribute: fake_outdoor_temperature
-    name: Fake Outdoor Temp (°C)
+    name: Fake Outdoor Temp
+    suffix: °C
   - type: attribute
     entity: sensor.pumpsteer
     attribute: price_category
@@ -70,11 +75,13 @@ entities:
   - type: attribute
     entity: sensor.pumpsteer
     attribute: current_price
-    name: Current Price (SEK/kWh)
+    name: Current Price
+    suffix: SEK/kWh
   - type: attribute
     entity: sensor.pumpsteer
     attribute: max_price
-    name: Max Price (SEK/kWh)
+    name: Max Price
+    suffix: SEK/kWh
   - type: attribute
     entity: sensor.pumpsteer
     attribute: aggressiveness
@@ -86,23 +93,28 @@ entities:
   - type: attribute
     entity: sensor.pumpsteer
     attribute: target_temperature
-    name: Target Temp (°C)
+    name: Target Temp
+    suffix: °C
   - type: attribute
     entity: sensor.pumpsteer
     attribute: indoor_temperature
-    name: Indoor Temp (°C)
+    name: Indoor Temp
+    suffix: °C
   - type: attribute
     entity: sensor.pumpsteer
     attribute: outdoor_temperature
-    name: Outdoor Temp (°C)
+    name: Outdoor Temp
+    suffix: °C
   - type: attribute
     entity: sensor.pumpsteer
     attribute: braking_threshold_percent
-    name: Braking Threshold (%)
+    name: Braking Threshold
+    suffix: "%"
   - type: attribute
     entity: sensor.pumpsteer
     attribute: price_factor_percent
-    name: Price Factor (%)
+    name: Price Factor
+    suffix: "%"
   - type: attribute
     entity: sensor.pumpsteer
     attribute: holiday_mode
@@ -114,25 +126,27 @@ entities:
   - type: attribute
     entity: sensor.pumpsteer
     attribute: temp_error_c
-    name: Temp Error (°C)
+    name: Temp Error
+    suffix: °C
   - type: attribute
     entity: sensor.pumpsteer
     attribute: to_summer_threshold_c
-    name: To Summer Threshold (°C)
+    name: To Summer Threshold
+    suffix: °C
   - type: attribute
     entity: sensor.pumpsteer
     attribute: saving_potential_sek_per_kwh
-    name: Saving Potential (SEK/kWh)
+    name: Saving Potential
+    suffix: SEK/kWh
   - type: attribute
     entity: sensor.pumpsteer
     attribute: next_3_hours_prices
-    name: Next 3h Prices (SEK/kWh)
+    name: Next 3h Prices
+    suffix: SEK/kWh
   - type: attribute
     entity: sensor.pumpsteer
     attribute: decision_reason
     name: Decision Reason
-
-
 
 ####### Apexchart #####
 
@@ -227,12 +241,13 @@ entities:
     name: Broms aktiv
     secondary_info: last-changed
   - entity: sensor.real_outdoor_temperature
-    name: Ute (°C)
+    name: Ute
     secondary_info: last-changed
   - type: attribute
     entity: sensor.pumpsteer
     attribute: indoor_temperature
-    name: Inomhus Temp (°C)
+    name: Inomhus Temp
+    suffix: °C
   - entity: input_number.pumpsteer_aggressiveness
     name: Aggrevisitet
   - entity: input_number.indoor_target_temperature
@@ -244,12 +259,48 @@ entities:
     secondary_info: last-changed
   - entity: input_boolean.autotune_inertia
     name: Autotune aktiverat
+  - entity: input_boolean.pumpsteer_preboost_enabled
   - entity: sensor.pumpsteer_data_quality
+
+## Fortsättning, enkel. 
+
+type: vertical-stack
+cards:
+  - type: entities
+    title: 🔧 PumpSteer – Semster
+    show_header_toggle: false
+    entities:
+      - entity: input_boolean.holiday_mode
+      - entity: input_datetime.holiday_start
+      - entity: input_datetime.holiday_end
+  - type: markdown
+    content: |
+      ### 🏖️ Semestermode
+      <small>
+      Styr som om ingen är hemma:
+
+      - Måltemp: **16 °C**  
+      - Värmer bara vid **låga elpriser**  
+      Aktivera i god tid innan hemkomst!
+      </small>
+      ### ⚙️ Inställningar
+      <small>
+      **Aggressivitet (0–5)**  
+      Hur mycket systemet prioriterar besparing:
+
+      - `0` = Ingen optimering  
+      - `3` = Balanserad  
+      - `5` = Max besparing
+
+      **Tröghet (0.1–5.0)**  
+      Hur snabbt huset reagerar:
+
+      - Lågt = Snabbt hus  
+      - Högt = Trögt hus
 
 
 ## 2. Temperaturer
 
-```yaml
 type: entities
 title: 🌡️ Temperaturer
 show_header_toggle: false
@@ -287,11 +338,10 @@ entities:
     attribute: To Summer Threshold (°C)
     name: Till Sommartröskel
     icon: mdi:thermometer-lines
-```
+
 
 ## 3. Elpriser och ekonomi
 
-```yaml
 type: entities
 title: ⚡ Elpriser
 show_header_toggle: false
