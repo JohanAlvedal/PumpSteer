@@ -1,72 +1,93 @@
-name: CI
+name: CI & Release
 
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'custom_components/**'
+      - 'manifest.json'
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
+    paths:
+      - 'custom_components/**'
+      - 'manifest.json'
+  schedule:
+    - cron: '0 6 * * 1'
+  release:
+    types: [ published ]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
-  lint:
-    name: Code Quality (warnings only)
+  validate:
+    name: Hassfest & Lint
+    # Kör inte denna på release-event (det sköts av release-jobbet)
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Run Hassfest
+        uses: home-assistant/actions/hassfest@master
+
+      - name: Lint with flake8 (E501 ignored)
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install flake8
+          flake8 custom_components/pumpsteer --ignore=E501
+
+      - name: Comment on PR if failed
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Validation failed (Hassfest/Lint). Please check the logs and fix the issues.'
+            })
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install black flake8 isort mypy
-          pip install homeassistant
+  release:
+    name: Validate, Build & Attach to Release
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Black formatting check (warning only)
-        run: |
-          echo "🔍 Checking Black formatting..."
-          if ! black --check --diff custom_components/; then
-            echo "⚠️  WARNING: Code is not Black-formatted"
-            echo "💡 Run 'black custom_components/' to fix"
-            echo "🤖 Or use the Auto-fix workflow in Actions"
-            exit 0
-          else
-            echo "✅ Black formatting is correct"
-          fi
-        continue-on-error: true
+      - name: Validate with Hassfest
+        uses: home-assistant/actions/hassfest@master
 
-      - name: Flake8 linting (E501 ignored)
+      - name: Lint with flake8 (E501 ignored)
         run: |
-          echo "🔍 Checking code quality with Flake8..."
-          # Skip E501 (long lines), keep common rules and relax E203/W503 to align with Black
-          flake8 custom_components/ --ignore=E501,E203,W503 || echo "⚠️  Found some code quality issues"
-        continue-on-error: true
+          python3 -m pip install --upgrade pip
+          pip install flake8
+          flake8 custom_components/pumpsteer --ignore=E501
 
-      - name: Import sorting check (warning only)
+      - name: Update version in manifest.json
         run: |
-          echo "🔍 Checking import sorting..."
-          if ! isort --check-only --diff custom_components/; then
-            echo "⚠️  WARNING: Imports are not sorted correctly"
-            echo "💡 Run 'isort custom_components/' to fix"
-          else
-            echo "✅ Import sorting is correct"
-          fi
-        continue-on-error: true
+          VERSION="${{ github.event.release.tag_name }}"
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/pumpsteer/manifest.json
 
-      - name: Type checking with mypy (warning only)
+      - name: Create ZIP for release
         run: |
-          echo "🔍 Running type checks..."
-          mypy custom_components/ --ignore-missing-imports || echo "⚠️  Found some type issues"
-        continue-on-error: true
+          cd custom_components
+          zip -r ../pumpsteer.zip pumpsteer/
 
-      - name: Summary
-        run: |
-          echo "📋 Code Quality Summary:"
-          echo "- This workflow checks code quality but doesn't fail the build"
-          echo "- Use the 'Safe Auto-fix (Step by Step)' workflow to automatically fix formatting"
-          echo "- Or run locally: black, isort, flake8"
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./pumpsteer.zip
+          asset_name: pumpsteer.zip
+          asset_content_type: application/zip
+
+      - name: Clean up
+        run: rm -f pumpsteer.zip
