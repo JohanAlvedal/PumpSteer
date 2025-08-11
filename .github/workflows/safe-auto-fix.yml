@@ -1,4 +1,3 @@
-# .github/workflows/safe-auto-fix.yml
 name: Safe Auto-fix (Step by Step)
 
 on:
@@ -10,92 +9,95 @@ on:
         default: 'preview'
         type: choice
         options:
-          - preview    # Bara visa vad som skulle ändras
-          - imports    # Bara fixa imports
-          - sorting    # Bara fixa import-sortering  
-          - formatting # Bara Black-formatering
-          - all        # Allt på en gång
+          - preview
+          - imports
+          - sorting
+          - formatting
+          - all
+
+permissions:
+  contents: write
 
 jobs:
   safe-fix:
     name: Safe Auto-fix
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install black isort autoflake
-        
-    - name: Preview changes (no modifications)
-      if: github.event.inputs.step == 'preview'
-      run: |
-        echo "🔍 PREVIEW MODE - No files will be modified"
-        echo ""
-        echo "📋 Unused imports that would be removed:"
-        autoflake --remove-all-unused-imports --recursive custom_components/ || echo "No unused imports found"
-        echo ""
-        echo "📋 Import sorting changes:"
-        isort --diff custom_components/ || echo "Imports already sorted"
-        echo ""
-        echo "📋 Black formatting changes:"
-        black --diff custom_components/ || echo "Already formatted correctly"
-        echo ""
-        echo "✅ Preview complete - no files were modified"
-        
-    - name: Fix unused imports only
-      if: github.event.inputs.step == 'imports'
-      run: |
-        echo "🗑️ Removing unused imports..."
-        autoflake --remove-all-unused-imports --recursive --in-place custom_components/
-        
-    - name: Fix import sorting only
-      if: github.event.inputs.step == 'sorting'
-      run: |
-        echo "📋 Sorting imports..."
-        isort custom_components/
-        
-    - name: Fix Black formatting only
-      if: github.event.inputs.step == 'formatting'
-      run: |
-        echo "🎨 Applying Black formatting..."
-        black custom_components/
-        
-    - name: Fix everything
-      if: github.event.inputs.step == 'all'
-      run: |
-        echo "🔧 Fixing all issues..."
-        autoflake --remove-all-unused-imports --recursive --in-place custom_components/
-        isort custom_components/
-        black custom_components/
-        
-    - name: Show what changed
-      if: github.event.inputs.step != 'preview'
-      run: |
-        echo "📋 Changes made:"
-        git diff --name-only || echo "No files changed"
-        git diff --stat || echo "No changes"
-        
-    - name: Commit and push changes
-      if: github.event.inputs.step != 'preview'
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action Safe-fix"
-        git add .
-        
-        if git diff --staged --quiet; then
-          echo "✅ No changes to commit"
-        else
-          git commit -m "safe-fix: ${{ github.event.inputs.step }} formatting fixes"
-          git push
-          echo "✅ Changes committed and pushed"
-        fi
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install black isort autoflake
+
+      - name: Preview changes (no modifications)
+        if: github.event.inputs.step == 'preview'
+        run: |
+          echo "🔍 PREVIEW MODE - No files will be modified"
+          echo ""
+          echo "📋 Unused imports that would be removed:"
+          autoflake --remove-all-unused-imports --recursive custom_components/ || true
+          echo ""
+          echo "📋 Import sorting changes:"
+          isort --diff custom_components/ || true
+          echo ""
+          echo "📋 Black formatting changes:"
+          black --diff custom_components/ || true
+          echo ""
+          echo "✅ Preview complete - no files were modified"
+
+      - name: Fix unused imports only
+        if: github.event.inputs.step == 'imports'
+        run: |
+          echo "🗑️ Removing unused imports..."
+          autoflake --remove-all-unused-imports --recursive --in-place custom_components/
+
+      - name: Fix import sorting only
+        if: github.event.inputs.step == 'sorting'
+        run: |
+          echo "📋 Sorting imports..."
+          isort custom_components/
+
+      - name: Fix Black formatting only
+        if: github.event.inputs.step == 'formatting'
+        run: |
+          echo "🎨 Applying Black formatting..."
+          black custom_components/
+
+      - name: Fix everything
+        if: github.event.inputs.step == 'all'
+        run: |
+          echo "🔧 Fixing all issues..."
+          autoflake --remove-all-unused-imports --recursive --in-place custom_components/
+          isort custom_components/
+          black custom_components/
+
+      - name: Show what changed
+        if: github.event.inputs.step != 'preview'
+        run: |
+          echo "📋 Changes made:"
+          git diff --name-only || echo "No files changed"
+          git diff --stat || echo "No changes"
+
+      - name: Commit and push changes
+        if: github.event.inputs.step != 'preview'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Safe-fix"
+          git add .
+          if git diff --staged --quiet; then
+            echo "✅ No changes to commit"
+          else
+            git commit -m "safe-fix: ${{ github.event.inputs.step }} formatting fixes"
+            git push
+            echo "✅ Changes committed and pushed"
+          fi
