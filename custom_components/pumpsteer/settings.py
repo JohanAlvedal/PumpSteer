@@ -23,7 +23,7 @@ AGGRESSIVENESS_SCALING_FACTOR: Final[float] = (
     0.5  # Factor for aggressiveness in normal mode
 )
 PREBOOST_MAX_OUTDOOR_TEMP: Final[float] = (
-    10.0  # °C - Max outdoor temp for pre-boost to be considered
+    5.0  # °C - Max outdoor temp for pre-boost to be considered
 )
 
 # === TEMPERATURE CONTROL LOGIC ===
@@ -59,7 +59,7 @@ MAX_PRICE_WARNING_THRESHOLD: Final[float] = (
 VERY_CHEAP_MULTIPLIER: Final[float] = 0.60  # 60% of average price
 CHEAP_MULTIPLIER: Final[float] = 0.90  # 90% of average price
 NORMAL_MULTIPLIER: Final[float] = 1.40  # 140% of average price
-EXPENSIVE_MULTIPLIER: Final[float] = 1.60  # 160% of average price
+EXPENSIVE_MULTIPLIER: Final[float] = 2.00  # (200%) 160% of average price
 
 # === PRE-BOOST STRATEGY SETTINGS ===
 MIN_PRICE_THRESHOLD_RATIO: Final[float] = 0.5
