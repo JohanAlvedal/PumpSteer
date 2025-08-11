@@ -8,7 +8,7 @@ PumpSteer is a custom Home Assistant integration that dynamically optimizes your
 
 ---
 
-## ⚠️ Disclaimer
+## ⚠️ Disclaimer 
 
 I'm not an expert in programming, energy systems, or automation. This setup is based on personal experiments and use. I cannot guarantee it will work for everyone, and I take no responsibility for any issues or damage resulting from the use of this configuration or code.
 
