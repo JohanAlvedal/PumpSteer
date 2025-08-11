@@ -1,4 +1,3 @@
-# File: pre_boost.py
 import logging
 from typing import Optional, List, Tuple
 
@@ -60,8 +59,9 @@ def calculate_optimal_preboost_timing(
     # Better handling of edge case
     if min_advance > max_advance:
         _LOGGER.warning(
-            f"Calculated min_advance ({min_advance:.1f}h) > max_advance ({max_advance:.1f}h). "
-            f"Check configuration: inertia={inertia}, severity={peak_severity}"
+            f"Calculated min_advance ({min_advance:.1f}h) > max_advance "
+            f"({max_advance:.1f}h). Check configuration: inertia={inertia}, "
+            f"severity={peak_severity}"
         )
         min_advance = max(0, max_advance - MIN_ADVANCE_SAFETY_MARGIN)
 
@@ -135,8 +135,8 @@ def find_cold_expensive_peaks(
 
             _LOGGER.debug(
                 f"Peak found at hour {i}: temp={temp:.1f}°C (drop: {temp_drop:.1f}), "
-                f"price={price:.3f} (ratio: {price_ratio:.2f}), duration={duration}h, "
-                f"severity={severity:.2f}"
+                f"price={price:.3f} (ratio: {price_ratio:.2f}), "
+                f"duration={duration}h, severity={severity:.2f}"
             )
 
     peaks.sort(key=lambda x: x[2], reverse=True)
@@ -183,9 +183,13 @@ def check_combined_preboost(
         if temps is None:
             return None
 
-        if len(temps) < lookahead_hours or (prices and len(prices) < lookahead_hours):
+        if len(temps) < lookahead_hours or (
+            prices and len(prices) < lookahead_hours
+        ):
             original_lookahead = lookahead_hours
-            lookahead_hours = min(len(temps), len(prices) if prices else len(temps))
+            lookahead_hours = min(
+                len(temps), len(prices) if prices else len(temps)
+            )
             _LOGGER.debug(
                 f"Adjusting lookahead: {original_lookahead}h → {lookahead_hours}h"
             )
@@ -222,7 +226,8 @@ def check_combined_preboost(
 
             if duration < PREBOOST_MIN_DURATION_HOURS:
                 _LOGGER.debug(
-                    f"Preboost skipped: Peak too short ({duration}h < {PREBOOST_MIN_DURATION_HOURS}h)"
+                    f"Preboost skipped: Peak too short ({duration}h < "
+                    f"{PREBOOST_MIN_DURATION_HOURS}h)"
                 )
                 continue
 
@@ -256,13 +261,15 @@ def check_combined_preboost(
 
             elif hours_to_peak > max_advance:
                 _LOGGER.debug(
-                    f"Peak too far away: {hours_to_peak}h > {max_advance}h (will check again later)"
+                    f"Peak too far away: {hours_to_peak}h > {max_advance}h "
+                    "(will check again later)"
                 )
                 continue
 
             elif hours_to_peak < min_advance:
                 _LOGGER.debug(
-                    f"Peak too close: {hours_to_peak}h < {min_advance}h (should have started earlier)"
+                    f"Peak too close: {hours_to_peak}h < {min_advance}h "
+                    "(should have started earlier)"
                 )
                 continue
 
@@ -278,7 +285,9 @@ def check_combined_preboost(
 def parse_temperature_csv_safe(temp_csv: str) -> Optional[List[float]]:
     """Safely parse CSV temperature data."""
     if not temp_csv or not isinstance(temp_csv, str):
-        _LOGGER.warning("Pre-boost: Received empty or invalid temperature forecast CSV")
+        _LOGGER.warning(
+            "Pre-boost: Received empty or invalid temperature forecast CSV"
+        )
         return None
 
     try:
@@ -316,7 +325,8 @@ def validate_temperature_data(temps: List[float], max_hours: int) -> bool:
             # Fail if too many extreme values
             if extreme_count >= EXTREME_PRICE_ERROR_THRESHOLD:
                 _LOGGER.error(
-                    f"Too many extreme temperatures ({extreme_count}), failing validation"
+                    f"Too many extreme temperatures ({extreme_count}), "
+                    f"failing validation"
                 )
                 return False
 
@@ -339,7 +349,8 @@ def validate_price_data(prices: List[float], max_hours: int) -> bool:
             # Only fail validation if there are too many extreme values
             if extreme_count >= EXTREME_PRICE_ERROR_THRESHOLD:
                 _LOGGER.error(
-                    f"Too many extreme prices ({extreme_count}), failing validation"
+                    f"Too many extreme prices ({extreme_count}), "
+                    f"failing validation"
                 )
                 return False
 
@@ -353,7 +364,7 @@ def check_future_warming_trend(temps: List[float], lookahead_hours: int) -> bool
 
     current_temp = temps[0]
     check_hours = min(lookahead_hours, len(temps) - 1)
-    future_temps = temps[1 : check_hours + 1]
+    future_temps = temps[1:check_hours + 1]
 
     # More nuanced warming trend detection
     if not future_temps:
@@ -386,8 +397,9 @@ def calculate_adjusted_thresholds(
         MIN_PRICE_THRESHOLD_RATIO,
         min(
             MAX_PRICE_THRESHOLD_RATIO,
-            BASE_PRICE_THRESHOLD_RATIO
-            - (aggressiveness * PREBOOST_AGGRESSIVENESS_SCALING_FACTOR),
+            BASE_PRICE_THRESHOLD_RATIO - (
+                aggressiveness * PREBOOST_AGGRESSIVENESS_SCALING_FACTOR
+            ),
         ),
     )
 
