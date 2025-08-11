@@ -163,15 +163,16 @@ class PumpSteerMLCollector:
                 "aggressiveness": initial.get("aggressiveness", 0),
                 "inertia": initial.get("inertia", 1.0),
                 "update_count": len(updates),
-                "start_temp_diff": initial.get("indoor_temp", 0) -
-                    initial.get("target_temp", 0),
+                "start_temp_diff": initial.get("indoor_temp", 0)
+                                 - initial.get("target_temp", 0),
             }
 
             # Classify session as successful or not
             # Under 2h for significant temperature difference
             # Over 3h indicates a problem
             if (
-                duration_minutes < 120 and abs(summary["start_temp_diff"]) > 0.3
+                duration_minutes < 120 and
+                abs(summary["start_temp_diff"]) > 0.3
             ):
                 summary["success"] = True
             elif duration_minutes > 180:
