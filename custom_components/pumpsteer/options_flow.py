@@ -2,6 +2,7 @@ import voluptuous as vol
 import logging
 
 from homeassistant import config_entries
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
@@ -22,8 +23,10 @@ HARDCODED_ENTITIES = {
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        super().__init__(config_entry)
+        super().__init__()
         self._entry_id = config_entry.entry_id
+        self.config_entry = config_entry
+
 
     async def async_step_init(self, user_input=None):
         """Manage the options flow."""
