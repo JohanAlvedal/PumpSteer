@@ -1,35 +1,29 @@
-# FIXED electricity_price.py - Correct database access for Home Assistant 2025
-
-import logging
-from datetime import datetime, timedelta
-from typing import Dict, List
+# electricity_price.py
 
 import numpy as np
+from typing import List, Dict
+import logging
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
-from homeassistant.core import HomeAssistant
 from homeassistant.util.dt import now as dt_now
+from datetime import timedelta, datetime
+from homeassistant.core import HomeAssistant
 
+# === CORRECTED IMPORT - all multipliers included ===
 from .settings import (
-    ABSOLUTE_CHEAP_LIMIT,
-    CHEAP_MULTIPLIER,
-    DEFAULT_EXTREME_MULTIPLIER,
     DEFAULT_PERCENTILES,
-    DEFAULT_TRAILING_HOURS,
-    EXPENSIVE_MULTIPLIER,
-    MAX_PRICE_WARNING_THRESHOLD,
+    DEFAULT_EXTREME_MULTIPLIER,
     MIN_SAMPLES_FOR_CLASSIFICATION,
-    NORMAL_MULTIPLIER,
+    ABSOLUTE_CHEAP_LIMIT,
     PRICE_CATEGORIES,
+    DEFAULT_TRAILING_HOURS,
+    MAX_PRICE_WARNING_THRESHOLD,
+    VERY_CHEAP_MULTIPLIER,      # ← ADDED
+    CHEAP_MULTIPLIER,
+    NORMAL_MULTIPLIER,
+    EXPENSIVE_MULTIPLIER,
+    VERY_EXPENSIVE_MULTIPLIER,  # ← ADDED
 )
-
-# — Legacy/Configuration Section (Settings imported from another file) —
-
-# These settings are typically defined elsewhere and represent configurable
-# parameters for price classification. Depending on the project's evolution,
-# these might be considered part of the 'legacy' configuration if not actively
-# maintained or if they represent initial fixed values.
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,6 +117,44 @@ def classify_prices(price_list: List[float], percentiles: List[float] = None) ->
     return final_categories
 
 
+def classify_single_price_hybrid(price: float, avg_price: float) -> str:
+    """
+    Classify a single price using hybrid approach with both relative and absolute thresholds.
+    
+    Args:
+        price: The price to classify
+        avg_price: Historical average price for comparison
+        
+    Returns:
+        Price category as string
+    """
+    if price < 0:
+        return "negative_price"
+    
+    # Calculate all thresholds based on average price and multipliers
+    very_cheap_threshold = avg_price * VERY_CHEAP_MULTIPLIER
+    cheap_threshold = avg_price * CHEAP_MULTIPLIER  
+    normal_threshold = avg_price * NORMAL_MULTIPLIER
+    expensive_threshold = avg_price * EXPENSIVE_MULTIPLIER
+    very_expensive_threshold = avg_price * VERY_EXPENSIVE_MULTIPLIER
+    
+    if price <= very_cheap_threshold:
+        return "very_cheap"
+    elif price <= cheap_threshold:
+        return "cheap"
+    elif price <= normal_threshold:
+        # Hybrid rule: absolute threshold can override relative classification
+        # If price is below absolute cheap limit, classify as cheap even if relatively normal
+        return "cheap" if price < ABSOLUTE_CHEAP_LIMIT else "normal"
+    elif price <= expensive_threshold:
+        return "expensive"
+    elif price <= very_expensive_threshold:
+        return "very_expensive"
+    else:
+        # Prices above 300% of average - extremely high
+        return "extreme"
+
+
 async def async_hybrid_classify_with_history(
     hass: HomeAssistant,
     price_list: List[float],
@@ -186,30 +218,10 @@ async def async_hybrid_classify_with_history(
         _LOGGER.warning("Invalid average price calculated from history; using standard percentile classification.")
         return classify_prices(price_list)
 
-    # Classify current prices based on the calculated historical average and predefined multipliers
+    # CORRECTED CLASSIFICATION LOGIC - using all multipliers consistently
     result = []
     for price in price_list:
-        # --- START REVISED LOGIC ---
-        # First, check for negative prices as a special case
-        if price < 0:
-            result.append("negative_price")
-        # Then, apply the original logic for non-negative prices
-        elif price <= 0.20:
-            result.append("very_cheap")
-        elif price <= 0.50:
-            result.append("cheap")
-        elif price <= avg_price * CHEAP_MULTIPLIER:
-            result.append("cheap")
-        elif price < avg_price * NORMAL_MULTIPLIER:
-            # This is a specific 'hybrid' rule: if the price is below NORMAL_MULTIPLIER
-            # but also below an ABSOLUTE_CHEAP_LIMIT, it's still classified as "cheap".
-            # This blends relative (to average) and absolute thresholds.
-            result.append("cheap" if price < ABSOLUTE_CHEAP_LIMIT else "normal")
-        elif price < avg_price * EXPENSIVE_MULTIPLIER:
-            result.append("expensive")
-        else:
-            result.append("very_expensive")
-        # --- END REVISED LOGIC ---
+        result.append(classify_single_price_hybrid(price, avg_price))
 
     return result
 
@@ -263,10 +275,11 @@ def count_categories(price_list: List[float]) -> Dict[str, int]:
     after classifying all prices in the input list using the `classify_prices` function.
     """
     categories = classify_prices(price_list)
-    # Initialize counts for all possible categories, including 'unknown'
+    # Initialize counts for all possible categories, including 'unknown', 'negative_price', and 'extreme'
     counts = {category: 0 for category in PRICE_CATEGORIES}
     counts["unknown"] = 0
     counts["negative_price"] = 0
+    counts["extreme"] = 0  # Added for new extreme category
 
     for category in categories:
         counts[category] += 1
@@ -278,7 +291,7 @@ def count_category(price_list: List[float], target_category: str) -> int:
     """
     Count the occurrences of a specific price category within a list of prices.
     """
-    valid_categories = PRICE_CATEGORIES + ["unknown", "negative_price"]
+    valid_categories = PRICE_CATEGORIES + ["unknown", "negative_price", "extreme"]
 
     if target_category not in valid_categories:
         raise ValueError(f"Unknown category: {target_category}. Valid categories: {valid_categories}")
@@ -319,7 +332,7 @@ def find_most_expensive_hours(price_list: List[float], num_hours: int = 1) -> Li
     return [i for i, _ in indexed_prices[:min(num_hours, len(indexed_prices))]]
 
 
-# — ADDED: New PumpSteer-specific functions —
+# === PumpSteer-specific functions ===
 
 async def async_get_forecast_prices(
     hass: HomeAssistant,
@@ -353,7 +366,6 @@ async def async_get_forecast_prices(
                     # Convert start time to datetime if needed
                     start_time = price_data['start']
                     if isinstance(start_time, str):
-                        # `datetime` is already imported at the top
                         start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
 
                     # Only future prices
