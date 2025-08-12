@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "PumpSteer configuration",
+        "data": {
+          "indoor_temp_entity": "Indoor temperature sensor",
+          "real_outdoor_entity": "Outdoor temperature sensor",
+          "electricity_price_entity": "Electricity price sensor"
+        }
+      }
+    },
+    "error": {
+      "required": "This field is required",
+      "entity_not_found": "Entity not found",
+      "entity_unavailable": "Entity unavailable"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PumpSteer options",
+        "data": {
+          "indoor_temp_entity": "Indoor temperature sensor",
+          "real_outdoor_entity": "Outdoor temperature sensor",
+          "electricity_price_entity": "Electricity price sensor"
+        }
+      }
+    },
+    "error": {
+      "required": "This field is required",
+      "entity_not_found": "Entity not found",
+      "entity_unavailable": "Entity unavailable"
+    }
+  }
+}
