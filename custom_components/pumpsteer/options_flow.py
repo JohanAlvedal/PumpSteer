@@ -1,10 +1,9 @@
-import voluptuous as vol
 import logging
 
+import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.helpers.selector import selector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options flow."""
         errors = {}
 
-        # self.config_entry är nu tillgängligt automatiskt från basklassen
+        # self.config_entry is now available automatically from base class
         entry = self.config_entry
 
         if user_input is not None:
@@ -41,9 +40,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                 updated_data = entry.data.copy()
                 updated_data.update(combined_data)
 
-                self.hass.config_entries.async_update_entry(
-                    entry, data=updated_data
-                )
+                self.hass.config_entries.async_update_entry(entry, data=updated_data)
 
                 return self.async_create_entry(title="", data={})
 

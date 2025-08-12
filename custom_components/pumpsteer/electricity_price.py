@@ -1,13 +1,27 @@
 # FIXED electricity_price.py - Correct database access for Home Assistant 2025
 
-import numpy as np
-from typing import List, Dict
 import logging
+from datetime import datetime, timedelta
+from typing import Dict, List
+
+import numpy as np
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
-from homeassistant.util.dt import now as dt_now
-from datetime import timedelta, datetime
 from homeassistant.core import HomeAssistant
+from homeassistant.util.dt import now as dt_now
+
+from .settings import (
+    ABSOLUTE_CHEAP_LIMIT,
+    CHEAP_MULTIPLIER,
+    DEFAULT_EXTREME_MULTIPLIER,
+    DEFAULT_PERCENTILES,
+    DEFAULT_TRAILING_HOURS,
+    EXPENSIVE_MULTIPLIER,
+    MAX_PRICE_WARNING_THRESHOLD,
+    MIN_SAMPLES_FOR_CLASSIFICATION,
+    NORMAL_MULTIPLIER,
+    PRICE_CATEGORIES,
+)
 
 # — Legacy/Configuration Section (Settings imported from another file) —
 
@@ -16,18 +30,6 @@ from homeassistant.core import HomeAssistant
 # these might be considered part of the 'legacy' configuration if not actively
 # maintained or if they represent initial fixed values.
 
-from .settings import (
-    DEFAULT_PERCENTILES,
-    DEFAULT_EXTREME_MULTIPLIER,
-    MIN_SAMPLES_FOR_CLASSIFICATION,
-    ABSOLUTE_CHEAP_LIMIT,
-    PRICE_CATEGORIES,
-    DEFAULT_TRAILING_HOURS,
-    MAX_PRICE_WARNING_THRESHOLD,
-    CHEAP_MULTIPLIER,
-    NORMAL_MULTIPLIER,
-    EXPENSIVE_MULTIPLIER,
-)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -144,7 +146,6 @@ async def async_hybrid_classify_with_history(
         recorder = get_instance(hass)
 
         def get_price_history():
-
             return get_significant_states(
                 hass,
                 start_time,
@@ -265,7 +266,6 @@ def count_categories(price_list: List[float]) -> Dict[str, int]:
     # Initialize counts for all possible categories, including 'unknown'
     counts = {category: 0 for category in PRICE_CATEGORIES}
     counts["unknown"] = 0
-
     counts["negative_price"] = 0
 
     for category in categories:
@@ -278,7 +278,6 @@ def count_category(price_list: List[float], target_category: str) -> int:
     """
     Count the occurrences of a specific price category within a list of prices.
     """
-
     valid_categories = PRICE_CATEGORIES + ["unknown", "negative_price"]
 
     if target_category not in valid_categories:
@@ -331,7 +330,6 @@ async def async_get_forecast_prices(
     Retrieve future electricity prices for PumpSteer's 6-hour forecast.
     """
     try:
-
         # Get entity's attributes which often contain future prices
         state = hass.states.get(price_entity_id)
         if not state:
