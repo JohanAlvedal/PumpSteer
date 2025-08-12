@@ -22,17 +22,16 @@ HARDCODED_ENTITIES = {
 
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self) -> None:
+        """Initialize options flow."""
         super().__init__()
-        self._entry_id = config_entry.entry_id
-        self.config_entry = config_entry
-
 
     async def async_step_init(self, user_input=None):
         """Manage the options flow."""
         errors = {}
 
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        # self.config_entry är nu tillgängligt automatiskt från basklassen
+        entry = self.config_entry
 
         if user_input is not None:
             combined_data = {**user_input, **HARDCODED_ENTITIES}
