@@ -131,4 +131,4 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
-        return PumpSteerOptionsFlowHandler(config_entry)
+        return PumpSteerOptionsFlowHandler()
