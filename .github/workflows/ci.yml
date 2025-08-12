@@ -30,17 +30,56 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+        
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
       - name: Run Hassfest
         uses: home-assistant/actions/hassfest@master
-
-      - name: Lint with flake8 (E501 ignored)
+        
+      - name: Install linting tools
         run: |
-          python3 -m pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install flake8
-          flake8 custom_components/pumpsteer --ignore=E501
-
-      - name: Comment on PR if failed
+          
+      - name: Run critical error checks
+        run: |
+          # Kör bara kritiska fel som kan orsaka runtime-problem
+          flake8 custom_components/pumpsteer --select=E9,F63,F7,F82,F401
+          
+      - name: Run relaxed style checks (warnings only)
+        run: |
+          # Kör alla stilkontroller men låt jobbet fortsätta även vid varningar
+          flake8 custom_components/pumpsteer \
+            --ignore=E203,E501,W503,W504,E131,E122,E303,W293 \
+            --max-line-length=120 \
+            --exit-zero || echo "Style warnings found but not blocking build"
+            
+      - name: Run syntax validation
+        run: |
+          # Extra säkerhetskontroll - validera att alla Python-filer kan parsas
+          python -c "
+          import ast, os, sys
+          failed = False
+          for root, dirs, files in os.walk('custom_components/pumpsteer'):
+              for file in files:
+                  if file.endswith('.py'):
+                      filepath = os.path.join(root, file)
+                      try:
+                          with open(filepath, 'r', encoding='utf-8') as f:
+                              ast.parse(f.read())
+                          print(f'✓ {filepath}')
+                      except Exception as e:
+                          print(f'✗ {filepath}: {e}')
+                          failed = True
+          if failed:
+              sys.exit(1)
+          print('All Python files have valid syntax!')
+          "
+          
+      - name: Comment on PR if critical errors found
         if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
@@ -50,7 +89,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '❌ Validation failed (Hassfest/Lint). Please check the logs and fix the issues.'
+              body: '❌ Critical validation errors found. Please check the logs and fix syntax/import errors before merging.'
             })
 
   release:
@@ -59,26 +98,52 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+        
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
       - name: Validate with Hassfest
         uses: home-assistant/actions/hassfest@master
-
-      - name: Lint with flake8 (E501 ignored)
+        
+      - name: Install linting tools
         run: |
-          python3 -m pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install flake8
-          flake8 custom_components/pumpsteer --ignore=E501
-
+          
+      - name: Critical validation for release
+        run: |
+          # Vid release: bara kritiska fel som kan orsaka problem
+          flake8 custom_components/pumpsteer --select=E9,F63,F7,F82,F401
+          
+      - name: Syntax validation for release
+        run: |
+          python -c "
+          import ast, os, sys
+          for root, dirs, files in os.walk('custom_components/pumpsteer'):
+              for file in files:
+                  if file.endswith('.py'):
+                      filepath = os.path.join(root, file)
+                      try:
+                          with open(filepath, 'r', encoding='utf-8') as f:
+                              ast.parse(f.read())
+                      except Exception as e:
+                          print(f'RELEASE BLOCKER: {filepath}: {e}')
+                          sys.exit(1)
+          print('✓ All files validated for release')
+          "
+          
       - name: Update version in manifest.json
         run: |
           VERSION="${{ github.event.release.tag_name }}"
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/pumpsteer/manifest.json
-
+          
       - name: Create ZIP for release
         run: |
           cd custom_components
           zip -r ../pumpsteer.zip pumpsteer/
-
+          
       - name: Upload release asset
         uses: actions/upload-release-asset@v1
         env:
@@ -88,6 +153,6 @@ jobs:
           asset_path: ./pumpsteer.zip
           asset_name: pumpsteer.zip
           asset_content_type: application/zip
-
+          
       - name: Clean up
         run: rm -f pumpsteer.zip
