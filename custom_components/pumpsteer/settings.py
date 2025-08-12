@@ -38,17 +38,22 @@ DEFAULT_PERCENTILES: Final[List[int]] = [
     85,
     95,
 ]  # Percentiles for 5-category classification
+
 DEFAULT_EXTREME_MULTIPLIER: Final[float] = 1.5  # Multiplier for extreme price detection
 MIN_SAMPLES_FOR_CLASSIFICATION: Final[int] = 5  # Minimum number of price samples needed
+
+# UPDATED: Added "extreme" category for prices over VERY_EXPENSIVE_MULTIPLIER
 PRICE_CATEGORIES: Final[List[str]] = [  # Price categories in ascending order
     "very_cheap",
     "cheap",
     "normal",
     "expensive",
     "very_expensive",
+    "extreme",  # Added for crisis-level pricing
 ]
+
 ABSOLUTE_CHEAP_LIMIT: Final[float] = (
-    0.60  # SEK/kWh - Absolute threshold for cheap prices
+    0.60  # SEK/kWh - Absolute threshold for cheap prices (hybrid classification)
 )
 DEFAULT_TRAILING_HOURS: Final[int] = 72  # Hours of historical data to consider
 MAX_PRICE_WARNING_THRESHOLD: Final[float] = (
@@ -56,10 +61,31 @@ MAX_PRICE_WARNING_THRESHOLD: Final[float] = (
 )
 
 # === HYBRID CLASSIFICATION THRESHOLDS ===
-VERY_CHEAP_MULTIPLIER: Final[float] = 0.60  # 60% of average price
-CHEAP_MULTIPLIER: Final[float] = 0.90  # 90% of average price
-NORMAL_MULTIPLIER: Final[float] = 1.40  # 140% of average price
-EXPENSIVE_MULTIPLIER: Final[float] = 2.00  # (200%) 160% of average price
+# CORRECTED: Complete set of multipliers for all categories
+VERY_CHEAP_MULTIPLIER: Final[float] = 0.60   # 60% of average price
+CHEAP_MULTIPLIER: Final[float] = 0.90        # 90% of average price
+NORMAL_MULTIPLIER: Final[float] = 1.40       # 140% of average price
+EXPENSIVE_MULTIPLIER: Final[float] = 2.00    # 200% of average price
+VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00  # 300% of average price
+
+# === EXPLANATION OF DESIGN DECISIONS ===
+
+# 1. EXTREME CATEGORY: YES
+# - Prices over 300% of average get "extreme" classification
+# - Useful for identifying truly exceptional price spikes
+# - Helps differentiate between "very expensive" and "crisis level" pricing
+
+# 2. ABSOLUTE_CHEAP_LIMIT: YES, KEEP AT 0.60 SEK/kWh  
+# - Still relevant as safety net for hybrid classification
+# - Ensures that genuinely cheap absolute prices aren't missed
+# - Example: If average is 2.00 SEK/kWh, 90% would be 1.80 SEK/kWh
+#   But a price of 0.50 SEK/kWh should still be "cheap" regardless
+
+# 3. HYBRID RULE: YES, KEEP IT
+# - Allows absolute thresholds to override relative classification
+# - Provides more intuitive results for users
+# - Prevents situations where objectively cheap prices are classified as "normal"
+#   just because the recent average was very low
 
 # === PRE-BOOST STRATEGY SETTINGS ===
 MIN_PRICE_THRESHOLD_RATIO: Final[float] = 0.5
@@ -123,7 +149,7 @@ EXTREME_PRICE_ERROR_THRESHOLD: Final[int] = (
 )
 
 
-# Basic validation of settings
+# UPDATED validation function to include new settings
 def validate_core_settings() -> None:
     """Validate core settings for consistency and logical values."""
     errors = []
@@ -138,23 +164,28 @@ def validate_core_settings() -> None:
     if DEFAULT_PERCENTILES != sorted(DEFAULT_PERCENTILES):
         errors.append("Percentiles must be in ascending order")
 
-    # Validate price categories
-    if len(PRICE_CATEGORIES) != 5:
-        errors.append("Exactly 5 price categories required")
+    # UPDATED: Validate price categories (now 6 categories including "extreme")
+    if len(PRICE_CATEGORIES) != 6:
+        errors.append("Exactly 6 price categories required (including 'extreme')")
 
     # Validate temperature range
     if MIN_FAKE_TEMP >= MAX_FAKE_TEMP:
         errors.append("Min fake temp must be less than max fake temp")
 
-    # Validate multipliers are in logical order
+    # UPDATED: Validate ALL multipliers are in logical order
     multipliers = [
         VERY_CHEAP_MULTIPLIER,
         CHEAP_MULTIPLIER,
         NORMAL_MULTIPLIER,
         EXPENSIVE_MULTIPLIER,
+        VERY_EXPENSIVE_MULTIPLIER,  # Added validation for this multiplier
     ]
     if multipliers != sorted(multipliers):
         errors.append("Price multipliers must be in ascending order")
+
+    # Validate that VERY_EXPENSIVE_MULTIPLIER is reasonable (not too high)
+    if VERY_EXPENSIVE_MULTIPLIER > 5.0:
+        errors.append("VERY_EXPENSIVE_MULTIPLIER seems unreasonably high (>5.0)")
 
     # Validate pre-boost timing constants
     if PREBOOST_MIN_ADVANCE_FACTOR >= PREBOOST_MAX_ADVANCE_FACTOR:
@@ -169,6 +200,13 @@ def validate_core_settings() -> None:
 
     if MIN_REASONABLE_PRICE >= MAX_REASONABLE_PRICE:
         errors.append("Min reasonable price must be less than max reasonable price")
+
+    # ADDED: Validate ABSOLUTE_CHEAP_LIMIT is reasonable
+    if ABSOLUTE_CHEAP_LIMIT <= 0:
+        errors.append("ABSOLUTE_CHEAP_LIMIT must be positive")
+    
+    if ABSOLUTE_CHEAP_LIMIT > 2.0:
+        errors.append("ABSOLUTE_CHEAP_LIMIT seems unreasonably high (>2.0 SEK/kWh)")
 
     if errors:
         error_msg = f"Settings validation failed: {'; '.join(errors)}"
