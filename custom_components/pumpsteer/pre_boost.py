@@ -31,6 +31,7 @@ from .settings import (
     MAX_DURATION_LOOKAHEAD,
     MIN_ADVANCE_SAFETY_MARGIN,
     EXTREME_PRICE_ERROR_THRESHOLD,
+    DEFAULT_PRICE_RATIO,  # <-- ADDED for consistency instead of hardcoded values
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -103,10 +104,11 @@ def find_cold_expensive_peaks(
     if not temps or not prices:
         return peaks
 
-    max_price = max(prices[:max_hours]) if prices else 1.0
+    # IMPROVED: Use DEFAULT_PRICE_RATIO instead of hardcoded fallback
+    max_price = max(prices[:max_hours]) if prices else DEFAULT_PRICE_RATIO
     if max_price <= 0:
-        _LOGGER.warning("Invalid max_price <= 0, using fallback")
-        max_price = 1.0
+        _LOGGER.warning(f"Invalid max_price <= 0, using fallback: {DEFAULT_PRICE_RATIO}")
+        max_price = DEFAULT_PRICE_RATIO
 
     check_hours = min(max_hours, len(temps), len(prices))
 
@@ -205,10 +207,11 @@ def check_combined_preboost(
             _LOGGER.debug("Pre-boost: Skipping due to warming trend")
             return None
 
-        max_price = max(prices[:lookahead_hours]) if prices else 0.0
+        # IMPROVED: Use DEFAULT_PRICE_RATIO for consistency
+        max_price = max(prices[:lookahead_hours]) if prices else DEFAULT_PRICE_RATIO
         if max_price <= 0:
-            _LOGGER.warning("Invalid max price for pre-boost analysis")
-            return None
+            _LOGGER.warning(f"Invalid max price for pre-boost analysis, using: {DEFAULT_PRICE_RATIO}")
+            max_price = DEFAULT_PRICE_RATIO
 
         adjusted_ratio, price_threshold = calculate_adjusted_thresholds(
             aggressiveness, max_price
@@ -231,7 +234,8 @@ def check_combined_preboost(
                 )
                 continue
 
-            current_price = prices[0] if prices else 0.0
+            # IMPROVED: Use DEFAULT_PRICE_RATIO for consistency
+            current_price = prices[0] if prices else DEFAULT_PRICE_RATIO
             cheap_now_threshold = max_price * PREBOOST_CHEAP_NOW_MULTIPLIER
             if PREBOOST_REQUIRE_VERY_CHEAP_NOW and current_price > cheap_now_threshold:
                 _LOGGER.debug(
