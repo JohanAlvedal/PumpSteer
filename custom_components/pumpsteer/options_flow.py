@@ -2,7 +2,6 @@ import voluptuous as vol
 import logging
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
