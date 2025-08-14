@@ -59,6 +59,29 @@ If PumpSteer is not yet available in HACS:
 
 ---
 
+## 🌤️ Weather Forecast Automation
+
+PumpSteer requires hourly temperature forecasts in `input_text.hourly_forecast_temperatures`. Instead of manual entry, use our automated blueprint:
+
+[![Import Blueprint](https://img.shields.io/badge/IMPORT%20BLUEPRINT%20TO-MY%20🏠-41BDF5?style=for-the-badge&labelColor=54B4D3)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=[https%3A//gist.githubusercontent.com/JohanAlvedal/48fb8b3e1ef5fc3a70b5c473be54e2fe/raw](https://gist.github.com/JohanAlvedal/48fb8b3e1ef5fc3a70b5c473be54e2fe.js))
+
+
+### What it does:
+- 🔄 Automatically fetches 24-hour temperature forecasts
+- 📊 Formats data as comma-separated values for PumpSteer
+- ⏰ Updates on configurable intervals (default: every 30 min)
+- 🌡️ Works with SMHI, Met.no, OpenWeatherMap, and more
+
+### Quick Setup:
+1. **Import blueprint** from the Gist above
+2. **Create automation** using your weather entity  
+3. **Set target** to `input_text.hourly_forecast_temperatures`
+4. **Configure update interval** (recommended: every 30 minutes)
+
+Once configured, PumpSteer will automatically receive fresh weather data for optimal heating decisions without any manual intervention.
+
+---
+
 ## 📦 Helper Entities (via `pumpsteer_package.yaml`)
 
 | Type             | Entity                          | Function                                |
