@@ -289,26 +289,32 @@ class PumpSteerSensor(Entity):
         if outdoor_temp >= summer_threshold:
             return outdoor_temp, "summer_mode"
 
-        if "expensive" in price_category or "very_expensive" in price_category:
-            _LOGGER.info(f"Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {BRAKING_MODE_TEMP} °C)")
-            return BRAKING_MODE_TEMP, "braking_by_price"
-
         temp_diff = indoor_temp - target_temp
 
         if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
-            return outdoor_temp, "neutral"
+            fake_temp = outdoor_temp
+            mode = "neutral"
+        else:
+            try:
+                fake_temp, mode = calculate_temperature_output(
+                    indoor_temp,
+                    target_temp,
+                    outdoor_temp,
+                    aggressiveness
+                )
+            except Exception as e:
+                _LOGGER.error(f"Error in temperature calculation: {e}")
+                fake_temp, mode = outdoor_temp, "error"
 
-        try:
-            fake_temp, mode = calculate_temperature_output(
-                indoor_temp,
-                target_temp,
-                outdoor_temp,
-                aggressiveness
+        if mode not in ["braking_by_temp", "heating"] and (
+            "expensive" in price_category or "very_expensive" in price_category
+        ):
+            _LOGGER.info(
+                f"Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {BRAKING_MODE_TEMP} °C)"
             )
-            return fake_temp, mode
-        except Exception as e:
-            _LOGGER.error(f"Error in temperature calculation: {e}")
-            return outdoor_temp, "error"
+            return BRAKING_MODE_TEMP, "braking_by_price"
+
+        return fake_temp, mode
 
 
     def _collect_ml_data(self, sensor_data: Dict[str, Any], mode: str, fake_temp: float) -> None:
