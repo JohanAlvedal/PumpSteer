@@ -16,6 +16,12 @@ I'm not an expert in programming, energy systems, or automation. This setup is b
 
 ---
 
+## 🗃️ Recorder Data Requirement
+
+PumpSteer calculates price levels using 72 hours of raw electricity price history from Home Assistant's recorder. Long-term statistics are not used, so ensure the recorder keeps at least three days of state data for your price sensor. Without sufficient history the price category may remain "normal" and the integration can appear stuck.
+
+---
+
 ## ✅ Features
 
 * 🔧 Smart virtual control of outdoor temperature
