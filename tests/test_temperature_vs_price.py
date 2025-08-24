@@ -52,4 +52,20 @@ def test_price_brake_when_neutral():
     data = base_sensor_data()
     fake_temp, mode = s._calculate_output_temperature(data, [], "expensive", 0)
     assert mode == "braking_by_price"
-    assert fake_temp == sensor.BRAKING_MODE_TEMP
+    assert fake_temp == data["outdoor_temp"] + sensor.WINTER_BRAKE_TEMP_OFFSET
+
+
+def test_very_cheap_price_overshoots_target():
+    s = create_sensor()
+    data = base_sensor_data()
+    fake_temp, mode = s._calculate_output_temperature(data, [], "very_cheap", 0)
+    assert mode == "heating"
+    assert fake_temp < data["outdoor_temp"]
+
+
+def test_cheap_price_overshoots_target():
+    s = create_sensor()
+    data = base_sensor_data()
+    fake_temp, mode = s._calculate_output_temperature(data, [], "cheap", 0)
+    assert mode == "heating"
+    assert fake_temp < data["outdoor_temp"]

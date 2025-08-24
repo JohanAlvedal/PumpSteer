@@ -23,9 +23,12 @@ from ..settings import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
     BRAKING_MODE_TEMP,
+    BRAKE_FAKE_TEMP,
     PREBOOST_MAX_OUTDOOR_TEMP,
     AGGRESSIVENESS_SCALING_FACTOR,
-    PREBOOST_OUTPUT_TEMP
+    PREBOOST_OUTPUT_TEMP,
+    WINTER_BRAKE_TEMP_OFFSET,
+    CHEAP_PRICE_OVERSHOOT,
 )
 from ..utils import (
     safe_float,
@@ -289,7 +292,19 @@ class PumpSteerSensor(Entity):
         if outdoor_temp >= summer_threshold:
             return outdoor_temp, "summer_mode"
 
-        temp_diff = indoor_temp - target_temp
+        # Allow slight overshoot when prices are cheap or very cheap
+        target_temp_for_logic = target_temp
+        if "very_cheap" in price_category or "cheap" in price_category:
+            target_temp_for_logic += CHEAP_PRICE_OVERSHOOT
+
+        # Dynamic braking temperature based on outdoor temp
+        brake_temp = (
+            outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
+            if outdoor_temp < summer_threshold
+            else BRAKE_FAKE_TEMP
+        )
+
+        temp_diff = indoor_temp - target_temp_for_logic
 
         if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
             fake_temp = outdoor_temp
@@ -298,9 +313,10 @@ class PumpSteerSensor(Entity):
             try:
                 fake_temp, mode = calculate_temperature_output(
                     indoor_temp,
-                    target_temp,
+                    target_temp_for_logic,
                     outdoor_temp,
-                    aggressiveness
+                    aggressiveness,
+                    brake_temp,
                 )
             except Exception as e:
                 _LOGGER.error(f"Error in temperature calculation: {e}")
@@ -309,10 +325,15 @@ class PumpSteerSensor(Entity):
         if mode not in ["braking_by_temp", "heating"] and (
             "expensive" in price_category or "very_expensive" in price_category
         ):
-            _LOGGER.info(
-                f"Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {BRAKING_MODE_TEMP} °C)"
+            price_brake_temp = (
+                outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
+                if outdoor_temp < summer_threshold
+                else BRAKING_MODE_TEMP
             )
-            return BRAKING_MODE_TEMP, "braking_by_price"
+            _LOGGER.info(
+                f"Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {price_brake_temp} °C)"
+            )
+            return price_brake_temp, "braking_by_price"
 
         return fake_temp, mode
 

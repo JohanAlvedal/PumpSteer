@@ -3,7 +3,6 @@ import logging
 from .settings import (
     MIN_FAKE_TEMP,
     MAX_FAKE_TEMP,
-    BRAKE_FAKE_TEMP,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -14,6 +13,7 @@ def calculate_temperature_output(
     actual_target_temp_for_logic: float,
     real_outdoor_temp: float,
     aggressiveness: float,
+    brake_temp: float,
 ) -> tuple[float, str]:
     """
     Calculates the virtual outdoor temperature (fake_temp) and operating mode
@@ -82,7 +82,7 @@ def calculate_temperature_output(
     # The fake temperature is increased to make the heat pump work less (or cool).
     elif diff > 0.5:
         fake_temp = real_outdoor_temp + (diff * scaling_factor * 4)
-        fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), BRAKE_FAKE_TEMP)
+        fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), brake_temp)
         mode = "braking_by_temp"
         _LOGGER.debug(
             f"TempControl: Braking (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}"
