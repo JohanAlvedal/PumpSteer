@@ -292,9 +292,9 @@ class PumpSteerSensor(Entity):
         if outdoor_temp >= summer_threshold:
             return outdoor_temp, "summer_mode"
 
-        # Allow slight overshoot when prices are cheap or very cheap
+        # Allow slight overshoot only when prices are very cheap
         target_temp_for_logic = target_temp
-        if "very_cheap" in price_category or "cheap" in price_category:
+        if "very_cheap" in price_category:
             target_temp_for_logic += CHEAP_PRICE_OVERSHOOT
 
         # Dynamic braking temperature based on outdoor temp
