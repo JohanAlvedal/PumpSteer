@@ -30,6 +30,8 @@ PREBOOST_MAX_OUTDOOR_TEMP: Final[float] = (
 MIN_FAKE_TEMP: Final[float] = -25.0
 MAX_FAKE_TEMP: Final[float] = 30.0
 BRAKE_FAKE_TEMP: Final[float] = 25.0
+WINTER_BRAKE_TEMP_OFFSET: Final[float] = 7.0  # °C offset above outdoor temp when braking in winter
+CHEAP_PRICE_OVERSHOOT: Final[float] = 1.0  # °C to overshoot target when prices are cheap
 
 # === ELECTRICITY PRICE CLASSIFICATION ===
 DEFAULT_PERCENTILES: Final[List[int]] = [
