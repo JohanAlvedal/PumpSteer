@@ -181,7 +181,7 @@ Recommendations can be shown in UI or in markdown cards.
 
 PumpSteer controls your heat pump's perceived demand using a fake outdoor temperature:
 
-* Increases heating when electricity is cheap
+* Slightly increases heating (1 °C overshoot) only when electricity prices are very cheap
 * Avoids heating when prices are high
 * Goes to neutral mode when stable
 * Disables heating when it's warm outside (summer mode)

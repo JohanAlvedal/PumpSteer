@@ -63,9 +63,9 @@ def test_very_cheap_price_overshoots_target():
     assert fake_temp < data["outdoor_temp"]
 
 
-def test_cheap_price_overshoots_target():
+def test_cheap_price_neutral_behavior():
     s = create_sensor()
     data = base_sensor_data()
     fake_temp, mode = s._calculate_output_temperature(data, [], "cheap", 0)
-    assert mode == "heating"
-    assert fake_temp < data["outdoor_temp"]
+    assert mode == "neutral"
+    assert fake_temp == data["outdoor_temp"]
