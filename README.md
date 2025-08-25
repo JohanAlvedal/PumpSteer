@@ -41,6 +41,7 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 * 🤖 ML analysis: learns how your house responds (session-based)
 * 🔁 Auto-adjustment of `house_inertia` (if enabled)
 * 🧠 Recommendations for improved comfort/savings balance
+* ⚙️ Adjustable heating and braking compensation factors
 * 🎛️ Fine-tuning via `input_number`, `input_text`, `input_boolean`, `input_datetime`
 * 🖼️ Extra sensors for UI visualization
 
