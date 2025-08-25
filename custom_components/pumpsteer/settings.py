@@ -32,6 +32,12 @@ MAX_FAKE_TEMP: Final[float] = 30.0
 BRAKE_FAKE_TEMP: Final[float] = 25.0
 WINTER_BRAKE_TEMP_OFFSET: Final[float] = 5.0  # °C offset above outdoor temp when braking in winter
 CHEAP_PRICE_OVERSHOOT: Final[float] = 1.0  # °C to overshoot target when prices are very cheap
+HEATING_COMPENSATION_FACTOR: Final[float] = (
+    0.2  # Factor for lowering fake temp per °C deficit and aggressiveness unit
+)
+BRAKING_COMPENSATION_FACTOR: Final[float] = (
+    0.4  # Factor for raising fake temp per °C surplus and aggressiveness unit
+)
 
 # === ELECTRICITY PRICE CLASSIFICATION ===
 DEFAULT_PERCENTILES: Final[List[int]] = [

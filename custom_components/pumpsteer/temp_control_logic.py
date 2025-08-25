@@ -3,6 +3,8 @@ import logging
 from .settings import (
     MIN_FAKE_TEMP,
     MAX_FAKE_TEMP,
+    HEATING_COMPENSATION_FACTOR,
+    BRAKING_COMPENSATION_FACTOR,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,16 +61,15 @@ def calculate_temperature_output(
         )
         return fake_temp, mode
 
-    # SCALING WITH AGGRESSIVENESS
-    scaling_factor = aggressiveness * 0.1
-    fake_temp = 0.0
-    mode = "aggressiveness"
+    # Default to neutral behaviour
+    fake_temp = real_outdoor_temp
+    mode = "neutral"
 
     # HEATING mode (too cold indoors)
     # If indoor temperature is significantly below target, activate heating.
     # The fake temperature is reduced to make the heat pump work harder.
     if diff < -0.5:
-        fake_temp = real_outdoor_temp + (diff * scaling_factor * 2)
+        fake_temp += diff * aggressiveness * HEATING_COMPENSATION_FACTOR
         # Previously: fake_temp = max(min(fake_temp, 30.0), -15.0)
         # Now: use global safety limits
         fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
@@ -81,19 +82,14 @@ def calculate_temperature_output(
     # If indoor temperature is significantly above target, activate braking.
     # The fake temperature is increased to make the heat pump work less (or cool).
     elif diff > 0.5:
-        fake_temp = real_outdoor_temp + (diff * scaling_factor * 4)
+        fake_temp += diff * aggressiveness * BRAKING_COMPENSATION_FACTOR
         fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), brake_temp)
         mode = "braking_by_temp"
         _LOGGER.debug(
             f"TempControl: Braking (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}"
         )
 
-    # NEUTRAL mode
-    # If indoor temperature is within the comfort zone of the target, remain neutral.
-    # The fake temperature is the real outdoor temperature.
     else:
-        fake_temp = real_outdoor_temp
-        mode = "neutral"
         _LOGGER.debug(
             f"TempControl: Within comfort zone (diff: {diff:.2f}) - Mode: {mode}"
         )
