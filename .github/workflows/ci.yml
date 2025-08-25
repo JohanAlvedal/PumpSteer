@@ -138,7 +138,11 @@ jobs:
         run: |
           VERSION="${{ github.event.release.tag_name }}"
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/pumpsteer/manifest.json
-          
+
+      - name: Remove __pycache__ directories
+        run: |
+          find . -name '__pycache__' -type d -exec rm -rf {} +
+
       - name: Create ZIP for release
         run: |
           cd custom_components
