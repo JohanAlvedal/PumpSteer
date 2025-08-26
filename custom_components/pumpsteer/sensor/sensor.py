@@ -323,7 +323,9 @@ class PumpSteerSensor(Entity):
                 fake_temp, mode = outdoor_temp, "error"
 
         if mode not in ["braking_by_temp", "heating"] and (
-            "expensive" in price_category or "very_expensive" in price_category
+            "expensive" in price_category
+            or "very_expensive" in price_category
+            or "extreme" in price_category
         ):
             price_brake_temp = (
                 outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
