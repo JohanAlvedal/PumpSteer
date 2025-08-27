@@ -32,8 +32,8 @@ ML_MIN_DATA_POINTS: Final[int] = 2  # Minimum data points for trend analysis
 # === ML PERFORMANCE ANALYSIS ===
 ML_LONG_DURATION_THRESHOLD: Final[float] = 120.0     # Minutes - indicates slow house
 ML_SHORT_DURATION_THRESHOLD: Final[float] = 20.0     # Minutes - indicates fast house
-ML_HIGH_INERTIA_THRESHOLD: Final[float] = 2.0        # House inertia - slow response
-ML_LOW_INERTIA_THRESHOLD: Final[float] = 2.0         # House inertia - fast response
+ML_HIGH_INERTIA_THRESHOLD: Final[float] = 3.0        # House inertia >= 3.0 indicates slow response
+ML_LOW_INERTIA_THRESHOLD: Final[float] = 1.0         # House inertia <= 1.0 indicates fast response
 ML_HIGH_AGGRESSIVENESS_THRESHOLD: Final[int] = 4     # Aggressiveness - high savings
 ML_LOW_AGGRESSIVENESS_THRESHOLD: Final[int] = 2      # Aggressiveness - comfort focus
 
