@@ -33,7 +33,7 @@ ML_MIN_DATA_POINTS: Final[int] = 2  # Minimum data points for trend analysis
 ML_LONG_DURATION_THRESHOLD: Final[float] = 120.0     # Minutes - indicates slow house
 ML_SHORT_DURATION_THRESHOLD: Final[float] = 20.0     # Minutes - indicates fast house
 ML_HIGH_INERTIA_THRESHOLD: Final[float] = 2.0        # House inertia - slow response
-ML_LOW_INERTIA_THRESHOLD: Final[float] = 2.0         # House inertia - fast response
+ML_LOW_INERTIA_THRESHOLD: Final[float] = 1.0         # House inertia - fast response
 ML_HIGH_AGGRESSIVENESS_THRESHOLD: Final[int] = 4     # Aggressiveness - high savings
 ML_LOW_AGGRESSIVENESS_THRESHOLD: Final[int] = 2      # Aggressiveness - comfort focus
 
@@ -121,6 +121,10 @@ def validate_ml_settings() -> None:
     # Validate aggressiveness thresholds
     if ML_LOW_AGGRESSIVENESS_THRESHOLD >= ML_HIGH_AGGRESSIVENESS_THRESHOLD:
         errors.append("ML_LOW_AGGRESSIVENESS_THRESHOLD must be less than ML_HIGH_AGGRESSIVENESS_THRESHOLD")
+
+    # Validate inertia thresholds
+    if ML_LOW_INERTIA_THRESHOLD >= ML_HIGH_INERTIA_THRESHOLD:
+        errors.append("ML_LOW_INERTIA_THRESHOLD must be less than ML_HIGH_INERTIA_THRESHOLD")
 
     # Validate file settings
     if ML_MAX_SESSION_UPDATES <= 0 or ML_TRIMMED_UPDATES <= 0:
