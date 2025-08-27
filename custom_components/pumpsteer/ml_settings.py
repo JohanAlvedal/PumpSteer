@@ -24,13 +24,13 @@ ML_MIN_HEATING_SESSIONS: Final[int] = 3  # Minimum heating sessions for analysis
 ML_ANALYSIS_RECENT_SESSIONS: Final[int] = 10  # How many recent sessions to analyze
 
 # === ML SUCCESS CRITERIA ===
-ML_SUCCESS_DURATION_THRESHOLD: Final[float] = 120.0  # Minutes - under this = success
+ML_SUCCESS_DURATION_THRESHOLD: Final[float] = 90.0   # Minutes - under this = success
 ML_SUCCESS_TEMP_DIFF_THRESHOLD: Final[float] = 0.3   # °C - minimum temp diff for success
 ML_FAILURE_DURATION_THRESHOLD: Final[float] = 180.0  # Minutes - over this = failure
 ML_MIN_DATA_POINTS: Final[int] = 2  # Minimum data points for trend analysis
 
 # === ML PERFORMANCE ANALYSIS ===
-ML_LONG_DURATION_THRESHOLD: Final[float] = 120.0     # Minutes - indicates slow house
+ML_LONG_DURATION_THRESHOLD: Final[float] = 150.0     # Minutes - indicates slow house
 ML_SHORT_DURATION_THRESHOLD: Final[float] = 20.0     # Minutes - indicates fast house
 ML_HIGH_INERTIA_THRESHOLD: Final[float] = 3.0        # House inertia >= 3.0 indicates slow response
 ML_LOW_INERTIA_THRESHOLD: Final[float] = 1.0         # House inertia <= 1.0 indicates fast response
@@ -94,11 +94,16 @@ def validate_ml_settings() -> None:
         errors.append("ML_MIN_SESSIONS_FOR_AUTOTUNE must be >= ML_MIN_SESSIONS_FOR_RECOMMENDATIONS")
 
     # Validate duration thresholds
-    if ML_SUCCESS_DURATION_THRESHOLD >= ML_FAILURE_DURATION_THRESHOLD:
-        errors.append("ML_SUCCESS_DURATION_THRESHOLD must be less than ML_FAILURE_DURATION_THRESHOLD")
-    
-    if ML_SHORT_DURATION_THRESHOLD >= ML_LONG_DURATION_THRESHOLD:
-        errors.append("ML_SHORT_DURATION_THRESHOLD must be less than ML_LONG_DURATION_THRESHOLD")
+    if not (
+        ML_SHORT_DURATION_THRESHOLD
+        < ML_SUCCESS_DURATION_THRESHOLD
+        < ML_LONG_DURATION_THRESHOLD
+        < ML_FAILURE_DURATION_THRESHOLD
+    ):
+        errors.append(
+            "Duration thresholds must be in ascending order: "
+            "short < success < long < failure"
+        )
 
     # Validate success rate thresholds
     if not (0 <= ML_POOR_SUCCESS_RATE <= ML_HIGH_SUCCESS_RATE_THRESHOLD <= ML_EXCELLENT_SUCCESS_RATE <= 100):
