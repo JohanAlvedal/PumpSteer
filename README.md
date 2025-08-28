@@ -70,8 +70,7 @@ If PumpSteer is not yet available in HACS:
 
 PumpSteer requires hourly temperature forecasts in `input_text.hourly_forecast_temperatures`. Instead of manual entry, use our automated blueprint:
 
-[![Import Blueprint](https://img.shields.io/badge/IMPORT%20BLUEPRINT%20TO-MY%20🏠-41BDF5?style=for-the-badge&labelColor=54B4D3)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=[https%3A//gist.githubusercontent.com/JohanAlvedal/48fb8b3e1ef5fc3a70b5c473be54e2fe/raw](https://gist.github.com/JohanAlvedal/48fb8b3e1ef5fc3a70b5c473be54e2fe.js))
-
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgist.githubusercontent.com%2FJohanAlvedal%2F48fb8b3e1ef5fc3a70b5c473be54e2fe%2Fraw%2Fpumpsteer_temperature_forcast.yaml)
 
 ### What it does:
 - 🔄 Automatically fetches 24-hour temperature forecasts
