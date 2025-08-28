@@ -18,7 +18,6 @@ entities:
     name: Broms aktiv
     secondary_info: last-changed
   - type: divider
-  - entity: sensor.atc_fe8e_temperature
   - entity: sensor.real_outdoor_temperature
     name: Outdoor
     secondary_info: last-changed
