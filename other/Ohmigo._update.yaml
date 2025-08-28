@@ -1,3 +1,7 @@
+##
+## If you have Ohmigo set up, this automation will keep its temperature 
+## sensor updated with the current temperature reading from PumpSteer.
+##
 alias: Update Ohmigo sensor
 description: ""
 triggers:
@@ -8,6 +12,6 @@ actions:
   - data:
       value: "{{ states('sensor.pumpsteer') | float }}"
     target:
-      entity_id: number.ohmigohass_temperature
+      entity_id: number.ohmigohass_temperature # Replace this with your Ohmigo temperature entity.
     action: number.set_value
 mode: single
