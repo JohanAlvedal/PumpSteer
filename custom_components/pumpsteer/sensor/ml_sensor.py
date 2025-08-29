@@ -1,8 +1,6 @@
 # ml_sensor.py – Improved ML analysis sensor for PumpSteer
 
 import logging
-import json
-from pathlib import Path
 from typing import Dict, Any
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -13,21 +11,12 @@ from homeassistant.helpers.device_registry import DeviceInfo
 import homeassistant.util.dt as dt_util
 
 from ..ml_adaptive import PumpSteerMLCollector
-from ..utils import safe_float, get_state
+from ..utils import safe_float, get_state, get_version
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _get_version() -> str:
-    manifest_path = Path(__file__).resolve().parents[1] / "manifest.json"
-    try:
-        with open(manifest_path) as manifest_file:
-            return json.load(manifest_file).get("version", "1.3.4")
-    except FileNotFoundError:
-        return "1.3.4"
-
-
-SW_VERSION = _get_version()
+SW_VERSION = get_version()
 
 # Important ML-related entities - these are critical for PumpSteer control
 ML_RELATED_ENTITIES = {
