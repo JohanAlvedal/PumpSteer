@@ -115,6 +115,16 @@ class PumpSteerMLSensor(Entity):
                 _LOGGER.error(f"ML sensor: Failed to load data: {e}")
                 self._last_error = f"Data loading failed: {e}"
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle cleanup when entity is removed."""
+        if self.ml and hasattr(self.ml, "async_shutdown"):
+            try:
+                await self.ml.async_shutdown()
+            except Exception as e:
+                _LOGGER.error(f"ML sensor: Error during shutdown: {e}")
+        self.ml = None
+        await super().async_will_remove_from_hass()
+
     def _get_control_system_data(self) -> Dict[str, Any]:
         """Get data from Home Assistant control system entities."""
         try:

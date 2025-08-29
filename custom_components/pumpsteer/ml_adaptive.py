@@ -170,6 +170,16 @@ class PumpSteerMLCollector:
         with open(self.data_file, "w") as f:
             json.dump(data, f, indent=2)
 
+    async def async_shutdown(self) -> None:
+        """Flush pending data and release resources."""
+        try:
+            if self.current_session is not None:
+                # Ensure any active session is closed before shutdown
+                self.end_session("shutdown")
+            await self.async_save_data()
+        except Exception as e:
+            _LOGGER.error(f"ML: Error during shutdown: {e}")
+
     def start_session(self, initial_data: Dict[str, Any]) -> None:
         """Start a new learning session."""
         if self.current_session is not None:
