@@ -1,8 +1,6 @@
 # sensor.py
 
 import logging
-import json
-from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
@@ -35,6 +33,7 @@ from ..utils import (
     get_state,
     get_attr,
     safe_array_slice,
+    get_version,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,16 +51,7 @@ except ImportError as e:
 DOMAIN = "pumpsteer"
 
 
-def _get_version() -> str:
-    manifest_path = Path(__file__).resolve().parents[1] / "manifest.json"
-    try:
-        with open(manifest_path) as manifest_file:
-            return json.load(manifest_file).get("version", "1.3.4")
-    except FileNotFoundError:
-        return "1.3.4"
-
-
-SW_VERSION = _get_version()
+SW_VERSION = get_version()
 
 # Hardcoded entities
 HARDCODED_ENTITIES = {

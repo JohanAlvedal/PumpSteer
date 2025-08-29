@@ -1,4 +1,6 @@
 import logging
+import json
+from pathlib import Path
 from typing import Optional, Tuple, List, Any, Union
 from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -12,6 +14,16 @@ from .settings import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def get_version() -> str:
+    """Load integration version from manifest.json."""
+    manifest_path = Path(__file__).resolve().parents[1] / "manifest.json"
+    try:
+        with open(manifest_path) as manifest_file:
+            return json.load(manifest_file).get("version", "1.3.4")
+    except FileNotFoundError:
+        return "1.3.4"
 
 
 def safe_float(
