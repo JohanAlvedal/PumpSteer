@@ -199,6 +199,16 @@ class PumpSteerSensor(Entity):
 
         await super().async_added_to_hass()
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle entity removal from Home Assistant."""
+        if self.ml_collector and hasattr(self.ml_collector, "async_shutdown"):
+            try:
+                await self.ml_collector.async_shutdown()
+            except Exception as e:
+                _LOGGER.error(f"Error during ML collector shutdown: {e}")
+        self.ml_collector = None
+        await super().async_will_remove_from_hass()
+
 
     async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Handle options update event."""
