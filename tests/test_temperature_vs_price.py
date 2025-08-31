@@ -12,7 +12,6 @@ from custom_components.pumpsteer.settings import (
     BRAKE_FAKE_TEMP,
     HEATING_COMPENSATION_FACTOR,
 )
-import pytest
 
 
 class DummyHass:
