@@ -231,8 +231,8 @@ class PumpSteerMLCollector:
         self.learning_sessions.append(self.current_session)
         self.current_session = None
 
-        # Save to file asynchronously
-        self.hass.loop.create_task(self.async_save_data())
+        # Save to file asynchronously using Home Assistant helper
+        self.hass.async_create_task(self.async_save_data())
 
         if ML_LOG_SESSION_DETAILS:
             _LOGGER.debug(
@@ -832,8 +832,8 @@ class PumpSteerMLCollector:
         self.learning_sessions.append(self.current_session)
         self.current_session = None
 
-        # Save to file asynchronously
-        self.hass.loop.create_task(self.async_save_data())
+        # Save to file asynchronously using Home Assistant helper
+        self.hass.async_create_task(self.async_save_data())
 
         _LOGGER.debug(
             f"ML: Session ended - Reason: {reason}, Duration: {session_summary.get('duration_minutes', 0):.1f}min"
