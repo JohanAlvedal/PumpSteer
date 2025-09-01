@@ -775,8 +775,8 @@ class PumpSteerMLCollector:
             "version": "1.0",
             "created": dt_util.now().isoformat(),
             "sessions": self.learning_sessions[
-                -100:
-            ],  # Save only the last 100 sessions
+                -ML_MAX_SAVED_SESSIONS:
+            ],  # Persist only the most recent sessions
             "session_count": len(self.learning_sessions),
         }
         Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
@@ -830,6 +830,8 @@ class PumpSteerMLCollector:
         self.current_session["summary"] = session_summary
 
         self.learning_sessions.append(self.current_session)
+        # Keep only the latest ML_MAX_SAVED_SESSIONS entries
+        self.learning_sessions = self.learning_sessions[-ML_MAX_SAVED_SESSIONS:]
         self.current_session = None
 
         # Save to file asynchronously using Home Assistant helper
