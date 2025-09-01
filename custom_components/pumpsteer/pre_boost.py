@@ -157,6 +157,7 @@ def check_combined_preboost(
 ) -> Optional[str]:
     """
     Check if preboost should be activated based on combined temperature and price forecasts.
+    Aggressiveness must be provided in the 0-5 range by the sensor layer.
 
     Args:
         temp_csv: CSV string of temperature forecasts
@@ -165,7 +166,7 @@ def check_combined_preboost(
         cold_threshold: Temperature threshold for considering "cold"
         price_threshold_ratio: Price ratio threshold for considering "expensive"
         min_peak_hits: Minimum number of peaks required
-        aggressiveness: Aggressiveness factor (0.0-1.0)
+        aggressiveness: Aggressiveness factor (0.0-5.0) provided by the sensor layer
         inertia: System thermal inertia factor
 
     Returns:
@@ -213,6 +214,7 @@ def check_combined_preboost(
             _LOGGER.warning(f"Invalid max price for pre-boost analysis, using: {DEFAULT_PRICE_RATIO}")
             max_price = DEFAULT_PRICE_RATIO
 
+        # Aggressiveness is provided on a 0-5 scale by the sensor layer
         adjusted_ratio, price_threshold = calculate_adjusted_thresholds(
             aggressiveness, max_price
         )
@@ -391,8 +393,8 @@ def check_future_warming_trend(temps: List[float], lookahead_hours: int) -> bool
 def calculate_adjusted_thresholds(
     aggressiveness: float, max_price: float
 ) -> Tuple[float, float]:
-    """Calculate adjusted price thresholds based on aggressiveness factor."""
-    aggressiveness = max(0.0, min(1.0, aggressiveness))
+    """Calculate adjusted price thresholds based on aggressiveness factor (0-5)."""
+    aggressiveness = max(0.0, min(5.0, aggressiveness))
 
     if max_price <= 0:
         raise ValueError(f"Invalid max_price: {max_price}")
