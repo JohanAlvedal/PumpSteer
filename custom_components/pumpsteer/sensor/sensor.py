@@ -274,6 +274,7 @@ class PumpSteerSensor(Entity):
                         temp_csv=temp_forecast_csv,
                         prices=prices,
                         cold_threshold=target_temp - 2.0,
+                        # Provide aggressiveness in the 0-5 range for pre-boost logic
                         aggressiveness=aggressiveness,
                         inertia=inertia
                     )
