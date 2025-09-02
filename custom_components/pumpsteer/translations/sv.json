@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "PumpSteer konfiguration",
+        "data": {
+          "indoor_temp_entity": "Inomhustemperatur sensor",
+          "real_outdoor_entity": "Utomhustemperatur sensor",
+          "electricity_price_entity": "Elpris sensor"
+        }
+      }
+    },
+    "error": {
+      "required": "Detta fält är obligatoriskt",
+      "entity_not_found": "Entitet hittades inte",
+      "entity_unavailable": "Entitet otillgänglig"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PumpSteer alternativ",
+        "data": {
+          "indoor_temp_entity": "Inomhustemperatur sensor",
+          "real_outdoor_entity": "Utomhustemperatur sensor",
+          "electricity_price_entity": "Elpris sensor"
+        }
+      }
+    },
+    "error": {
+      "required": "Detta fält är obligatoriskt",
+      "entity_not_found": "Entitet hittades inte",
+      "entity_unavailable": "Entitet otillgänglig"
+    }
+  }
+}

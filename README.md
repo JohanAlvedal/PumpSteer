@@ -2,6 +2,15 @@
 
 PumpSteer is a custom Home Assistant integration that dynamically optimizes your heat pump by manipulating the outdoor temperature sensor input. It helps save energy and money by adjusting your heating strategy based on electricity prices, indoor temperature, weather forecasts, and thermal inertia.
 
+## 🎯 What can PumpSteer do for you? / Vad kan PumpSteer göra för dig?
+
+**Save money** 💰 by heating when electricity is cheap and reducing heating when prices are high  
+**Increase comfort** 🏠 by maintaining your desired temperature while optimizing energy usage  
+**Learn automatically** 🤖 how your house responds to temperature changes through ML analysis  
+**Prevent overheating** ☀️ by automatically switching to summer mode when it's warm outside  
+**Plan ahead** 🚀 by pre-heating before cold periods or expensive electricity hours  
+**Adapt to your schedule** 🏝️ with holiday mode for when you're away from home  
+
 <a href="https://www.buymeacoffee.com/alvjo" target="_blank">
   <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 200px !important;">
 </a>
