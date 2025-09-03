@@ -22,6 +22,7 @@ from ..settings import (
     HOLIDAY_TEMP,
     BRAKING_MODE_TEMP,
     BRAKE_FAKE_TEMP,
+    SUMMER_PRECOOL_LOOKAHEAD,
     PREBOOST_MAX_OUTDOOR_TEMP,
     AGGRESSIVENESS_SCALING_FACTOR,
     PREBOOST_OUTPUT_TEMP,
@@ -34,6 +35,7 @@ from ..utils import (
     get_attr,
     safe_array_slice,
     get_version,
+    should_precool_for_summer,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -261,34 +263,46 @@ class PumpSteerSensor(Entity):
         preboost_mode = None
         temp_forecast_csv = None
 
-        # Allow preboost only if switch is ON
+        # Fetch forecast if entity provided
+        if outdoor_temp_forecast_entity:
+            temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
+
+        # Allow preboost only if switch is ON and outdoor temperature is low
         preboost_allowed = bool(sensor_data.get('preboost_enabled', False))
 
-        if preboost_allowed and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
-            if outdoor_temp_forecast_entity:
-                temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
-
-            if temp_forecast_csv:
-                try:
-                    preboost_mode = check_combined_preboost(
-                        temp_csv=temp_forecast_csv,
-                        prices=prices,
-                        cold_threshold=target_temp - 2.0,
-                        # Provide aggressiveness in the 0-5 range for pre-boost logic
-                        aggressiveness=aggressiveness,
-                        inertia=inertia
-                    )
-                except Exception as e:
-                    _LOGGER.error(f"Error in pre-boost check: {e}")
-                    preboost_mode = None
-            else:
-                _LOGGER.debug("No temperature forecast available for pre-boost check.")
+        if (
+            preboost_allowed
+            and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP
+            and temp_forecast_csv
+        ):
+            try:
+                preboost_mode = check_combined_preboost(
+                    temp_csv=temp_forecast_csv,
+                    prices=prices,
+                    cold_threshold=target_temp - 2.0,
+                    # Provide aggressiveness in the 0-5 range for pre-boost logic
+                    aggressiveness=aggressiveness,
+                    inertia=inertia,
+                )
+            except Exception as e:
+                _LOGGER.error(f"Error in pre-boost check: {e}")
+                preboost_mode = None
+        elif preboost_allowed and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
+            _LOGGER.debug("No temperature forecast available for pre-boost check.")
         elif not preboost_allowed:
             _LOGGER.debug("Pre-boost disabled by switch; skipping pre-boost evaluation.")
 
         if preboost_mode == "preboost":
             _LOGGER.info(f"Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
             return PREBOOST_OUTPUT_TEMP, "preboost"
+
+        if temp_forecast_csv and should_precool_for_summer(
+            temp_forecast_csv, summer_threshold, SUMMER_PRECOOL_LOOKAHEAD
+        ):
+            _LOGGER.info(
+                "Activating summer precool mode due to forecasted high temperatures"
+            )
+            return BRAKE_FAKE_TEMP, "precool_for_summer"
 
         if outdoor_temp >= summer_threshold:
             return outdoor_temp, "summer_mode"

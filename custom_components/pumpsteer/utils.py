@@ -306,6 +306,24 @@ def safe_parse_temperature_forecast(
         return None
 
 
+def should_precool_for_summer(
+    temp_forecast_csv: Optional[str],
+    summer_threshold: float,
+    lookahead_hours: int,
+) -> bool:
+    """Check if forecast exceeds summer threshold within given hours."""
+    if not temp_forecast_csv:
+        return False
+
+    temps = safe_parse_temperature_forecast(
+        temp_forecast_csv, max_hours=lookahead_hours
+    )
+    if not temps:
+        return False
+
+    return any(t >= summer_threshold for t in temps)
+
+
 def validate_required_entities(
     hass: HomeAssistant, config: dict, strict: bool = True
 ) -> List[str]:

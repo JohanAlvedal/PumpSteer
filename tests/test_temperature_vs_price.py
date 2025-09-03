@@ -15,8 +15,23 @@ from custom_components.pumpsteer.settings import (
 import pytest
 
 
+class DummyState:
+    def __init__(self, state):
+        self.state = state
+
+
+class DummyStates:
+    def __init__(self, mapping):
+        self._mapping = mapping
+
+    def get(self, entity_id):
+        value = self._mapping.get(entity_id)
+        return DummyState(value) if value is not None else None
+
+
 class DummyHass:
-    pass
+    def __init__(self, states=None):
+        self.states = DummyStates(states or {})
 
 
 class DummyConfigEntry:
@@ -26,8 +41,8 @@ class DummyConfigEntry:
         pass
 
 
-def create_sensor():
-    return sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
+def create_sensor(hass=None):
+    return sensor.PumpSteerSensor(hass or DummyHass(), DummyConfigEntry())
 
 
 def base_sensor_data(**kwargs):
@@ -83,6 +98,16 @@ def test_cheap_price_neutral_behavior():
     fake_temp, mode = s._calculate_output_temperature(data, [], "cheap", 0)
     assert mode == "neutral"
     assert fake_temp == data["outdoor_temp"]
+
+
+def test_precool_triggered_by_forecast():
+    forecast = "17,19,17"
+    hass = DummyHass({"input_text.hourly_forecast_temperatures": forecast})
+    s = create_sensor(hass)
+    data = base_sensor_data(outdoor_temp_forecast_entity="input_text.hourly_forecast_temperatures")
+    fake_temp, mode = s._calculate_output_temperature(data, [], "normal", 0)
+    assert mode == "precool_for_summer"
+    assert fake_temp == BRAKE_FAKE_TEMP
 
 
 def test_heating_compensation_factor_applied():
