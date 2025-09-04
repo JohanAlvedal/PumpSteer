@@ -299,7 +299,7 @@ class PumpSteerSensor(Entity):
             _LOGGER.info(
                 "Activating summer precool mode due to forecasted high temperatures"
             )
-            return BRAKE_FAKE_TEMP, "precool_for_summer"
+            return BRAKE_FAKE_TEMP, "precool"
 
         if outdoor_temp >= summer_threshold:
             return outdoor_temp, "summer_mode"
