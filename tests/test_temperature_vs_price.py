@@ -110,6 +110,16 @@ def test_precool_triggered_by_forecast():
     assert fake_temp == BRAKE_FAKE_TEMP
 
 
+def test_precool_triggered_by_long_term_forecast():
+    forecast = "17,17,17,17,17,17,19"
+    hass = DummyHass({"input_text.hourly_forecast_temperatures": forecast})
+    s = create_sensor(hass)
+    data = base_sensor_data(outdoor_temp_forecast_entity="input_text.hourly_forecast_temperatures")
+    fake_temp, mode = s._calculate_output_temperature(data, [], "normal", 0)
+    assert mode == "precool_for_summer"
+    assert fake_temp == BRAKE_FAKE_TEMP
+
+
 def test_heating_compensation_factor_applied():
     fake_temp, mode = calculate_temperature_output(
         indoor_temp=19.0,

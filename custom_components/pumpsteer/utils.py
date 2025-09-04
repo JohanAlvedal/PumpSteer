@@ -11,6 +11,7 @@ from .settings import (
     MAX_REASONABLE_TEMP,
     MIN_REASONABLE_PRICE,
     MAX_REASONABLE_PRICE,
+    PRECOOL_LOOKAHEAD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -306,22 +307,21 @@ def safe_parse_temperature_forecast(
         return None
 
 
-def should_precool_for_summer(
+def should_precool(
     temp_forecast_csv: Optional[str],
-    summer_threshold: float,
-    lookahead_hours: int,
+    warm_threshold: float,
 ) -> bool:
-    """Check if forecast exceeds summer threshold within given hours."""
+    """Check if forecast exceeds warm threshold within lookahead period."""
     if not temp_forecast_csv:
         return False
 
     temps = safe_parse_temperature_forecast(
-        temp_forecast_csv, max_hours=lookahead_hours
+        temp_forecast_csv, max_hours=PRECOOL_LOOKAHEAD
     )
     if not temps:
         return False
 
-    return any(t >= summer_threshold for t in temps)
+    return any(t >= warm_threshold for t in temps)
 
 
 def validate_required_entities(
