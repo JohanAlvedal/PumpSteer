@@ -106,7 +106,7 @@ def test_precool_triggered_by_forecast():
     s = create_sensor(hass)
     data = base_sensor_data(outdoor_temp_forecast_entity="input_text.hourly_forecast_temperatures")
     fake_temp, mode = s._calculate_output_temperature(data, [], "normal", 0)
-    assert mode == "precool_for_summer"
+    assert mode == "precool"
     assert fake_temp == BRAKE_FAKE_TEMP
 
 

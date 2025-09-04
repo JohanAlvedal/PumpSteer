@@ -306,12 +306,12 @@ def safe_parse_temperature_forecast(
         return None
 
 
-def should_precool_for_summer(
+def should_precool(
     temp_forecast_csv: Optional[str],
     summer_threshold: float,
     lookahead_hours: int,
 ) -> bool:
-    """Check if forecast exceeds summer threshold within given hours."""
+    """Check if forecast exceeds threshold within given hours."""
     if not temp_forecast_csv:
         return False
 

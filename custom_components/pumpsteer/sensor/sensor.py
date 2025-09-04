@@ -35,7 +35,7 @@ from ..utils import (
     get_attr,
     safe_array_slice,
     get_version,
-    should_precool_for_summer,
+    should_precool,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -296,13 +296,13 @@ class PumpSteerSensor(Entity):
             _LOGGER.info(f"Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
             return PREBOOST_OUTPUT_TEMP, "preboost"
 
-        if temp_forecast_csv and should_precool_for_summer(
+        if temp_forecast_csv and should_precool(
             temp_forecast_csv, summer_threshold, SUMMER_PRECOOL_LOOKAHEAD
         ):
             _LOGGER.info(
-                "Activating summer precool mode due to forecasted high temperatures"
+                "Activating precool mode due to forecasted high temperatures"
             )
-            return BRAKE_FAKE_TEMP, "precool_for_summer"
+            return BRAKE_FAKE_TEMP, "precool"
 
         if outdoor_temp >= summer_threshold:
             return outdoor_temp, "summer_mode"
