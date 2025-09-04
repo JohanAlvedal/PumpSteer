@@ -3,7 +3,7 @@ from custom_components.pumpsteer.utils import get_version
 
 
 def test_get_version_reads_manifest():
-    assert get_version() == "1.5.0-beta"
+    assert get_version() == "1.5.0-beta1"
 
 
 def test_get_version_missing_manifest(monkeypatch):
