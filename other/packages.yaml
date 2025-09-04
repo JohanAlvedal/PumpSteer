@@ -177,7 +177,7 @@ template:
               🔥 Heating ({{ temp_diff | round(1) }}°C below target)
             {% elif mode == 'cooling' %}
               ❄️ Cooling ({{ temp_diff | round(1) }}°C above target)
-            {% elif mode == 'precool_for_summer' %}
+            {% elif mode == 'precool' %}
               🧊 Precooling for Summer
             {% elif mode == 'summer_mode' %}
               ☀️ Summer Mode
