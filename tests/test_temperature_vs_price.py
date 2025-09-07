@@ -12,6 +12,7 @@ from custom_components.pumpsteer.settings import (
     BRAKE_FAKE_TEMP,
     HEATING_COMPENSATION_FACTOR,
 )
+from custom_components.pumpsteer.utils import should_precool
 import pytest
 
 
@@ -131,3 +132,26 @@ def test_heating_compensation_factor_applied():
     expected = 5.0 + (19.0 - 21.0) * 3.0 * HEATING_COMPENSATION_FACTOR
     assert mode == "heating"
     assert round(fake_temp, 6) == round(expected, 6)
+
+
+def test_precool_not_triggered_when_below_threshold():
+    """Ensure normal mode when forecast never meets threshold."""
+    forecast = "17,17,17"
+    hass = DummyHass({"input_text.hourly_forecast_temperatures": forecast})
+    s = create_sensor(hass)
+    data = base_sensor_data(
+        outdoor_temp_forecast_entity="input_text.hourly_forecast_temperatures"
+    )
+    fake_temp, mode = s._calculate_output_temperature(data, [], "normal", 0)
+    assert mode == "neutral"
+    assert fake_temp == data["outdoor_temp"]
+
+
+def test_should_precool_false_when_below_threshold():
+    """should_precool returns False for forecasts under the threshold."""
+    assert not should_precool("17,17,17", 18.0)
+
+
+def test_should_precool_false_without_forecast():
+    """should_precool returns False if forecast is missing."""
+    assert not should_precool(None, 18.0)
