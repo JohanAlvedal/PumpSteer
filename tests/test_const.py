@@ -41,3 +41,28 @@ def test_build_attributes_basic():
     assert attrs["mode"] == "heating"
     assert attrs["current_price"] == 1.2
     assert "aggressiveness" in attrs
+
+
+def test_decision_reason_very_cheap_heating():
+    sensor_data = {
+        'aggressiveness': 3,
+        'inertia': 2,
+        'target_temp': 21.0,
+        'indoor_temp': 21.0,
+        'outdoor_temp': 5.0,
+        'summer_threshold': 15.0,
+        'outdoor_temp_forecast_entity': True,
+    }
+    prices = [0.5, 0.6]
+    current_price = 0.5
+    price_category = "very_cheap"
+    mode = "heating"
+    holiday = False
+    categories = ["very_cheap", "cheap"]
+    now_hour = 0
+
+    s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
+    s._state = 5.0
+
+    attrs = s._build_attributes(sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour)
+    assert attrs["decision_reason"] == "heating - Triggered by very cheap price"

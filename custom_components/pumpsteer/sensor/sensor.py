@@ -488,8 +488,11 @@ class PumpSteerSensor(Entity):
             'preboost': 'pre-boost (cold & expensive forecast)',
             'error': 'error in calculation',
         }
-
-        decision_reason = f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
+        # If heating is enabled while prices are very cheap, the trigger should reflect that
+        if mode == 'heating' and 'very_cheap' in price_category:
+            decision_reason = f"{mode} - Triggered by very cheap price"
+        else:
+            decision_reason = f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
         next_3_hours_prices = safe_array_slice(prices, now_hour, 3)
 
         attributes = {
