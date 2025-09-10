@@ -37,6 +37,7 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 * ☀️ Summer mode: disables heating control during warm weather
 * 🏝️ Holiday mode: temporarily reduces temperature when away
 * 🚀 Pre-boost: stores heat before cold or high-price periods
+* ❄️ Precool: pauses heating ahead of forecasted warm weather
 * 📈 Switchable price model (`hybrid` or `percentiles`)
 * 🤖 ML analysis: learns how your house responds (session-based)
 * 🔁 Auto-adjustment of `house_inertia` (if enabled)
@@ -46,6 +47,10 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 * 🖼️ Extra sensors for UI visualization
 
 > 💡 **Note:** Holiday mode is only active when the outdoor temperature is below the summer threshold.
+
+## ❄️ Precool Mode
+
+When the hourly temperature forecast shows that any of the next 24 hours will exceed the summer threshold, PumpSteer enters *precool* mode. It sends the braking temperature (25 °C by default) to the heat pump so heating stops before the warm period arrives. This prevents unnecessary heating just before summer-like conditions.
 
 ---
 
@@ -185,6 +190,7 @@ PumpSteer controls your heat pump's perceived demand using a fake outdoor temper
 * Avoids heating when prices are high
 * Goes to neutral mode when stable
 * Disables heating when it's warm outside (summer mode)
+* Pre-cools ahead of warm periods when the forecast exceeds the summer threshold
 * Lowers target temp to 16 °C during holidays
 * Learns over time how your house reacts and adjusts settings (if `autotune_inertia` is enabled)
 
