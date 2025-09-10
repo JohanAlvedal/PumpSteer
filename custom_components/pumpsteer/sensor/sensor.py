@@ -349,6 +349,7 @@ class PumpSteerSensor(Entity):
             )
             return price_brake_temp, "braking_by_price"
 
+        fake_temp = min(fake_temp, BRAKE_FAKE_TEMP)
         return fake_temp, mode
 
 
