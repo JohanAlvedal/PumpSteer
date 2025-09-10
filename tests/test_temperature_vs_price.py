@@ -131,3 +131,21 @@ def test_heating_compensation_factor_applied():
     expected = 5.0 + (19.0 - 21.0) * 3.0 * HEATING_COMPENSATION_FACTOR
     assert mode == "heating"
     assert round(fake_temp, 6) == round(expected, 6)
+
+
+def test_fake_temp_constraint_applied():
+    """Test that fake_temp is constrained to not exceed BRAKE_FAKE_TEMP."""
+    s = create_sensor()
+    # Create a scenario that might produce high fake_temp values
+    # Use very high indoor temperature and neutral target to trigger braking mode
+    data = base_sensor_data(
+        indoor_temp=30.0,  # Very high indoor temp
+        target_temp=20.0,  # Much lower target
+        outdoor_temp=5.0,  # Cold outdoor temp
+        aggressiveness=5.0  # Maximum aggressiveness
+    )
+    fake_temp, mode = s._calculate_output_temperature(data, [], "normal", 0)
+    
+    # The fake_temp should be constrained to BRAKE_FAKE_TEMP (25.0)
+    assert fake_temp <= BRAKE_FAKE_TEMP
+    assert fake_temp == BRAKE_FAKE_TEMP  # Should be exactly BRAKE_FAKE_TEMP due to constraint
