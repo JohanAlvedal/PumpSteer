@@ -28,7 +28,7 @@ PREBOOST_MAX_OUTDOOR_TEMP: Final[float] = (
 
 # === TEMPERATURE CONTROL LOGIC ===
 MIN_FAKE_TEMP: Final[float] = -25.0
-MAX_FAKE_TEMP: Final[float] = 30.0
+MAX_FAKE_TEMP: Final[float] = 25.0
 BRAKE_FAKE_TEMP: Final[float] = 20.0
 PRECOOL_LOOKAHEAD: Final[int] = 24  # Hours ahead to look for precooling
 WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0  # °C offset above outdoor temp when braking in winter
