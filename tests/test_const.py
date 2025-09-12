@@ -76,3 +76,30 @@ def test_decision_reason_very_cheap_heating():
     )
     assert attrs["decision_reason"] == "heating - Triggered by very cheap price"
 
+
+def test_decision_reason_precool():
+    sensor_data = {
+        'aggressiveness': 3,
+        'inertia': 2,
+        'target_temp': 21.0,
+        'indoor_temp': 21.0,
+        'outdoor_temp': 5.0,
+        'summer_threshold': 15.0,
+        'outdoor_temp_forecast_entity': True,
+    }
+    prices = [1.0, 1.2]
+    current_price = 1.0
+    price_category = "normal"
+    mode = "precool"
+    holiday = False
+    categories = ["normal", "high"]
+    now_hour = 0
+
+    s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
+    s._state = 5.0
+
+    attrs = s._build_attributes(
+        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
+    )
+    assert attrs["decision_reason"] == "precool - Triggered by pre-cool (warm forecast)"
+
