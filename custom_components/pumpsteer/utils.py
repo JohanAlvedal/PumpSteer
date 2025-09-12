@@ -309,9 +309,9 @@ def safe_parse_temperature_forecast(
 
 def should_precool(
     temp_forecast_csv: Optional[str],
-    warm_threshold: float,
+    threshold_with_margin: float,
 ) -> bool:
-    """Check if forecast exceeds warm threshold within lookahead period."""
+    """Check if forecast exceeds threshold including any margin within lookahead."""
     if not temp_forecast_csv:
         return False
 
@@ -321,7 +321,7 @@ def should_precool(
     if not temps:
         return False
 
-    return any(t >= warm_threshold for t in temps)
+    return any(t >= threshold_with_margin for t in temps)
 
 
 def validate_required_entities(
