@@ -87,7 +87,10 @@ def test_extreme_price_brake_when_neutral():
 def test_very_cheap_price_overshoots_target():
     s = create_sensor()
     data = base_sensor_data()
+    original_overshoot = sensor.CHEAP_PRICE_OVERSHOOT
+    sensor.CHEAP_PRICE_OVERSHOOT = 0.6  # Ensure overshoot is active for the test
     fake_temp, mode = s._calculate_output_temperature(data, [], "very_cheap", 0)
+    sensor.CHEAP_PRICE_OVERSHOOT = original_overshoot
     assert mode == "heating"
     assert fake_temp < data["outdoor_temp"]
 

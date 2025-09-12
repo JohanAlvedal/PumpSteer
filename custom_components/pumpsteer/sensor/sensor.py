@@ -486,6 +486,7 @@ class PumpSteerSensor(Entity):
             'summer_mode': 'summer',
             'neutral': 'neutral',
             'preboost': 'pre-boost (cold & expensive forecast)',
+            'precool': 'pre-cool (warm forecast)',
             'error': 'error in calculation',
         }
         # If heating is enabled while prices are very cheap, the trigger should reflect that
