@@ -27,6 +27,7 @@ from ..settings import (
     PREBOOST_OUTPUT_TEMP,
     WINTER_BRAKE_TEMP_OFFSET,
     CHEAP_PRICE_OVERSHOOT,
+    PRECOOL_MARGIN,
 )
 from ..utils import (
     safe_float,
@@ -295,7 +296,9 @@ class PumpSteerSensor(Entity):
             _LOGGER.info(f"Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
             return PREBOOST_OUTPUT_TEMP, "preboost"
 
-        if temp_forecast_csv and should_precool(temp_forecast_csv, summer_threshold):
+        if temp_forecast_csv and should_precool(
+            temp_forecast_csv, summer_threshold + PRECOOL_MARGIN
+        ):
             _LOGGER.info(
                 "Activating summer precool mode due to forecasted high temperatures"
             )

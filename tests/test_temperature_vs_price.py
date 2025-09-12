@@ -11,6 +11,7 @@ from custom_components.pumpsteer.temp_control_logic import calculate_temperature
 from custom_components.pumpsteer.settings import (
     BRAKE_FAKE_TEMP,
     HEATING_COMPENSATION_FACTOR,
+    PRECOOL_MARGIN,
 )
 import pytest
 
@@ -104,7 +105,9 @@ def test_cheap_price_neutral_behavior():
 
 
 def test_precool_triggered_by_forecast():
-    forecast = "17,19,17"
+    st = base_sensor_data()["summer_threshold"]
+    trigger = st + PRECOOL_MARGIN
+    forecast = f"{st - 1},{trigger},{st - 1}"
     hass = DummyHass({"input_text.hourly_forecast_temperatures": forecast})
     s = create_sensor(hass)
     data = base_sensor_data(outdoor_temp_forecast_entity="input_text.hourly_forecast_temperatures")
@@ -114,7 +117,9 @@ def test_precool_triggered_by_forecast():
 
 
 def test_precool_triggered_by_long_term_forecast():
-    forecast = "17,17,17,17,17,17,19"
+    st = base_sensor_data()["summer_threshold"]
+    trigger = st + PRECOOL_MARGIN
+    forecast = ",".join([str(st - 1)] * 6 + [str(trigger)])
     hass = DummyHass({"input_text.hourly_forecast_temperatures": forecast})
     s = create_sensor(hass)
     data = base_sensor_data(outdoor_temp_forecast_entity="input_text.hourly_forecast_temperatures")
