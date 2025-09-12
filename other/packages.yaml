@@ -51,7 +51,7 @@ input_number:
     min: 0.0
     max: 1.0
     step: 0.01
-    mode: slider
+    mode: box
     unit_of_measurement: ""
     icon: mdi:tune
 
@@ -203,7 +203,7 @@ template:
           {% else %}
             0
           {% endif %}
-        icon: mdi:cash-percent
+        icon: mdi:cash-clock
         availability: >
           {{ state_attr('sensor.pumpsteer', 'current_price') is not none and
             state_attr('sensor.pumpsteer', 'max_price') is not none }}
@@ -268,22 +268,22 @@ template:
         state: >
           {% set prices = state_attr('sensor.pumpsteer', 'next_3_hours_prices') %}
           {% set current_price = state_attr('sensor.pumpsteer', 'current_price') | float(0) %}
-          {% if prices is iterable and prices | length > 0 %}
-            {% set next_price = prices[0] | float(0) %}
+          {% if prices is iterable and prices | length > 1 %}
+            {% set next_price = prices[1] | float(0) %}
             {% if current_price > 0 %}
               {% set change = ((next_price - current_price) / current_price * 100) | round(0) %}
-              {% if change > 10 %}
-                📈 Price is rising ({{ change }}%)
-              {% elif change < -10 %}
-                📉 Price is falling ({{ change }}%)
+              {% if change > 5 %}
+              Rising ({{ change }}%)
+              {% elif change < -5 %}
+                Falling ({{ change }}%)
               {% else %}
-                ➡️ Stable price ({{ change }}%)
+                Stable ({{ change }}%)
               {% endif %}
             {% else %}
-              ➡️ No price change
+              No price change
             {% endif %}
           {% else %}
-            ❓ No forecast
+            No forecast
           {% endif %}
 
       - name: "PumpSteer Data Quality"
@@ -387,7 +387,38 @@ template:
         icon: mdi:lightbulb-on-outline
         state: >
           {{ state_attr('sensor.pumpsteer_ml_analysis', 'recommendations') | default('No recommendations yet') }}
+          
+      # --- ADDED: Difference between PumpSteer (virtual) and real outdoor temperature ---
+      - name: "PumpSteer Delta"
+        unique_id: pumpsteer_delta
+        unit_of_measurement: "°C"
+        icon: mdi:swap-horizontal-bold
+        device_class: temperature
+        # All comments are in English
+        # 'delta' is the signed difference: virtual (pumpsteer) minus real outdoor temp.
+        state: >
+          {% set real = states('sensor.real_outdoor_temperature') %}
+          {% set virtual = states('sensor.pumpsteer') %}
+          {% if real not in ['unknown','unavailable','none', None] 
+                and virtual not in ['unknown','unavailable','none', None] %}
+            {{ (virtual | float(0) - real | float(0)) | round(1) }}
+          {% else %}
+            unavailable
+          {% endif %}
+        availability: >
+          {{ states('sensor.real_outdoor_temperature') not in ['unknown','unavailable', 'none']
+             and states('sensor.pumpsteer') not in ['unknown','unavailable','none'] }}
 
+  - sensor:
+      - name: "Forecast Temperatures List"
+        state: >
+          {{ states('input_text.hourly_forecast_temperatures') }}
+        attributes:
+          values: >
+            {% set raw = states('input_text.hourly_forecast_temperatures') %}
+            {% set list = raw.split(',') %}
+            {{ list | map('float') | list }}
+      
 # ═══════════════════════════════════════════════════════════
 # STATISTICS SENSORS
 # ═══════════════════════════════════════════════════════════
@@ -413,6 +444,7 @@ sensor:
     state_characteristic: mean
     max_age:
       days: 30
+
 # ═══════════════════════════════════════════════════════════
 # AUTOMATIONS
 # ═══════════════════════════════════════════════════════════
@@ -434,7 +466,7 @@ automation:
           {% set new_cat = trigger.to_state.attributes.get('price_category') if trigger.to_state else none %}
           {{ old_cat != new_cat }}
     action:
-      - service: persistent_notification.create
+      - service: notify.mobile_app_iphone13pro
         data:
           title: "⚡ Very high electricity price!"
           message: >
@@ -443,7 +475,12 @@ automation:
             💰 Price: {{ state_attr('sensor.pumpsteer', 'current_price') | default('N/A') }} SEK/kWh
             📊 Category: {{ state_attr('sensor.pumpsteer', 'price_category') | default('N/A') }}
             🏠 Mode: {{ state_attr('sensor.pumpsteer', 'mode') | default('N/A') | title }}
-          notification_id: "pumpsteer_high_price"
+          data:
+            push:
+              sound:
+                name: default
+                critical: 0
+                volume: 1.0
 
   - alias: "PumpSteer - Pre-boost Notification"
     id: pumpsteer_preboost_notification
@@ -454,7 +491,7 @@ automation:
         entity_id: sensor.pumpsteer_operating_mode
         to: "Preboost"
     action:
-      - service: persistent_notification.create
+      - service: notify.mobile_app_iphone13pro
         data:
           title: "🔥 PumpSteer Pre-boost Activated"
           message: >
@@ -463,4 +500,53 @@ automation:
             🌡️ Current temp: {{ state_attr('sensor.pumpsteer', 'outdoor_temperature') | default('N/A') }}°C
             🎯 Virtual temp: {{ states('sensor.pumpsteer') | default('N/A') }}°C
             ⏰ Inertia: {{ state_attr('sensor.pumpsteer', 'inertia') | default('N/A') }}h
-          notification_id: "pumpsteer_preboost"
+          data:
+            push:
+              sound:
+                name: default
+                critical: 0
+                volume: 1.0
+
+  - alias: Apply all ML recommendations
+    triggers:
+      - entity_id:
+          - sensor.pumpsteer_ml_analysis
+        trigger: state
+        attribute: recommendations
+    conditions:
+      - condition: state
+        entity_id: input_boolean.autotune_inertia
+        state: "on"
+    actions:
+      - target:
+          entity_id: input_number.house_inertia
+        data:
+          value: "{{ state_attr('sensor.pumpsteer_ml_analysis', 'inertia') | float(0) }}"
+        action: input_number.set_value
+      - data:
+          value: >-
+            {{ state_attr('sensor.pumpsteer_ml_analysis', 'integral_temp_error') |
+            float(0) }}
+        action: input_number.set_value
+        target:
+          entity_id: input_number.integral_temp_error
+      - data:
+          value: >-
+            {{ state_attr('sensor.pumpsteer_ml_analysis', 'integral_gain') |
+            float(0) }}
+        action: input_number.set_value
+        target:
+          entity_id: input_number.pumpsteer_integral_gain
+      - data:
+          message: >
+            ML Auto-tune applied:  Inertia={{
+            state_attr('sensor.pumpsteer_ml_analysis', 'inertia') }}, 
+            Integral_Gain={{ state_attr('sensor.pumpsteer_ml_analysis',
+            'integral_gain') }},  Integral_Temp_Error={{
+            state_attr('sensor.pumpsteer_ml_analysis', 'integral_temp_error') }}
+          level: info
+        action: system_log.write
+      - action: notify.persistent_notification
+        metadata: {}
+        data:
+          message: ML recommendations applied successfully
