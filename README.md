@@ -33,6 +33,7 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
   * Temperature forecast (comma-separated list)
   * Thermal inertia
 * 💸 Electricity price adjustment via Nordpool or other sensor
+*   Supports 15-minute price intervals
 * 🧊 Braking mode: limits heating during high prices
 * ☀️ Summer mode: disables heating control during warm weather
 * 🏝️ Holiday mode: temporarily reduces temperature when away
