@@ -2,6 +2,8 @@
 
 PumpSteer is a custom Home Assistant integration that dynamically optimizes your heat pump by manipulating the outdoor temperature sensor input. It helps save energy and money by adjusting your heating strategy based on electricity prices, indoor temperature, weather forecasts, and thermal inertia.
 
+**This control system regulates heat supply solely based on outdoor temperature and lacks direct integration with your existing heating system. Therefore, it requires that the basic settings in your heating system already function correctly to achieve a consistent and comfortable indoor climate.**
+
 <a href="https://www.buymeacoffee.com/alvjo" target="_blank">
   <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 200px !important;">
 </a>
@@ -50,7 +52,7 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 
 ## ❄️ Precool Mode
 
-When the hourly temperature forecast shows that any of the next 24 hours will exceed the summer threshold, PumpSteer enters *precool* mode. It sends the braking temperature (25 °C by default) to the heat pump so heating stops before the warm period arrives. This prevents unnecessary heating just before summer-like conditions.
+When the hourly temperature forecast shows that any of the next 24 hours will exceed the summer threshold, PumpSteer enters *precool* mode. It sends the braking temperature (25 °C by default) to the heat pump so heating stops before the warm period arrives. This prevents unnecessary heating just before summer-like conditions.
 
 ---
 
@@ -186,7 +188,7 @@ Recommendations can be shown in UI or in markdown cards.
 
 PumpSteer controls your heat pump's perceived demand using a fake outdoor temperature:
 
-* Slightly increases heating (1 °C overshoot) only when electricity prices are very cheap
+* Slightly increases heating (1 °C overshoot) only when electricity prices are very cheap
 * Avoids heating when prices are high
 * Goes to neutral mode when stable
 * Disables heating when it's warm outside (summer mode)
