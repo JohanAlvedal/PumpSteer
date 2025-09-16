@@ -6,6 +6,10 @@ _LOGGER = logging.getLogger(__name__)
 # === VERSION INFO ===
 PUMPSTEER_VERSION: Final[str] = "1.2.1"
 
+# === TIME SLOT SETTINGS ===
+INTERVAL_MINUTES: Final[int] = 60  # Minutes per price interval
+SLOTS_PER_HOUR: Final[int] = 60 // INTERVAL_MINUTES
+
 # === HOUSE CONTROL SETTINGS ===
 DEFAULT_HOUSE_INERTIA: Final[float] = 1.0  # Default house thermal inertia
 
