@@ -24,6 +24,13 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 
 ---
 
+![PumpSteer Drift & Status](docs/img/01.png)
+![PumpSteer Troubleshooting](docs/img/02.png)
+![PumpSteer Templates](docs/img/03.png)
+![PumpSteer Price & Holiday](docs/img/04.png)
+
+---
+
 ## ✅ Features
 
 * 🔧 Smart virtual control of outdoor temperature
