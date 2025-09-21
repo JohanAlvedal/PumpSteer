@@ -1,9 +1,14 @@
 import builtins
+import json
+from pathlib import Path
 from custom_components.pumpsteer.utils import get_version
 
 
 def test_get_version_reads_manifest():
-    assert get_version() == "1.5.0"
+    manifest_path = Path("custom_components/pumpsteer/manifest.json")
+    with open(manifest_path) as f:
+        version = json.load(f)["version"]
+    assert get_version() == version
 
 
 def test_get_version_missing_manifest(monkeypatch):

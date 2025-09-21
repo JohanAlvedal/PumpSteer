@@ -23,6 +23,8 @@ from .settings import (
     NORMAL_MULTIPLIER,
     EXPENSIVE_MULTIPLIER,
     VERY_EXPENSIVE_MULTIPLIER,  # ← ADDED
+    INTERVAL_MINUTES,
+    SLOTS_PER_HOUR,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -300,36 +302,36 @@ def count_category(price_list: List[float], target_category: str) -> int:
     return categories.count(target_category)
 
 
-def find_cheapest_hours(price_list: List[float], num_hours: int = 1) -> List[int]:
+def find_cheapest_slots(price_list: List[float], num_slots: int = 1) -> List[int]:
     """
-    Find the indices (positions) of the `num_hours` cheapest prices in the list.
+    Find the indices (positions) of the `num_slots` cheapest prices in the list.
     The indices correspond to the original position in the `price_list`.
     """
-    if not price_list or num_hours <= 0:
+    if not price_list or num_slots <= 0:
         return []
 
     # Pair each price with its original index
     indexed_prices = [(i, price) for i, price in enumerate(price_list)]
     # Sort by price in ascending order
     indexed_prices.sort(key=lambda x: x[1])
-    # Return the indices of the cheapest hours
-    return [i for i, _ in indexed_prices[:min(num_hours, len(indexed_prices))]]
+    # Return the indices of the cheapest slots
+    return [i for i, _ in indexed_prices[:min(num_slots, len(indexed_prices))]]
 
 
-def find_most_expensive_hours(price_list: List[float], num_hours: int = 1) -> List[int]:
+def find_most_expensive_slots(price_list: List[float], num_slots: int = 1) -> List[int]:
     """
-    Find the indices (positions) of the `num_hours` most expensive prices in the list.
+    Find the indices (positions) of the `num_slots` most expensive prices in the list.
     The indices correspond to the original position in the `price_list`.
     """
-    if not price_list or num_hours <= 0:
+    if not price_list or num_slots <= 0:
         return []
 
     # Pair each price with its original index
     indexed_prices = [(i, price) for i, price in enumerate(price_list)]
     # Sort by price in descending order
     indexed_prices.sort(key=lambda x: x[1], reverse=True)
-    # Return the indices of the most expensive hours
-    return [i for i, _ in indexed_prices[:min(num_hours, len(indexed_prices))]]
+    # Return the indices of the most expensive slots
+    return [i for i, _ in indexed_prices[:min(num_slots, len(indexed_prices))]]
 
 
 # === PumpSteer-specific functions ===
@@ -405,6 +407,7 @@ def calculate_boost_potential(
         return {
             'should_boost': False,
             'boost_hours': 0,
+            'boost_slots': [],
             'reason': 'Insufficient price data'
         }
 
@@ -428,13 +431,15 @@ def calculate_boost_potential(
     price_increase_threshold = current_avg * (1.2 * multiplier)
 
     if future_avg > price_increase_threshold:
-        # Find the cheapest hours now for boosting
-        cheap_hours = find_cheapest_hours(current_prices, max(1, aggressiveness))
+        # Find the cheapest slots now for boosting
+        cheap_slots = find_cheapest_slots(
+            current_prices, max(1, aggressiveness * SLOTS_PER_HOUR)
+        )
 
         return {
             'should_boost': True,
-            'boost_hours': len(cheap_hours),
-            'boost_indices': cheap_hours,
+            'boost_hours': (len(cheap_slots) * INTERVAL_MINUTES) / 60,
+            'boost_slots': cheap_slots,
             'current_avg': current_avg,
             'future_avg': future_avg,
             'savings_potential': future_avg - current_avg,
@@ -444,5 +449,6 @@ def calculate_boost_potential(
     return {
         'should_boost': False,
         'boost_hours': 0,
+        'boost_slots': [],
         'reason': f'Future prices {future_avg:.3f} <= threshold {price_increase_threshold:.3f}'
     }
