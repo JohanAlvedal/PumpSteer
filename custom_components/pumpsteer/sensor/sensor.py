@@ -342,11 +342,7 @@ class PumpSteerSensor(Entity):
             or "very_expensive" in price_category
             or "extreme" in price_category
         ):
-            price_brake_temp = (
-                outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
-                if outdoor_temp < summer_threshold
-                else BRAKING_MODE_TEMP
-            )
+            price_brake_temp = BRAKING_MODE_TEMP
             _LOGGER.info(
                 f"Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {price_brake_temp} °C)"
             )
