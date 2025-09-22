@@ -232,5 +232,8 @@ This is a hobby project built with the help of ChatGPT, Copilot, and a lot of pa
 * 🐞 [Create Issue](https://github.com/JohanAlvedal/PumpSteer/issues)
 
 ---
+## License
+As of version v1.6.0, this project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+Previous versions (≤ v1.5.1) are available under the Apache License 2.0.
 
 © Johan Älvedal
