@@ -385,23 +385,6 @@ class PumpSteerSensor(Entity):
             _LOGGER.debug(f"ML data collection error (non-critical): {e}")
 
 
-    def _add_ml_attributes(self) -> None:
-        """Add ML attributes to sensor attributes."""
-        if not self.ml_collector:
-            return
-
-        try:
-            ml_status = self.ml_collector.get_status()
-            self._attributes.update({
-                "ML_Available": True,
-                "ML_Status": "Collecting data" if ml_status["collecting_data"] else "Ready",
-                "ML_Sessions_Collected": ml_status["sessions_collected"]
-            })
-
-        except Exception as e:
-            _LOGGER.debug(f"ML attributes error (non-critical): {e}")
-
-
     async def _get_price_data(
         self,
         config: Dict[str, Any],
@@ -548,7 +531,6 @@ class PumpSteerSensor(Entity):
                     "Status": f"Missing: {', '.join(missing)}",
                     "Last Updated": update_time.isoformat(),
                     "Current Hour": now_hour,
-                    "ML_Available": self.ml_collector is not None
                 }
                 return
 
@@ -574,21 +556,16 @@ class PumpSteerSensor(Entity):
 
             if self.ml_collector:
                 self._collect_ml_data(sensor_data, mode, fake_temp)
-                self._add_ml_attributes()
 
             self._last_update_time = update_time
 
         except Exception as e:
-            if not self.ml_collector:
-                self._attributes["ML_Available"] = False
-                self._attributes["ML_Error"] = "ML Collector not initialized"
             _LOGGER.error(f"Error during update: {e}", exc_info=True)
             self._state = STATE_UNAVAILABLE
             self._attributes = {
                 "Status": f"Error: {str(e)}",
                 "Last Updated": dt_util.now().isoformat(),
                 "Error Details": str(e),
-                "ML_Available": self.ml_collector is not None
             }
 
 
