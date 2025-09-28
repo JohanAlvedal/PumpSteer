@@ -77,6 +77,14 @@ def test_price_brake_for_small_deficit_when_expensive():
     assert fake_temp == sensor.BRAKING_MODE_TEMP
 
 
+def test_price_brake_with_high_aggressiveness_near_target():
+    s = create_sensor()
+    data = base_sensor_data(indoor_temp=20.4, target_temp=21.0, aggressiveness=5.0)
+    fake_temp, mode = s._calculate_output_temperature(data, [], "very_expensive", 0, 60)
+    assert mode == "braking_by_price"
+    assert fake_temp == sensor.BRAKING_MODE_TEMP
+
+
 def test_price_brake_when_neutral():
     s = create_sensor()
     data = base_sensor_data()

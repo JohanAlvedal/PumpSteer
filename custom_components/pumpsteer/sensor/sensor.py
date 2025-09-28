@@ -339,6 +339,11 @@ class PumpSteerSensor(Entity):
         )
 
         temp_diff = indoor_temp - target_temp_for_logic
+        price_is_high = (
+            "expensive" in price_category
+            or "very_expensive" in price_category
+            or "extreme" in price_category
+        )
 
         if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
             fake_temp = outdoor_temp
@@ -357,28 +362,21 @@ class PumpSteerSensor(Entity):
                 fake_temp, mode = outdoor_temp, "error"
 
             temp_deficit = target_temp_for_logic - indoor_temp
-            max_deficit = (
-                NEUTRAL_TEMP_THRESHOLD
-                * (1.0 - min(1.0, aggressiveness / 5.0))
-                + NEUTRAL_TEMP_THRESHOLD
+            normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
+            price_brake_window = NEUTRAL_TEMP_THRESHOLD + 0.05 + (
+                0.45 * normalized_aggressiveness
             )
-            if (
-                mode == "heating"
-                and (
-                    "expensive" in price_category
-                    or "very_expensive" in price_category
-                    or "extreme" in price_category
+
+            if mode == "heating" and price_is_high and temp_deficit <= price_brake_window:
+                _LOGGER.info(
+                    "Price braking active during heating: deficit %.2f °C within %.2f °C window (agg %.2f)",
+                    temp_deficit,
+                    price_brake_window,
+                    aggressiveness,
                 )
-                and temp_deficit < max_deficit
-            ):
-                # Ngenic-inspired braking tightens as aggressiveness approaches 5 to avoid wasteful heating.
                 return BRAKING_MODE_TEMP, "braking_by_price"
 
-        if mode not in ["braking_by_temp", "heating"] and (
-            "expensive" in price_category
-            or "very_expensive" in price_category
-            or "extreme" in price_category
-        ):
+        if mode not in ["braking_by_temp", "heating"] and price_is_high:
             price_brake_temp = BRAKING_MODE_TEMP
             slot_label = f"slot {current_slot_index}"
             _LOGGER.info(
