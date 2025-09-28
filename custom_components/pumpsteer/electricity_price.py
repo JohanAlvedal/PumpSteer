@@ -9,6 +9,12 @@ from homeassistant.util.dt import now as dt_now
 from datetime import timedelta, datetime
 from homeassistant.core import HomeAssistant
 
+from .utils import (
+    hours_to_intervals,
+    detect_price_interval_minutes,
+    intervals_to_hours,
+)
+
 # === CORRECTED IMPORT - all multipliers included ===
 from .settings import (
     DEFAULT_PERCENTILES,
@@ -356,37 +362,61 @@ async def async_get_forecast_prices(
             _LOGGER.debug("No future prices found in entity attributes")
             return []
 
-        # Filter only future hours
         current_time = dt_now()
-        forecast_prices = []
+        entries: List[Dict[str, any]] = []
 
         for price_data in raw_prices:
-            if isinstance(price_data, dict) and 'start' in price_data and 'value' in price_data:
-                try:
-                    # Convert start time to datetime if needed
-                    start_time = price_data['start']
-                    if isinstance(start_time, str):
-                        start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            if not isinstance(price_data, dict):
+                continue
 
-                    # Only future prices
-                    if start_time > current_time:
-                        forecast_prices.append({
-                            'timestamp': start_time,
-                            'price': float(price_data['value']),
-                            'hours_from_now': int((start_time - current_time).total_seconds() / 3600)
-                        })
+            if 'start' not in price_data or 'value' not in price_data:
+                continue
 
-                        # Limit to desired number of hours
-                        if len(forecast_prices) >= hours_ahead:
-                            break
+            try:
+                start_time = price_data['start']
+                if isinstance(start_time, str):
+                    start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
 
-                except (ValueError, TypeError, KeyError) as e:
-                    _LOGGER.debug(f"Skipping invalid price data: {e}")
+                if start_time <= current_time:
                     continue
 
-        # Sort by time
-        forecast_prices.sort(key=lambda x: x['timestamp'])
-        return forecast_prices[:hours_ahead]
+                entries.append(
+                    {
+                        'timestamp': start_time,
+                        'price': float(price_data['value']),
+                    }
+                )
+            except (ValueError, TypeError, KeyError) as e:
+                _LOGGER.debug(f"Skipping invalid price data: {e}")
+                continue
+
+        if not entries:
+            return []
+
+        entries.sort(key=lambda x: x['timestamp'])
+
+        interval_minutes = 60
+        if len(entries) >= 2:
+            delta = entries[1]['timestamp'] - entries[0]['timestamp']
+            interval_minutes = max(1, int(delta.total_seconds() // 60)) or 60
+
+        required_slots = hours_to_intervals(hours_ahead, interval_minutes)
+        forecast_prices: List[Dict[str, any]] = []
+
+        for entry in entries[:required_slots]:
+            hours_from_now = round(
+                (entry['timestamp'] - current_time).total_seconds() / 3600,
+                2,
+            )
+            forecast_prices.append(
+                {
+                    'timestamp': entry['timestamp'],
+                    'price': entry['price'],
+                    'hours_from_now': hours_from_now,
+                }
+            )
+
+        return forecast_prices
 
     except Exception as e:
         _LOGGER.error(f"Error retrieving forecast prices: {e}")
@@ -409,6 +439,7 @@ def calculate_boost_potential(
         }
 
     current_avg = get_daily_average(current_prices)
+    interval_minutes = detect_price_interval_minutes(current_prices)
     future_prices = [p['price'] for p in forecast_prices]
     future_avg = get_daily_average(future_prices)
 
@@ -430,10 +461,11 @@ def calculate_boost_potential(
     if future_avg > price_increase_threshold:
         # Find the cheapest hours now for boosting
         cheap_hours = find_cheapest_hours(current_prices, max(1, aggressiveness))
+        boost_duration_hours = intervals_to_hours(len(cheap_hours), interval_minutes)
 
         return {
             'should_boost': True,
-            'boost_hours': len(cheap_hours),
+            'boost_hours': boost_duration_hours,
             'boost_indices': cheap_hours,
             'current_avg': current_avg,
             'future_avg': future_avg,
