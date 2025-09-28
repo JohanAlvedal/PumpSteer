@@ -42,7 +42,16 @@ def test_build_attributes_basic():
     s._state = 5.0
 
     attrs = s._build_attributes(
-        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
+        sensor_data,
+        prices,
+        current_price,
+        price_category,
+        mode,
+        holiday,
+        categories,
+        now_hour,
+        60,
+        now_hour,
     )
     assert attrs["mode"] == "heating"
     assert attrs["current_price"] == 1.2
@@ -72,7 +81,16 @@ def test_decision_reason_very_cheap_heating():
     s._state = 5.0
 
     attrs = s._build_attributes(
-        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
+        sensor_data,
+        prices,
+        current_price,
+        price_category,
+        mode,
+        holiday,
+        categories,
+        now_hour,
+        60,
+        now_hour,
     )
     assert attrs["decision_reason"] == "heating - Triggered by very cheap price"
 
@@ -99,7 +117,16 @@ def test_decision_reason_precool():
     s._state = 5.0
 
     attrs = s._build_attributes(
-        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
+        sensor_data,
+        prices,
+        current_price,
+        price_category,
+        mode,
+        holiday,
+        categories,
+        now_hour,
+        60,
+        now_hour,
     )
     assert attrs["decision_reason"] == "precool - Triggered by pre-cool (warm forecast)"
 

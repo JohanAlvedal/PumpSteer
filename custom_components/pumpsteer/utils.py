@@ -1,7 +1,9 @@
 import logging
 import json
+import math
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List, Any, Union
+from typing import Optional, Tuple, List, Any, Union, Sequence
 from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.typing import StateType
@@ -507,6 +509,102 @@ def safe_array_slice(array: List[Any], start: int, length: int) -> List[Any]:
         )
 
     return result
+
+
+def detect_price_interval_minutes(prices: Sequence[Any]) -> int:
+    """Infer the resolution of a price list in minutes."""
+    if not prices:
+        return 60
+
+    length = len(prices)
+    if length <= 0:
+        return 60
+
+    if 1440 % length == 0:
+        return max(1, 1440 // length)
+
+    for multiplier in range(2, 8):
+        if length % multiplier == 0:
+            base = length // multiplier
+            if base > 0 and 1440 % base == 0:
+                return max(1, 1440 // base)
+
+    return 60
+
+
+def compute_price_slot_index(
+    current_time: datetime, interval_minutes: int, total_slots: int
+) -> int:
+    """Calculate the current index within a price series."""
+    if total_slots <= 0:
+        return 0
+
+    minutes_since_midnight = current_time.hour * 60 + current_time.minute
+    interval = max(1, interval_minutes)
+    slot_index = minutes_since_midnight // interval
+
+    return max(0, min(slot_index, total_slots - 1))
+
+
+def hours_to_intervals(hours: float, interval_minutes: int) -> int:
+    """Convert hours to the equivalent number of price intervals."""
+    if interval_minutes <= 0:
+        return max(1, int(math.ceil(hours)))
+    return max(1, int(math.ceil((hours * 60.0) / interval_minutes)))
+
+
+def intervals_to_hours(intervals: int, interval_minutes: int) -> float:
+    """Convert a number of intervals to hours with two decimals precision."""
+    if intervals <= 0 or interval_minutes <= 0:
+        return 0.0
+    return round((intervals * interval_minutes) / 60.0, 2)
+
+
+def aggregate_price_series(
+    prices: Sequence[float],
+    source_interval_minutes: int,
+    target_interval_minutes: int = 60,
+) -> List[float]:
+    """Aggregate a price list to a coarser resolution using averages."""
+    if not prices:
+        return []
+
+    if (
+        source_interval_minutes <= 0
+        or target_interval_minutes <= 0
+        or source_interval_minutes == target_interval_minutes
+    ):
+        return list(prices)
+
+    if target_interval_minutes % source_interval_minutes != 0:
+        _LOGGER.debug(
+            "Cannot aggregate prices: %s does not divide %s minutes",
+            source_interval_minutes,
+            target_interval_minutes,
+        )
+        return list(prices)
+
+    group_size = target_interval_minutes // source_interval_minutes
+    aggregated: List[float] = []
+
+    for i in range(0, len(prices), group_size):
+        group = [p for p in prices[i : i + group_size] if isinstance(p, (int, float))]
+        if not group:
+            continue
+        aggregated.append(sum(group) / len(group))
+
+    return aggregated
+
+
+def get_price_window_for_hours(
+    prices: Sequence[float],
+    start_index: int,
+    hours: float,
+    interval_minutes: int,
+) -> List[float]:
+    """Return a slice of the price list covering the requested duration."""
+    intervals = hours_to_intervals(hours, interval_minutes)
+    return safe_array_slice(list(prices), start_index, intervals)
 
 
 def safe_numeric_conversion(

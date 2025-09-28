@@ -1,6 +1,7 @@
 # sensor.py
 
 import logging
+from datetime import datetime
 from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
@@ -33,9 +34,12 @@ from ..utils import (
     safe_float,
     get_state,
     get_attr,
-    safe_array_slice,
     get_version,
     should_precool,
+    detect_price_interval_minutes,
+    compute_price_slot_index,
+    get_price_window_for_hours,
+    aggregate_price_series,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,21 +81,29 @@ DEFAULT_AGGRESSIVENESS = 3.0
 def safe_get_current_price_and_category(
     prices: List[float],
     categories: List[str],
-    hour: int,
+    slot_index: int,
     mode: str = "unknown"
 ) -> Tuple[float, str]:
-    """Safely get current price and category for a given hour."""
-    if not prices or hour >= len(prices) or hour < 0:
-        _LOGGER.warning(f"Invalid price data access: hour={hour}, prices_len={len(prices) if prices else 0}")
+    """Safely get current price and category for a given time slot."""
+    if not prices or slot_index >= len(prices) or slot_index < 0:
+        _LOGGER.warning(
+            "Invalid price data access: slot=%s, prices_len=%s",
+            slot_index,
+            len(prices) if prices else 0,
+        )
         return 0.0, "unknown"
 
-    current_price = prices[hour]
+    current_price = prices[slot_index]
 
-    if not categories or hour >= len(categories):
-        _LOGGER.warning(f"Invalid category data access: hour={hour}, categories_len={len(categories) if categories else 0}")
+    if not categories or slot_index >= len(categories):
+        _LOGGER.warning(
+            "Invalid category data access: slot=%s, categories_len=%s",
+            slot_index,
+            len(categories) if categories else 0,
+        )
         price_category = "unknown"
     else:
-        price_category = f"{categories[hour]} ({mode})"
+        price_category = f"{categories[slot_index]} ({mode})"
 
     return current_price, price_category
 
@@ -249,7 +261,8 @@ class PumpSteerSensor(Entity):
         sensor_data: Dict[str, Any],
         prices: List[float],
         price_category: str,
-        now_hour: int
+        current_slot_index: int,
+        price_interval_minutes: int = 60
     ) -> Tuple[float, str]:
         """Calculate output temperature based on current conditions."""
         indoor_temp = sensor_data['indoor_temp']
@@ -276,9 +289,15 @@ class PumpSteerSensor(Entity):
             and temp_forecast_csv
         ):
             try:
+                preboost_prices = aggregate_price_series(
+                    prices,
+                    price_interval_minutes,
+                )
+                if not preboost_prices:
+                    preboost_prices = prices
                 preboost_mode = check_combined_preboost(
                     temp_csv=temp_forecast_csv,
-                    prices=prices,
+                    prices=preboost_prices,
                     cold_threshold=target_temp - 2.0,
                     # Provide aggressiveness in the 0-5 range for pre-boost logic
                     aggressiveness=aggressiveness,
@@ -361,8 +380,9 @@ class PumpSteerSensor(Entity):
             or "extreme" in price_category
         ):
             price_brake_temp = BRAKING_MODE_TEMP
+            slot_label = f"slot {current_slot_index}"
             _LOGGER.info(
-                f"Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {price_brake_temp} °C)"
+                f"Blocking heating at {slot_label} due to {price_category} price (setting fake temp to {price_brake_temp} °C)"
             )
             return price_brake_temp, "braking_by_price"
 
@@ -406,29 +426,36 @@ class PumpSteerSensor(Entity):
     async def _get_price_data(
         self,
         config: Dict[str, Any],
-        now_hour: int
-    ) -> Tuple[List[float], float, str, List[str]]:
+        current_time: datetime
+    ) -> Tuple[List[float], float, str, List[str], int, int]:
         """Fetch price data and classify prices."""
         entity_id = config.get("electricity_price_entity")
 
         if not entity_id:
             _LOGGER.error("No electricity price entity configured")
-            return [], 0.0, "unknown", []
+            return [], 0.0, "unknown", [], 60, 0
 
         prices_raw = get_attr(self.hass, entity_id, "today") or get_attr(self.hass, entity_id, "raw_today")
         if not prices_raw:
             _LOGGER.warning(f"Could not retrieve electricity prices from {entity_id}")
-            return [], 0.0, "unknown", []
+            return [], 0.0, "unknown", [], 60, 0
 
         try:
             prices = [float(p) for p in prices_raw if isinstance(p, (float, int)) and p is not None]
         except (ValueError, TypeError) as e:
             _LOGGER.error(f"Error converting prices to float: {e}")
-            return [], 0.0, "unknown", []
+            return [], 0.0, "unknown", [], 60, 0
 
         if not prices:
             _LOGGER.warning("No valid prices found after conversion")
-            return [], 0.0, "unknown", []
+            return [], 0.0, "unknown", [], 60, 0
+
+        price_interval_minutes = detect_price_interval_minutes(prices)
+        current_slot_index = compute_price_slot_index(
+            current_time,
+            price_interval_minutes,
+            len(prices),
+        )
 
         mode = get_state(self.hass, HARDCODED_ENTITIES["price_model_entity"]) or "hybrid"
         categories = []
@@ -448,10 +475,17 @@ class PumpSteerSensor(Entity):
             categories = ["unknown"] * len(prices)
 
         current_price, price_category = safe_get_current_price_and_category(
-            prices, categories, now_hour, mode
+            prices, categories, current_slot_index, mode
         )
 
-        return prices, current_price, price_category, categories
+        return (
+            prices,
+            current_price,
+            price_category,
+            categories,
+            price_interval_minutes,
+            current_slot_index,
+        )
 
 
     def _build_attributes(
@@ -463,7 +497,9 @@ class PumpSteerSensor(Entity):
         mode: str,
         holiday: bool,
         categories: List[str],
-        now_hour: int
+        now_hour: int,
+        price_interval_minutes: int,
+        current_slot_index: int,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor."""
         max_price = max(prices) if prices else 1.0
@@ -494,7 +530,12 @@ class PumpSteerSensor(Entity):
             decision_reason = f"{mode} - Triggered by very cheap price"
         else:
             decision_reason = f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
-        next_3_hours_prices = safe_array_slice(prices, now_hour, 3)
+        next_3_hours_prices = get_price_window_for_hours(
+            prices,
+            current_slot_index,
+            3,
+            price_interval_minutes,
+        )
 
         attributes = {
             "mode": mode,
@@ -520,6 +561,8 @@ class PumpSteerSensor(Entity):
             "decision_reason": decision_reason,
             "price_categories_all_hours": categories,
             "current_hour": now_hour,
+            "current_price_slot_index": current_slot_index,
+            "price_interval_minutes": price_interval_minutes,
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
@@ -539,7 +582,14 @@ class PumpSteerSensor(Entity):
 
             config = {**self._config_entry.data, **self._config_entry.options}
             sensor_data = self._get_sensor_data(config)
-            prices, current_price, price_category, categories = await self._get_price_data(config, now_hour)
+            (
+                prices,
+                current_price,
+                price_category,
+                categories,
+                price_interval_minutes,
+                current_slot_index,
+            ) = await self._get_price_data(config, update_time)
             self._last_price_category = price_category
 
             missing = self._validate_required_data(sensor_data, prices)
@@ -563,13 +613,25 @@ class PumpSteerSensor(Entity):
                 sensor_data['target_temp'] = HOLIDAY_TEMP
 
             fake_temp, mode = self._calculate_output_temperature(
-                sensor_data, prices, price_category, now_hour
+                sensor_data,
+                prices,
+                price_category,
+                current_slot_index,
+                price_interval_minutes,
             )
             self._state = round(fake_temp, 1)
 
             self._attributes = self._build_attributes(
-                sensor_data, prices, current_price, price_category,
-                mode, holiday, categories, now_hour
+                sensor_data,
+                prices,
+                current_price,
+                price_category,
+                mode,
+                holiday,
+                categories,
+                now_hour,
+                price_interval_minutes,
+                current_slot_index,
             )
 
             if self.ml_collector:
