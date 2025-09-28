@@ -337,6 +337,24 @@ class PumpSteerSensor(Entity):
                 _LOGGER.error(f"Error in temperature calculation: {e}")
                 fake_temp, mode = outdoor_temp, "error"
 
+            temp_deficit = target_temp_for_logic - indoor_temp
+            max_deficit = (
+                NEUTRAL_TEMP_THRESHOLD
+                * (1.0 - min(1.0, aggressiveness / 5.0))
+                + NEUTRAL_TEMP_THRESHOLD
+            )
+            if (
+                mode == "heating"
+                and (
+                    "expensive" in price_category
+                    or "very_expensive" in price_category
+                    or "extreme" in price_category
+                )
+                and temp_deficit < max_deficit
+            ):
+                # Ngenic-inspired braking tightens as aggressiveness approaches 5 to avoid wasteful heating.
+                return BRAKING_MODE_TEMP, "braking_by_price"
+
         if mode not in ["braking_by_temp", "heating"] and (
             "expensive" in price_category
             or "very_expensive" in price_category

@@ -69,6 +69,14 @@ def test_heating_not_blocked_by_expensive_price():
     assert fake_temp < data["outdoor_temp"]
 
 
+def test_price_brake_for_small_deficit_when_expensive():
+    s = create_sensor()
+    data = base_sensor_data(indoor_temp=20.7, target_temp=21.0)
+    fake_temp, mode = s._calculate_output_temperature(data, [], "very_expensive", 0)
+    assert mode == "braking_by_price"
+    assert fake_temp == sensor.BRAKING_MODE_TEMP
+
+
 def test_price_brake_when_neutral():
     s = create_sensor()
     data = base_sensor_data()
