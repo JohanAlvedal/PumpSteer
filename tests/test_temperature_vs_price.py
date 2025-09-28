@@ -74,7 +74,9 @@ def test_price_brake_when_neutral():
     data = base_sensor_data()
     fake_temp, mode = s._calculate_output_temperature(data, [], "expensive", 0)
     assert mode == "braking_by_price"
-    assert fake_temp == sensor.BRAKING_MODE_TEMP
+    # With default aggressiveness 3.0, brake temp = 25.0 + (3.0-2.0)*2.0 = 27.0
+    expected_temp = sensor.BRAKING_MODE_TEMP + (data["aggressiveness"] - 2.0) * 2.0
+    assert fake_temp == expected_temp
 
 
 def test_extreme_price_brake_when_neutral():
@@ -82,7 +84,9 @@ def test_extreme_price_brake_when_neutral():
     data = base_sensor_data()
     fake_temp, mode = s._calculate_output_temperature(data, [], "extreme", 0)
     assert mode == "braking_by_price"
-    assert fake_temp == sensor.BRAKING_MODE_TEMP
+    # With default aggressiveness 3.0, brake temp = 25.0 + (3.0-2.0)*2.0 = 27.0
+    expected_temp = sensor.BRAKING_MODE_TEMP + (data["aggressiveness"] - 2.0) * 2.0
+    assert fake_temp == expected_temp
 
 
 def test_very_cheap_price_overshoots_target():
@@ -160,7 +164,7 @@ def test_fake_temp_constraint_applied():
 
 
 def test_price_brake_consistent_across_temperatures():
-    """Test that braking_by_price always uses BRAKING_MODE_TEMP regardless of outdoor temperature."""
+    """Test that braking_by_price uses aggressiveness-adjusted temperature regardless of outdoor temperature."""
     s = create_sensor()
     
     # Test various outdoor temperatures (all below summer threshold to avoid summer_mode)
@@ -171,7 +175,9 @@ def test_price_brake_consistent_across_temperatures():
         fake_temp, mode = s._calculate_output_temperature(data, [], "expensive", 0)
         
         assert mode == "braking_by_price", f"Mode should be braking_by_price for outdoor_temp {outdoor_temp}"
-        assert fake_temp == sensor.BRAKING_MODE_TEMP, f"fake_temp should be {sensor.BRAKING_MODE_TEMP} for outdoor_temp {outdoor_temp}, got {fake_temp}"
+        # With default aggressiveness 3.0, brake temp = 25.0 + (3.0-2.0)*2.0 = 27.0
+        expected_temp = sensor.BRAKING_MODE_TEMP + (data["aggressiveness"] - 2.0) * 2.0
+        assert fake_temp == expected_temp, f"fake_temp should be {expected_temp} for outdoor_temp {outdoor_temp}, got {fake_temp}"
 
 
 def test_price_brake_different_categories():
@@ -185,4 +191,58 @@ def test_price_brake_different_categories():
         fake_temp, mode = s._calculate_output_temperature(data, [], category, 0)
         
         assert mode == "braking_by_price", f"Mode should be braking_by_price for {category}"
-        assert fake_temp == sensor.BRAKING_MODE_TEMP, f"fake_temp should be {sensor.BRAKING_MODE_TEMP} for {category}, got {fake_temp}"
+        # With default aggressiveness 3.0, brake temp = 25.0 + (3.0-2.0)*2.0 = 27.0
+        expected_temp = sensor.BRAKING_MODE_TEMP + (data["aggressiveness"] - 2.0) * 2.0
+        assert fake_temp == expected_temp, f"fake_temp should be {expected_temp} for {category}, got {fake_temp}"
+
+
+def test_aggressiveness_based_price_braking():
+    """Test that price braking becomes more aggressive with higher aggressiveness levels."""
+    s = create_sensor()
+    
+    # Test different aggressiveness levels
+    aggressiveness_levels = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    
+    for aggressiveness in aggressiveness_levels:
+        data = base_sensor_data(aggressiveness=aggressiveness)
+        fake_temp, mode = s._calculate_output_temperature(data, [], "expensive", 0)
+        
+        assert mode == "braking_by_price", f"Mode should be braking_by_price for aggressiveness {aggressiveness}"
+        
+        # Calculate expected temperature based on aggressiveness formula
+        expected_boost = max(0, (aggressiveness - 2.0) * 2.0)
+        expected_temp = sensor.BRAKING_MODE_TEMP + expected_boost
+        
+        assert fake_temp == expected_temp, f"fake_temp should be {expected_temp} for aggressiveness {aggressiveness}, got {fake_temp}"
+
+
+def test_aggressiveness_boost_thresholds():
+    """Test that aggressiveness boost starts at the right threshold."""
+    s = create_sensor()
+    
+    # At aggressiveness 2.0, should not get boost (should be base BRAKING_MODE_TEMP)
+    data = base_sensor_data(aggressiveness=2.0)
+    fake_temp, mode = s._calculate_output_temperature(data, [], "expensive", 0)
+    assert fake_temp == sensor.BRAKING_MODE_TEMP
+    
+    # At aggressiveness 2.1, should get small boost
+    data = base_sensor_data(aggressiveness=2.1)
+    fake_temp, mode = s._calculate_output_temperature(data, [], "expensive", 0)
+    expected_temp = sensor.BRAKING_MODE_TEMP + (2.1 - 2.0) * 2.0
+    assert fake_temp == expected_temp
+
+
+def test_low_aggressiveness_no_price_boost():
+    """Test that low aggressiveness levels don't get extra braking boost during expensive hours."""
+    s = create_sensor()
+    
+    # Test aggressiveness levels below and at the threshold
+    low_aggressiveness_levels = [0.0, 1.0, 1.5, 2.0]
+    
+    for aggressiveness in low_aggressiveness_levels:
+        data = base_sensor_data(aggressiveness=aggressiveness)
+        fake_temp, mode = s._calculate_output_temperature(data, [], "expensive", 0)
+        
+        assert mode == "braking_by_price", f"Mode should be braking_by_price for aggressiveness {aggressiveness}"
+        # For aggressiveness <= 2.0, should use base BRAKING_MODE_TEMP
+        assert fake_temp == sensor.BRAKING_MODE_TEMP, f"fake_temp should be {sensor.BRAKING_MODE_TEMP} for low aggressiveness {aggressiveness}, got {fake_temp}"

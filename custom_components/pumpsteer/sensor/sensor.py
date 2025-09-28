@@ -342,9 +342,12 @@ class PumpSteerSensor(Entity):
             or "very_expensive" in price_category
             or "extreme" in price_category
         ):
-            price_brake_temp = BRAKING_MODE_TEMP
+            # Scale braking temperature based on aggressiveness during expensive hours
+            # Higher aggressiveness means we need more aggressive braking to prevent heating
+            aggressiveness_boost = max(0, (aggressiveness - 2.0) * 2.0)  # Start boosting at aggressiveness > 2
+            price_brake_temp = BRAKING_MODE_TEMP + aggressiveness_boost
             _LOGGER.info(
-                f"Blocking heating at hour {now_hour} due to {price_category} price (setting fake temp to {price_brake_temp} °C)"
+                f"Blocking heating at hour {now_hour} due to {price_category} price (aggressiveness: {aggressiveness}, setting fake temp to {price_brake_temp} °C)"
             )
             return price_brake_temp, "braking_by_price"
 
