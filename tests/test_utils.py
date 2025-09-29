@@ -13,7 +13,7 @@ from custom_components.pumpsteer.utils import (
 
 
 def test_get_version_reads_manifest():
-    assert get_version() == "1.5.1-beta2"
+    assert get_version() == "1.6.0"
 
 
 def test_get_version_missing_manifest(monkeypatch):
