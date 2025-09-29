@@ -211,6 +211,39 @@ All control is done locally without any cloud dependency.
 
 ---
 
+## ❓ FAQ
+
+### Can PumpSteer directly control my heat pump?
+
+PumpSteer does **not** talk to the heat pump over Modbus, REST, or any proprietary interface. Instead, it exposes the calculated value as a Home Assistant sensor (`sensor.pumpsteer`) that represents a *virtual* outdoor temperature. You then feed that value into the heat pump by replacing or overriding the real outdoor temperature sensor in your automation. The heat pump still makes the final decisions using its own built-in control curve, but it reacts as if the outdoor conditions have changed. PumpSteer therefore never changes compressor set-points or flow targets directly; it only influences the built-in regulator through the fake outdoor temperature.
+
+### What is thermal inertia and how is it calculated?
+
+`house_inertia` describes how quickly your building responds to heating or braking. A low value (≈0.5–1.5) means the house reacts fast, so PumpSteer can shift temperatures aggressively. A high value (≈3–5) slows things down for heavy, slow houses. The value is stored in the helper `input_number.house_inertia` and you can set it manually during setup.
+
+If you enable `input_boolean.autotune_inertia`, the machine-learning module keeps track of every heating session: it records how far the indoor temperature was from the target, how long it took to recover, and whether the session was successful. When the average duration is long, PumpSteer suggests (or automatically applies) a higher inertia. When the house recovers quickly, it suggests a lower inertia. In other words, inertia adjustments are derived from the observed heating durations—not from flow temperatures.
+
+### What does the ML module actually learn?
+
+The ML collector watches the indoor temperature, target temperature, aggressiveness, and inertia during every heating cycle. It estimates success rate, typical heating duration, and how often comfort targets are hit. Those statistics are used to recommend tweaks to `aggressiveness` and `house_inertia`, or to auto-tune inertia if you allow it. The learning does **not** read or require supply/return flow temperatures; it is based entirely on the inputs already provided to PumpSteer.
+
+### Which sensors must be connected to PumpSteer?
+
+The integration needs:
+
+* Indoor temperature sensor (`input_number.indoor_target_temperature` + actual indoor temperature entity)
+* Outdoor temperature sensor
+* Electricity price sensor
+* Optional: hourly outdoor temperature forecast, holiday switches, pre-boost toggle, etc.
+
+You do **not** need to provide flow temperature, set-point, compressor status, or other proprietary heat pump sensors. As long as the heat pump follows the virtual outdoor temperature, PumpSteer can operate.
+
+### How is the PumpSteer efficiency score calculated?
+
+`sensor.pumpsteer_efficiency_score` is an informative metric that blends comfort and savings on a 0–100 scale. It takes the absolute indoor temperature error (penalising large deviations) and the current savings potential that PumpSteer estimates from electricity prices. The score is the average of those two sub-scores: one for comfort (`100 - temp_error × 20`) and one for cost (`min(100, saving_potential × 25)`). A value near 100 means you are close to the target temperature while also operating during favourable prices. It is **not** a direct measurement of kWh saved compared to running without PumpSteer.
+
+---
+
 ## 🛠️ Logging
 
 * Errors and warnings are logged in Home Assistant
