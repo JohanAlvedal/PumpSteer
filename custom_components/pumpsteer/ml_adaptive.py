@@ -343,107 +343,94 @@ class PumpSteerMLCollector:
             # Get performance summary to check data availability
             performance = self.get_performance_summary()
             
-            # Gather current configuration values (always available)
+            # If not enough data, return simple message
+            if performance.get("status") != "analyzing":
+                return ["Collecting initial data. Recommendations will appear when enough sessions have been analyzed."]
+            
+            # Gather current configuration values
             heating_sessions = [
                 s
                 for s in self.learning_sessions
                 if s.get("summary", {}).get("mode") == "heating"
             ]
             
-            # Get current values for status reporting
-            most_used_agg = performance.get("most_used_aggressiveness", 3) if performance.get("status") == "analyzing" else 3
-            avg_duration = performance.get("avg_heating_duration", 0) if performance.get("status") == "analyzing" else 0
-            success_rate = performance.get("success_rate", 0) if performance.get("status") == "analyzing" else 0
+            if not heating_sessions:
+                return ["Collecting initial data. Recommendations will appear when enough sessions have been analyzed."]
+            
+            # Get current values for analysis
+            most_used_agg = performance.get("most_used_aggressiveness", 3)
+            avg_duration = performance.get("avg_heating_duration", 0)
+            success_rate = performance.get("success_rate", 0)
             
             # Analyze recent inertia patterns
             inertia_values = [
                 s["summary"].get("inertia", 1.0) 
                 for s in heating_sessions[-ML_ANALYSIS_RECENT_SESSIONS:]
-            ] if heating_sessions else []
+            ]
             avg_inertia = statistics.mean(inertia_values) if inertia_values else 1.0
 
-            # ALWAYS provide current settings status
-            recommendations.append(
-                f"Current settings: Aggressiveness = {most_used_agg}, House Inertia = {avg_inertia:.1f}"
-            )
-
-            # Data-driven recommendations (when sufficient data is available)
-            if performance.get("status") == "analyzing" and heating_sessions:
-                # AGGRESSIVENESS recommendations - clarify it's for comfort vs savings preference
-                if most_used_agg == 0:
-                    recommendations.append(
-                        "Aggressiveness 0: No money-saving logic active. System works as a regular thermostat. "
-                        "Increase to 1-5 to enable cost optimization."
-                    )
-                elif most_used_agg >= ML_HIGH_AGGRESSIVENESS_THRESHOLD and success_rate < ML_HIGH_SUCCESS_RATE_THRESHOLD:
-                    new_agg = most_used_agg - ML_AGGRESSIVENESS_ADJUSTMENT_STEP
-                    recommendations.append(
-                        f"Aggressiveness {most_used_agg} prioritizes savings but comfort is lower "
-                        f"({success_rate:.1f}% success rate). Consider decreasing to {new_agg} for better comfort/savings balance."
-                    )
-                elif most_used_agg <= ML_LOW_AGGRESSIVENESS_THRESHOLD and avg_duration < 45:
-                    new_agg = most_used_agg + ML_AGGRESSIVENESS_ADJUSTMENT_STEP
-                    recommendations.append(
-                        f"Aggressiveness {most_used_agg} prioritizes comfort over savings. "
-                        f"You can increase to {new_agg} to save more energy if comfort is acceptable."
-                    )
-
-                # HOUSE_INERTIA recommendations - thermal response characteristic
-                if avg_duration > ML_LONG_DURATION_THRESHOLD and avg_inertia < ML_LOW_INERTIA_THRESHOLD:
-                    new_inertia = avg_inertia + ML_INERTIA_ADJUSTMENT_STEP
-                    recommendations.append(
-                        f"Heating sessions average {avg_duration:.1f} minutes with house_inertia {avg_inertia:.1f}. "
-                        f"Your house retains heat slowly. Try increasing house_inertia to {new_inertia:.1f} for better prediction."
-                    )
-                elif avg_duration < ML_SHORT_DURATION_THRESHOLD and avg_inertia > ML_HIGH_INERTIA_THRESHOLD:
-                    new_inertia = avg_inertia - ML_INERTIA_ADJUSTMENT_STEP
-                    recommendations.append(
-                        f"Heating sessions average {avg_duration:.1f} minutes with house_inertia {avg_inertia:.1f}. "
-                        f"Your house retains heat well. Try decreasing house_inertia to {new_inertia:.1f} for better prediction."
-                    )
-
-                # SUCCESS RATE analysis
-                if success_rate > ML_EXCELLENT_SUCCESS_RATE:
-                    recommendations.append(
-                        f"Excellent performance ({success_rate:.1f}% success rate)! "
-                        f"Your current settings provide a good balance between comfort and savings."
-                    )
-                elif success_rate < ML_POOR_SUCCESS_RATE:
-                    recommendations.append(
-                        f"Success rate is {success_rate:.1f}%, which could be improved. "
-                        f"Adjust aggressiveness (comfort vs savings preference) or house_inertia (thermal response) for better results."
-                    )
-
-                # Learning patience advice
-                if len(self.learning_sessions) < ML_LEARN_PATIENCE_SESSIONS:
-                    recommendations.append(
-                        f"System is collecting data ({len(self.learning_sessions)} of {ML_LEARN_PATIENCE_SESSIONS} sessions). "
-                        f"Wait for more sessions before making major changes."
-                    )
-
-            # ALWAYS provide guidance, even with limited data
-            else:
+            # Only provide actionable, data-driven recommendations
+            # AGGRESSIVENESS recommendations - clarify it's for comfort vs savings preference
+            if most_used_agg == 0:
                 recommendations.append(
-                    "Collecting initial data. Current recommendations are based on default values."
+                    "Aggressiveness 0: No money-saving logic active. System works as a regular thermostat. "
+                    "Increase to 1-5 to enable cost optimization."
                 )
-                
-            # ALWAYS include parameter explanations
-            recommendations.append(
-                "Parameter guide: Aggressiveness (0-5) controls your preference for comfort vs energy savings. "
-                "House_inertia (0-5) represents how quickly your house responds to temperature changes."
-            )
+            elif most_used_agg >= ML_HIGH_AGGRESSIVENESS_THRESHOLD and success_rate < ML_HIGH_SUCCESS_RATE_THRESHOLD:
+                new_agg = most_used_agg - ML_AGGRESSIVENESS_ADJUSTMENT_STEP
+                recommendations.append(
+                    f"Aggressiveness {most_used_agg} prioritizes savings but comfort is lower "
+                    f"({success_rate:.1f}% success rate). Consider decreasing to {new_agg} for better comfort/savings balance."
+                )
+            elif most_used_agg <= ML_LOW_AGGRESSIVENESS_THRESHOLD and avg_duration < 45:
+                new_agg = most_used_agg + ML_AGGRESSIVENESS_ADJUSTMENT_STEP
+                recommendations.append(
+                    f"Aggressiveness {most_used_agg} prioritizes comfort over savings. "
+                    f"You can increase to {new_agg} to save more energy if comfort is acceptable."
+                )
+
+            # HOUSE_INERTIA recommendations - thermal response characteristic
+            if avg_duration > ML_LONG_DURATION_THRESHOLD and avg_inertia < ML_LOW_INERTIA_THRESHOLD:
+                new_inertia = avg_inertia + ML_INERTIA_ADJUSTMENT_STEP
+                recommendations.append(
+                    f"Heating sessions average {avg_duration:.1f} minutes with house_inertia {avg_inertia:.1f}. "
+                    f"Your house retains heat slowly. Try increasing house_inertia to {new_inertia:.1f} for better prediction."
+                )
+            elif avg_duration < ML_SHORT_DURATION_THRESHOLD and avg_inertia > ML_HIGH_INERTIA_THRESHOLD:
+                new_inertia = avg_inertia - ML_INERTIA_ADJUSTMENT_STEP
+                recommendations.append(
+                    f"Heating sessions average {avg_duration:.1f} minutes with house_inertia {avg_inertia:.1f}. "
+                    f"Your house retains heat well. Try decreasing house_inertia to {new_inertia:.1f} for better prediction."
+                )
+
+            # SUCCESS RATE analysis
+            if success_rate > ML_EXCELLENT_SUCCESS_RATE:
+                recommendations.append(
+                    f"Excellent performance ({success_rate:.1f}% success rate)! "
+                    f"Your current settings provide a good balance between comfort and savings."
+                )
+            elif success_rate < ML_POOR_SUCCESS_RATE:
+                recommendations.append(
+                    f"Success rate is {success_rate:.1f}%, which could be improved. "
+                    f"Adjust aggressiveness (comfort vs savings preference) or house_inertia (thermal response) for better results."
+                )
+
+            # Learning patience advice
+            if len(self.learning_sessions) < ML_LEARN_PATIENCE_SESSIONS:
+                recommendations.append(
+                    f"System is collecting data ({len(self.learning_sessions)} of {ML_LEARN_PATIENCE_SESSIONS} sessions). "
+                    f"Wait for more sessions before making major changes."
+                )
+
+            # If no actionable recommendations were generated, return the collecting data message
+            if not recommendations:
+                return ["Collecting initial data. Recommendations will appear when enough sessions have been analyzed."]
 
             return recommendations
 
         except Exception as e:
             _LOGGER.error(f"ML: Error generating recommendations: {e}")
-            # Even on error, provide basic guidance
-            return [
-                "Current settings: Aggressiveness = 3 (default), House Inertia = 1.0 (default)",
-                "Unable to generate detailed recommendations due to an error. Please check the logs.",
-                "Parameter guide: Aggressiveness (0-5) controls your preference for comfort vs energy savings. "
-                "House_inertia (0-5) represents how quickly your house responds to temperature changes."
-            ]
+            return ["Collecting initial data. Recommendations will appear when enough sessions have been analyzed."]
 
     def get_learning_insights(self) -> Dict[str, Any]:
         """Combine all ML information and check auto-tune possibilities."""
