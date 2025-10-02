@@ -51,7 +51,7 @@ class HeatDemandSensor(Entity):
 
     @property
     def unit_of_measurement(self) -> str:
-        return "heat_demand (-10 to +10)"
+        return "°C"
 
     @property
     def icon(self) -> str:
