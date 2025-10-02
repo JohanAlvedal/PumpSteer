@@ -1,25 +1,49 @@
 import logging
 from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.const import STATE_UNAVAILABLE
+
+from ..utils import get_version
 
 _LOGGER = logging.getLogger(__name__)
+SW_VERSION = get_version()
 
 class HeatDemandSensor(Entity):
     """Sensor som automatiskt beräknar värme/kylbehov (-10 till +10) utifrån temperaturfel över tid."""
 
-    def __init__(self, hass: HomeAssistant, indoor_temp_entity: str, target_temp_entity: str, history_length: int = 12):
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         self.hass = hass
-        self._indoor_temp_entity = indoor_temp_entity
-        self._target_temp_entity = target_temp_entity
+        self._config_entry = config_entry
+        
+        # Get entity IDs from config
+        config = {**config_entry.data, **config_entry.options}
+        self._indoor_temp_entity = config.get("indoor_temp_entity")
+        self._target_temp_entity = config.get("target_temp_entity")
+        
         self._state = 0
         self._temp_error_history = []
-        self._history_length = history_length
+        self._history_length = 12
         self._name = "PumpSteer Heat Demand"
+        self._attr_unique_id = f"{config_entry.entry_id}_heat_demand"
+        
+        self._attr_device_info = DeviceInfo(
+            identifiers={("pumpsteer", config_entry.entry_id)},
+            name="PumpSteer",
+            manufacturer="Custom",
+            model="Heat Pump Controller",
+            sw_version=SW_VERSION,
+        )
 
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def unique_id(self) -> str:
+        return self._attr_unique_id
 
     @property
     def state(self) -> StateType:
@@ -28,6 +52,25 @@ class HeatDemandSensor(Entity):
     @property
     def unit_of_measurement(self) -> str:
         return "heat_demand (-10 to +10)"
+
+    @property
+    def icon(self) -> str:
+        """Return icon based on heat demand state."""
+        if self._state > 5:
+            return "mdi:fire"
+        elif self._state > 0:
+            return "mdi:thermometer-plus"
+        elif self._state < -5:
+            return "mdi:snowflake"
+        elif self._state < 0:
+            return "mdi:thermometer-minus"
+        else:
+            return "mdi:thermometer"
+
+    @property
+    def available(self) -> bool:
+        """Return if sensor is available."""
+        return self._state != STATE_UNAVAILABLE
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -50,9 +93,16 @@ class HeatDemandSensor(Entity):
         return sum(self._temp_error_history[-self._history_length:]) / min(len(self._temp_error_history), self._history_length)
 
     async def async_update(self) -> None:
+        """Update the heat demand sensor."""
+        if not self._indoor_temp_entity or not self._target_temp_entity:
+            _LOGGER.error("Heat demand sensor: Missing entity configuration")
+            self._state = STATE_UNAVAILABLE
+            return
+            
         indoor_temp = self._get_temperature(self._indoor_temp_entity)
         target_temp = self._get_temperature(self._target_temp_entity)
         if indoor_temp is None or target_temp is None:
+            _LOGGER.warning(f"Heat demand sensor: Unable to read temperatures (indoor: {indoor_temp}, target: {target_temp})")
             self._state = 0
             return
 
