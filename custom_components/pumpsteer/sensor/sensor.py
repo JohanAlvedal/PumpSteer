@@ -1,5 +1,3 @@
-# sensor.py
-
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple, List
@@ -11,6 +9,7 @@ from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from .heat_demand_sensor import HeatDemandSensor
 import homeassistant.util.dt as dt_util
 
 # Import existing modules
@@ -53,9 +52,7 @@ except ImportError as e:
     ML_AVAILABLE = False
     _LOGGER.warning(f"ML features disabled: {e}")
 
-
 DOMAIN = "pumpsteer"
-
 
 SW_VERSION = get_version()
 
@@ -76,7 +73,6 @@ HARDCODED_ENTITIES = {
 NEUTRAL_TEMP_THRESHOLD = 0.5
 DEFAULT_SUMMER_THRESHOLD = 18.0
 DEFAULT_AGGRESSIVENESS = 3.0
-
 
 def safe_get_current_price_and_category(
     prices: List[float],
@@ -106,7 +102,6 @@ def safe_get_current_price_and_category(
         price_category = f"{categories[slot_index]} ({mode})"
 
     return current_price, price_category
-
 
 class PumpSteerSensor(Entity):
     """PumpSteer sensor for heat pump control."""
@@ -213,12 +208,10 @@ class PumpSteerSensor(Entity):
         self.ml_collector = None
         await super().async_will_remove_from_hass()
 
-
     async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Handle options update event."""
         self._config_entry = entry
         await self.async_update()
-
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch sensor data from Home Assistant."""
@@ -232,7 +225,6 @@ class PumpSteerSensor(Entity):
             'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"],
             'preboost_enabled': (get_state(self.hass, HARDCODED_ENTITIES["preboost_enabled_entity"]) == "on")
         }
-
 
     def _validate_required_data(self, sensor_data: Dict[str, Any], prices: List[float]) -> Optional[List[str]]:
         missing = []
@@ -254,7 +246,6 @@ class PumpSteerSensor(Entity):
             _LOGGER.debug("Outdoor temperature forecast entity not configured, skipping pre-boost temperature forecast check.")
 
         return missing if missing else None
-
 
     def _calculate_output_temperature(
         self,
@@ -387,7 +378,6 @@ class PumpSteerSensor(Entity):
         fake_temp = min(fake_temp, BRAKE_FAKE_TEMP)
         return fake_temp, mode
 
-
     def _collect_ml_data(self, sensor_data: Dict[str, Any], mode: str, fake_temp: float) -> None:
         """Collect data for machine learning."""
         if not self.ml_collector:
@@ -419,7 +409,6 @@ class PumpSteerSensor(Entity):
 
         except Exception as e:
             _LOGGER.debug(f"ML data collection error (non-critical): {e}")
-
 
     async def _get_price_data(
         self,
@@ -484,7 +473,6 @@ class PumpSteerSensor(Entity):
             price_interval_minutes,
             current_slot_index,
         )
-
 
     def _build_attributes(
         self,
@@ -571,7 +559,6 @@ class PumpSteerSensor(Entity):
 
         return attributes
 
-
     async def async_update(self) -> None:
         """Update sensor data."""
         try:
@@ -646,7 +633,6 @@ class PumpSteerSensor(Entity):
                 "Error Details": str(e),
             }
 
-
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -655,3 +641,11 @@ async def async_setup_entry(
     """Set up the PumpSteer sensor entity."""
     sensor = PumpSteerSensor(hass, config_entry)
     async_add_entities([sensor], update_before_add=True)
+
+    # Lägg till HeatDemandSensor
+    indoor_temp_entity = config_entry.data.get("indoor_temp_entity")
+    target_temp_entity = "input_number.indoor_target_temperature"
+    heat_demand_sensor = HeatDemandSensor(
+        hass, indoor_temp_entity, target_temp_entity
+    )
+    async_add_entities([heat_demand_sensor], update_before_add=True)
