@@ -52,9 +52,9 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 * 🚀 Pre-boost: stores heat before cold or high-price periods
 * ❄️ Precool: pauses heating ahead of forecasted warm weather
 * 📈 Switchable price model (`hybrid` or `percentiles`)
-* 🤖 ML analysis: learns how your house responds (session-based)
-* 🔁 Auto-adjustment of `house_inertia` (if enabled)
-* 🧠 Recommendations for improved comfort/savings balance
+* 🤖 ML analysis: learns how your house responds (session-based) (beta, work in progress)
+* 🔁 Auto-adjustment of `house_inertia` (if enabled) (beta, work in progress)
+* 🧠 Recommendations for improved comfort/savings balance (beta, work in progress)
 * ⚙️ Adjustable heating and braking compensation factors
 * 🎛️ Fine-tuning via `input_number`, `input_text`, `input_boolean`, `input_datetime`
 * 🖼️ Extra sensors for UI visualization
