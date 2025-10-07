@@ -66,7 +66,7 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 
 ## ❄️ Precool Mode
 
-When the hourly temperature forecast shows that any of the next 24 hours will exceed the summer threshold, PumpSteer enters *precool* mode. It sends the braking temperature (25 °C by default) to the heat pump so heating stops before the warm period arrives. This prevents unnecessary heating just before summer-like conditions.
+When the hourly temperature forecast shows that any of the next 24 hours will exceed the summer threshold, PumpSteer enters *precool* mode. It sends the braking temperature to the heat pump so heating stops before the warm period arrives. This prevents unnecessary heating just before summer-like conditions.
 
 ---
 
