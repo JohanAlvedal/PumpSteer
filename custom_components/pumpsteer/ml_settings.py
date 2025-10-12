@@ -27,7 +27,6 @@ ML_ANALYSIS_RECENT_SESSIONS: Final[int] = 10  # How many recent sessions to anal
 ML_SUCCESS_DURATION_THRESHOLD: Final[float] = 90.0   # Minutes - under this = success
 ML_SUCCESS_TEMP_DIFF_THRESHOLD: Final[float] = 0.3   # °C - minimum temp diff for success
 ML_FAILURE_DURATION_THRESHOLD: Final[float] = 180.0  # Minutes - over this = failure
-ML_MIN_DATA_POINTS: Final[int] = 2  # Minimum data points for trend analysis
 
 # === ML PERFORMANCE ANALYSIS ===
 ML_LONG_DURATION_THRESHOLD: Final[float] = 150.0     # Minutes - indicates slow house
@@ -55,10 +54,6 @@ ML_MIN_INTEGRAL_GAIN: Final[float] = 0.0             # Minimum integral gain val
 # === ML HOUSE INERTIA AUTO-TUNE ===
 ML_INERTIA_MAX_VALUE: Final[float] = 5.0             # Maximum house inertia value
 ML_INERTIA_MIN_VALUE: Final[float] = 0.5             # Minimum house inertia value
-
-# === ML TREND DETECTION ===
-ML_WARMING_TREND_THRESHOLD: Final[float] = 0.8       # 80% of hours must be warmer
-ML_MIN_FORECAST_HOURS: Final[int] = 2                # Minimum hours for meaningful analysis
 
 # === ML SESSION LIMITS ===
 ML_LEARN_PATIENCE_SESSIONS: Final[int] = 10          # Wait this many before major changes
