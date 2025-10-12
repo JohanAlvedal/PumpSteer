@@ -59,6 +59,10 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 * 🎛️ Fine-tuning via `input_number`, `input_text`, `input_boolean`, `input_datetime`
 * 🖼️ Extra sensors for UI visualization
 
+## 📝 Release Notes
+
+Se [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md) för en sammanfattning av de senaste ändringarna, inklusive brytande uppdateringar i paketfilen och hur cheap boost beter sig.
+
 > 💡 **Note:** Holiday mode is only active when the outdoor temperature is below the summer threshold.
 
 ## ❄️ Precool Mode

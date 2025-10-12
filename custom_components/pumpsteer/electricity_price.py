@@ -11,9 +11,9 @@ from homeassistant.core import HomeAssistant
 
 from .utils import (
     hours_to_intervals,
-    detect_price_interval_minutes,
     intervals_to_hours,
 )
+from .compat import detect_price_interval_minutes
 
 # === CORRECTED IMPORT - all multipliers included ===
 from .settings import (

@@ -35,10 +35,10 @@ from ..utils import (
     get_attr,
     get_version,
     should_precool,
-    detect_price_interval_minutes,
     compute_price_slot_index,
     get_price_window_for_hours,
 )
+from ..compat import detect_price_interval_minutes
 
 _LOGGER = logging.getLogger(__name__)
 
