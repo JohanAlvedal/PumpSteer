@@ -21,6 +21,26 @@ input_number:
     unit_of_measurement: "°C"
     mode: box
 
+  pumpsteer_cheap_boost_delta:
+    name: Cheap Boost Temperature Increase
+    min: 0
+    max: 5
+    step: 0.1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-chevron-up
+    mode: box
+    initial: 0.5
+
+  pumpsteer_cheap_boost_hours:
+    name: Cheap Boost Focus Hours
+    min: 1
+    max: 12
+    step: 1
+    unit_of_measurement: "h"
+    icon: mdi:clock-start
+    mode: box
+    initial: 3
+
   indoor_target_temperature:
     name: Indoor Target Temperature
     min: 16
@@ -77,8 +97,8 @@ input_boolean:
     icon: mdi:robot
 
   pumpsteer_preboost_enabled:
-    name: PumpSteer Preboost
-    icon: mdi:rocket-launch
+    name: PumpSteer Cheap Boost
+    icon: mdi:flash
 
 input_datetime:
   holiday_start:
@@ -136,7 +156,7 @@ template:
           {{ state_attr('sensor.pumpsteer', 'mode') | default('Starting...') | title }}
         icon: >
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
-          {% if mode == 'preboost' %}
+          {% if mode == 'cheap_boost' %}
             mdi:flash
           {% elif mode == 'heating' %}
             mdi:fire
@@ -167,8 +187,8 @@ template:
             🔄 Starting up...
           {% else %}
             {% set temp_diff = temp_diff | float(0) %}
-            {% if mode == 'preboost' %}
-              🔥 Pre-boost active
+            {% if mode == 'cheap_boost' %}
+              🔥 Cheap boost active
             {% elif mode == 'braking_by_price' %}
               💰 Price Braking ({{ price_cat.split('(')[0].strip() if '(' in price_cat else price_cat }})
             {% elif mode == 'braking_by_temp' %}
@@ -222,12 +242,12 @@ template:
         icon: mdi:target
         state_class: measurement
 
-      - name: "PumpSteer Is Preboosting"
-        unique_id: ps_is_preboosting
+      - name: "PumpSteer Cheap Boost Active"
+        unique_id: ps_is_cheap_boosting
         state: >
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
-          {{ mode == 'preboost' if mode is not none else false }}
-        icon: mdi:fire
+          {{ mode == 'cheap_boost' if mode is not none else false }}
+        icon: mdi:flash
 
       - name: "PumpSteer Is Braking"
         unique_id: ps_is_braking
@@ -482,20 +502,20 @@ automation:
                 critical: 0
                 volume: 1.0
 
-  - alias: "PumpSteer - Pre-boost Notification"
-    id: pumpsteer_preboost_notification
-    description: "Notification when pre-boost is activated"
+  - alias: "PumpSteer - Cheap Boost Notification"
+    id: pumpsteer_cheap_boost_notification
+    description: "Notification when cheap boost is activated"
     mode: single
     trigger:
       - platform: state
         entity_id: sensor.pumpsteer_operating_mode
-        to: "Preboost"
+        to: "Cheap_Boost"
     action:
       - service: notify.mobile_app_iphone13pro
         data:
-          title: "🔥 PumpSteer Pre-boost Activated"
+          title: "🔥 PumpSteer Cheap Boost Activated"
           message: >
-            Pre-boost has started to prepare for an upcoming cold and expensive period.
+            Cheap boost has started to take advantage of the day's lowest electricity prices.
 
             🌡️ Current temp: {{ state_attr('sensor.pumpsteer', 'outdoor_temperature') | default('N/A') }}°C
             🎯 Virtual temp: {{ states('sensor.pumpsteer') | default('N/A') }}°C

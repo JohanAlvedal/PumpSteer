@@ -1,3 +1,4 @@
+import math
 import sys
 from pathlib import Path
 
@@ -55,7 +56,10 @@ def base_sensor_data(**kwargs):
         "aggressiveness": 3.0,
         "inertia": 1.0,
         "outdoor_temp_forecast_entity": None,
-        "preboost_enabled": False,
+        "cheap_boost_enabled": False,
+        "cheap_boost_active": False,
+        "cheap_boost_hours": sensor.CHEAP_BOOST_HOURS,
+        "cheap_boost_target_delta": sensor.CHEAP_BOOST_TARGET_DELTA,
     }
     data.update(kwargs)
     return data
@@ -110,6 +114,113 @@ def test_very_cheap_price_overshoots_target():
     sensor.CHEAP_PRICE_OVERSHOOT = original_overshoot
     assert mode == "heating"
     assert fake_temp < data["outdoor_temp"]
+
+
+def test_cheap_boost_activates_on_cheapest_slots():
+    s = create_sensor()
+    prices = [0.6, 0.1, 0.4, 0.5]
+    boosted = base_sensor_data(
+        indoor_temp=19.0,
+        target_temp=21.0,
+        cheap_boost_enabled=True,
+    )
+    normal = base_sensor_data(
+        indoor_temp=19.0,
+        target_temp=21.0,
+        cheap_boost_enabled=False,
+    )
+
+    boosted_fake_temp, boosted_mode = s._calculate_output_temperature(
+        boosted,
+        prices,
+        "normal",
+        1,
+        60,
+    )
+    normal_fake_temp, normal_mode = s._calculate_output_temperature(
+        normal,
+        prices,
+        "normal",
+        1,
+        60,
+    )
+
+    assert boosted["cheap_boost_active"] is True
+    assert normal.get("cheap_boost_active") is False
+    assert boosted_mode == "cheap_boost"
+    assert normal_mode == "heating"
+    assert boosted_fake_temp < normal_fake_temp
+
+
+def test_cheap_boost_respects_custom_delta_and_hours():
+    s = create_sensor()
+    prices = [0.6, 0.1, 0.4, 0.2]
+    boosted = base_sensor_data(
+        indoor_temp=19.0,
+        target_temp=21.0,
+        cheap_boost_enabled=True,
+        cheap_boost_target_delta=1.5,
+        cheap_boost_hours=2.0,
+    )
+
+    boosted_fake_temp, boosted_mode = s._calculate_output_temperature(
+        boosted,
+        prices,
+        "normal",
+        3,
+        60,
+    )
+
+    assert boosted_mode == "cheap_boost"
+    assert boosted["cheap_boost_active"] is True
+    assert math.isclose(boosted["cheap_boost_target_delta"], 1.5)
+    assert math.isclose(boosted["cheap_boost_total_hours"], 2.0)
+    assert boosted["cheap_boost_slots"] == [1, 3]
+
+    baseline = base_sensor_data(
+        indoor_temp=19.0,
+        target_temp=21.0,
+        cheap_boost_enabled=True,
+        cheap_boost_hours=2.0,
+    )
+    baseline_fake_temp, _ = s._calculate_output_temperature(
+        baseline,
+        prices,
+        "normal",
+        3,
+        60,
+    )
+
+    assert boosted_fake_temp < baseline_fake_temp
+
+
+def test_cheap_boost_falls_back_to_defaults_when_values_invalid():
+    s = create_sensor()
+    prices = [0.4, 0.3, 0.2]
+    boosted = base_sensor_data(
+        indoor_temp=19.0,
+        target_temp=21.0,
+        cheap_boost_enabled=True,
+        cheap_boost_target_delta=-1.0,
+        cheap_boost_hours=0.0,
+    )
+
+    s._calculate_output_temperature(
+        boosted,
+        prices,
+        "normal",
+        2,
+        60,
+    )
+
+    assert math.isclose(
+        boosted["cheap_boost_target_delta"],
+        sensor.CHEAP_BOOST_TARGET_DELTA,
+    )
+    assert math.isclose(
+        boosted["cheap_boost_hours"],
+        sensor.CHEAP_BOOST_HOURS,
+    )
 
 
 def test_cheap_price_neutral_behavior():
