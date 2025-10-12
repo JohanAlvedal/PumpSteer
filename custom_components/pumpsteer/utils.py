@@ -1,5 +1,6 @@
 import logging
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple, List, Any, Union
 from homeassistant.core import HomeAssistant
@@ -615,3 +616,142 @@ def validate_config_completeness(config: dict) -> Tuple[bool, List[str]]:
             issues.append(f"Config key {key} should be string, got {type(value)}")
 
     return len(issues) == 0, issues
+
+
+def detect_price_interval_minutes(prices: List[Any]) -> int:
+    """
+    Detect the interval between price points in minutes.
+
+    Args:
+        prices: List of electricity prices
+
+    Returns:
+        Interval in minutes (default: 60 for hourly data)
+    """
+    if not prices or len(prices) < 2:
+        _LOGGER.debug("Not enough prices to detect interval, assuming 60 minutes")
+        return 60
+
+    # Nordpool typically provides hourly data (24 prices per day)
+    # If we have 24 prices, it's hourly (60 minutes)
+    # If we have 48 prices, it's half-hourly (30 minutes)
+    # If we have 96 prices, it's quarter-hourly (15 minutes)
+    num_prices = len(prices)
+    
+    if num_prices >= 90:  # Around 96 for quarter-hourly
+        return 15
+    elif num_prices >= 45:  # Around 48 for half-hourly
+        return 30
+    else:  # Default to hourly
+        return 60
+
+
+def compute_price_slot_index(
+    current_time: datetime, interval_minutes: int, num_prices: int
+) -> int:
+    """
+    Compute which price slot index we're currently in.
+
+    Args:
+        current_time: Current datetime
+        interval_minutes: Interval between prices in minutes
+        num_prices: Total number of prices available
+
+    Returns:
+        Current price slot index (0-based)
+    """
+    if interval_minutes <= 0:
+        _LOGGER.warning(f"Invalid interval {interval_minutes}, using 60")
+        interval_minutes = 60
+
+    # Calculate slot based on time of day
+    # Assuming prices start at midnight
+    minutes_since_midnight = current_time.hour * 60 + current_time.minute
+    slot_index = minutes_since_midnight // interval_minutes
+
+    # Ensure index is within bounds
+    if slot_index >= num_prices:
+        _LOGGER.warning(
+            f"Calculated slot {slot_index} exceeds available prices {num_prices}, using last slot"
+        )
+        slot_index = num_prices - 1
+    elif slot_index < 0:
+        _LOGGER.warning(f"Calculated negative slot {slot_index}, using 0")
+        slot_index = 0
+
+    return slot_index
+
+
+def get_price_window_for_hours(
+    prices: List[float],
+    start_index: int,
+    hours: int,
+    interval_minutes: int = 60,
+) -> List[float]:
+    """
+    Get price data for the next N hours from a starting index.
+
+    Args:
+        prices: List of electricity prices
+        start_index: Starting index
+        hours: Number of hours to retrieve
+        interval_minutes: Interval between prices in minutes
+
+    Returns:
+        List of prices for the specified window
+    """
+    if not prices or start_index < 0 or hours <= 0:
+        return []
+
+    # Calculate how many slots we need for the requested hours
+    slots_needed = (hours * 60) // interval_minutes
+
+    end_index = min(start_index + slots_needed, len(prices))
+    
+    if start_index >= len(prices):
+        _LOGGER.debug(f"Start index {start_index} beyond prices length {len(prices)}")
+        return []
+
+    return prices[start_index:end_index]
+
+
+def aggregate_price_series(
+    prices: List[float], interval_minutes: int
+) -> List[float]:
+    """
+    Aggregate price series to hourly intervals if needed.
+
+    Args:
+        prices: List of electricity prices
+        interval_minutes: Current interval between prices
+
+    Returns:
+        Aggregated prices (hourly if interval < 60, otherwise unchanged)
+    """
+    if not prices:
+        return []
+
+    # If already hourly or longer, return as is
+    if interval_minutes >= 60:
+        return prices
+
+    # Calculate how many slots to combine
+    slots_per_hour = 60 // interval_minutes
+    
+    if slots_per_hour <= 1:
+        return prices
+
+    # Aggregate by averaging
+    aggregated = []
+    for i in range(0, len(prices), slots_per_hour):
+        chunk = prices[i:i + slots_per_hour]
+        if chunk:
+            avg_price = sum(chunk) / len(chunk)
+            aggregated.append(avg_price)
+
+    _LOGGER.debug(
+        f"Aggregated {len(prices)} prices at {interval_minutes}min intervals "
+        f"to {len(aggregated)} hourly prices"
+    )
+
+    return aggregated
