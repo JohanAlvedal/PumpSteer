@@ -55,6 +55,24 @@ input_number:
     unit_of_measurement: ""
     icon: mdi:tune
 
+  pumpsteer_cheap_boost_hours:
+    name: "Cheap Boost Hours"
+    min: 0
+    max: 12
+    step: 1
+    mode: box
+    unit_of_measurement: "hours"
+    icon: mdi:clock-fast
+
+  pumpsteer_cheap_boost_delta:
+    name: "Cheap Boost Temperature Delta"
+    min: -20
+    max: 0
+    step: 1
+    mode: box
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-minus
+
 input_text:
   hourly_forecast_temperatures:
     name: Hourly Forecast Temperatures
