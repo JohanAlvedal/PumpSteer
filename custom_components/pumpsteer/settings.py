@@ -19,6 +19,11 @@ BRAKING_MODE_TEMP: Final[float] = (
 PREBOOST_OUTPUT_TEMP: Final[float] = (
     -15.0
 )  # °C - Virtual outdoor temperature when pre-boosting
+CHEAP_BOOST_OUTPUT_TEMP: Final[float] = (
+    -15.0
+)  # °C - Virtual outdoor temperature when cheap boosting
+CHEAP_BOOST_DEFAULT_HOURS: Final[int] = 3  # Default number of cheapest hours to boost
+CHEAP_BOOST_DEFAULT_DELTA: Final[float] = 2.0  # °C - Default temperature delta for cheap boost
 AGGRESSIVENESS_SCALING_FACTOR: Final[float] = (
     0.5  # Factor for aggressiveness in normal mode
 )

@@ -52,7 +52,8 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 * 🧊 Braking mode: limits heating during high prices
 * ☀️ Summer mode: disables heating control during warm weather
 * 🏝️ Holiday mode: temporarily reduces temperature when away
-* 🚀 Pre-boost: stores heat before cold or high-price periods
+* 🚀 Pre-boost: stores heat before cold or high-price periods (legacy)
+* 🚀 Cheap Boost: stores heat during the cheapest electricity hours (configurable)
 * ❄️ Precool: pauses heating ahead of forecasted warm weather
 * 📈 Switchable price model (`hybrid` or `percentiles`)
 * 🤖 ML analysis: learns how your house responds (session-based) (beta, work in progress)
@@ -120,7 +121,10 @@ Once configured, PumpSteer will automatically receive fresh weather data for opt
 | `input_text`     | `hourly_forecast_temperatures`  | Temperature forecast (24 CSV values)    |
 | `input_boolean`  | `holiday_mode`                  | Activates holiday mode                  |
 | `input_boolean`  | `autotune_inertia`              | Allow system to adjust `house_inertia`  |
-| `input_boolean`  | `pumpsteer_preboost_enabled`    | Enable pre-boost before cold/expensive periods |
+| `input_boolean`  | `pumpsteer_preboost_enabled`    | Enable pre-boost before cold/expensive periods (legacy) |
+| `input_boolean`  | `pumpsteer_cheap_boost_enabled` | Enable cheap boost during cheapest hours |
+| `input_number`   | `pumpsteer_cheap_boost_hours`   | Number of cheapest hours to boost (0-12) |
+| `input_number`   | `pumpsteer_cheap_boost_delta`   | Temperature delta for cheap boost (°C) |
 | `input_select`   | `pumpsteer_price_model`         | Price classification model (`hybrid` or `percentiles`) |
 | `input_datetime` | `holiday_start` / `holiday_end` | Automatically enable holiday mode       |
 
@@ -173,7 +177,10 @@ Virtual (fake) outdoor temperature sent to your heat pump.
 | `Decision Reason`            | Reason for current decision                         |
 | `Price Categories All Hours` | Classification for all hours                        |
 | `Current Hour`               | Current hour of the day                             |
-| `Preboost Enabled`           | Whether pre-boost mode is allowed                   |
+| `Preboost Enabled`           | Whether pre-boost mode is allowed (legacy)          |
+| `Cheap Boost Enabled`        | Whether cheap boost mode is allowed                 |
+| `Cheap Boost Hours`          | Number of cheapest hours to boost during            |
+| `Cheap Boost Delta`          | Temperature delta for cheap boost (°C)              |
 | `Data Quality`               | Availability and completeness of input data         |
 
 ---

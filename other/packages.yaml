@@ -55,6 +55,24 @@ input_number:
     unit_of_measurement: ""
     icon: mdi:tune
 
+  pumpsteer_cheap_boost_hours:
+    name: "PumpSteer Cheap Boost Hours"
+    min: 0
+    max: 12
+    step: 1
+    mode: box
+    unit_of_measurement: "hours"
+    icon: mdi:clock-fast
+
+  pumpsteer_cheap_boost_delta:
+    name: "PumpSteer Cheap Boost Delta"
+    min: 0.0
+    max: 5.0
+    step: 0.5
+    mode: box
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-chevron-up
+
 input_text:
   hourly_forecast_temperatures:
     name: Hourly Forecast Temperatures
@@ -78,6 +96,10 @@ input_boolean:
 
   pumpsteer_preboost_enabled:
     name: PumpSteer Preboost
+    icon: mdi:rocket-launch
+
+  pumpsteer_cheap_boost_enabled:
+    name: PumpSteer Cheap Boost
     icon: mdi:rocket-launch
 
 input_datetime:
@@ -138,6 +160,8 @@ template:
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
           {% if mode == 'preboost' %}
             mdi:flash
+          {% elif mode == 'cheap_boost' %}
+            mdi:rocket-launch
           {% elif mode == 'heating' %}
             mdi:fire
           {% elif mode == 'cooling' %}
@@ -169,6 +193,8 @@ template:
             {% set temp_diff = temp_diff | float(0) %}
             {% if mode == 'preboost' %}
               🔥 Pre-boost active
+            {% elif mode == 'cheap_boost' %}
+              🚀 Cheap Boost active
             {% elif mode == 'braking_by_price' %}
               💰 Price Braking ({{ price_cat.split('(')[0].strip() if '(' in price_cat else price_cat }})
             {% elif mode == 'braking_by_temp' %}
@@ -500,6 +526,32 @@ automation:
             🌡️ Current temp: {{ state_attr('sensor.pumpsteer', 'outdoor_temperature') | default('N/A') }}°C
             🎯 Virtual temp: {{ states('sensor.pumpsteer') | default('N/A') }}°C
             ⏰ Inertia: {{ state_attr('sensor.pumpsteer', 'inertia') | default('N/A') }}h
+          data:
+            push:
+              sound:
+                name: default
+                critical: 0
+                volume: 1.0
+
+  - alias: "PumpSteer - Cheap Boost Notification"
+    id: pumpsteer_cheap_boost_notification
+    description: "Notification when cheap boost is activated"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.pumpsteer_operating_mode
+        to: "Cheap Boost"
+    action:
+      - service: notify.mobile_app_iphone13pro
+        data:
+          title: "🚀 PumpSteer Cheap Boost Activated"
+          message: >
+            Cheap boost has started during one of the cheapest electricity hours.
+
+            🌡️ Current temp: {{ state_attr('sensor.pumpsteer', 'outdoor_temperature') | default('N/A') }}°C
+            💰 Current price: {{ state_attr('sensor.pumpsteer', 'current_price') | default('N/A') }} SEK/kWh
+            📊 Boost hours: {{ state_attr('sensor.pumpsteer', 'cheap_boost_hours') | default('N/A') }}
+            🎯 Delta: {{ state_attr('sensor.pumpsteer', 'cheap_boost_delta') | default('N/A') }}°C
           data:
             push:
               sound:
