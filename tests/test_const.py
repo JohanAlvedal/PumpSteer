@@ -35,14 +35,16 @@ def test_build_attributes_basic():
     price_category = "normal"
     mode = "heating"
     holiday = False
-    categories = ["normal", "high", "low"]
+    categories = ["normal", "high", "low", "normal"]
     now_hour = 1
+    price_interval_minutes = 60
+    current_slot_index = 0
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
 
     attrs = s._build_attributes(
-        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
+        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour, price_interval_minutes, current_slot_index
     )
     assert attrs["mode"] == "heating"
     assert attrs["current_price"] == 1.2
@@ -67,12 +69,14 @@ def test_decision_reason_very_cheap_heating():
     holiday = False
     categories = ["very_cheap", "cheap"]
     now_hour = 0
+    price_interval_minutes = 60
+    current_slot_index = 0
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
 
     attrs = s._build_attributes(
-        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
+        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour, price_interval_minutes, current_slot_index
     )
     assert attrs["decision_reason"] == "heating - Triggered by very cheap price"
 
@@ -94,12 +98,14 @@ def test_decision_reason_precool():
     holiday = False
     categories = ["normal", "high"]
     now_hour = 0
+    price_interval_minutes = 60
+    current_slot_index = 0
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
 
     attrs = s._build_attributes(
-        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour
+        sensor_data, prices, current_price, price_category, mode, holiday, categories, now_hour, price_interval_minutes, current_slot_index
     )
     assert attrs["decision_reason"] == "precool - Triggered by pre-cool (warm forecast)"
 
