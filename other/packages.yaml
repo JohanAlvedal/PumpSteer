@@ -255,6 +255,13 @@ template:
           {{ mode == 'preboost' if mode is not none else false }}
         icon: mdi:fire
 
+      - name: "PumpSteer Is Cheap Boosting"
+        unique_id: ps_is_cheap_boosting
+        state: >
+          {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
+          {{ mode == 'cheap_boost' if mode is not none else false }}
+        icon: mdi:rocket-launch
+
       - name: "PumpSteer Is Braking"
         unique_id: ps_is_braking
         state: >
