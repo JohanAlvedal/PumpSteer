@@ -280,39 +280,37 @@ class PumpSteerSensor(Entity):
         if outdoor_temp_forecast_entity:
             temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
 
-        # Allow preboost only if switch is ON and outdoor temperature is low
+        # Allow boost only if switch is ON and outdoor temperature is low
+        # Simplified: boost during cheapest hours when enabled
         preboost_allowed = bool(sensor_data.get('preboost_enabled', False))
 
-        if (
-            preboost_allowed
-            and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP
-            and temp_forecast_csv
-        ):
+        if preboost_allowed and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
             try:
+                # Aggregate prices to hourly if needed
                 preboost_prices = aggregate_price_series(
                     prices,
                     price_interval_minutes,
                 )
                 if not preboost_prices:
                     preboost_prices = prices
+                
+                # Simplified boost: just check if current hour is among cheapest
+                # Temperature forecast is no longer required
                 preboost_mode = check_combined_preboost(
-                    temp_csv=temp_forecast_csv,
+                    temp_csv=temp_forecast_csv or "",  # Optional, not used in simplified mode
                     prices=preboost_prices,
-                    cold_threshold=target_temp - 2.0,
-                    # Provide aggressiveness in the 0-5 range for pre-boost logic
+                    cold_threshold=target_temp - 2.0,  # Not used in simplified mode
                     aggressiveness=aggressiveness,
-                    inertia=inertia,
+                    inertia=inertia,  # Not used in simplified mode
                 )
             except Exception as e:
-                _LOGGER.error(f"Error in pre-boost check: {e}")
+                _LOGGER.error(f"Error in boost check: {e}")
                 preboost_mode = None
-        elif preboost_allowed and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
-            _LOGGER.debug("No temperature forecast available for pre-boost check.")
         elif not preboost_allowed:
-            _LOGGER.debug("Pre-boost disabled by switch; skipping pre-boost evaluation.")
+            _LOGGER.debug("Boost disabled by switch; skipping boost evaluation.")
 
         if preboost_mode == "preboost":
-            _LOGGER.info(f"Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
+            _LOGGER.info(f"Boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
             return PREBOOST_OUTPUT_TEMP, "preboost"
 
         if temp_forecast_csv and should_precool(

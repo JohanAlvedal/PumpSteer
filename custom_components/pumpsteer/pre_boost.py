@@ -156,135 +156,87 @@ def check_combined_preboost(
     inertia: float = 1.0,
 ) -> Optional[str]:
     """
-    Check if preboost should be activated based on combined temperature and price forecasts.
-    Aggressiveness must be provided in the 0-5 range by the sensor layer.
+    Simplified boost logic: Boost during the cheapest hours of the day.
+    
+    This replaces the complex cold+expensive peak prediction logic with a simpler
+    approach: when enabled, boost during the N cheapest hours of the current day.
+    The number of boost hours is determined by the aggressiveness setting.
 
     Args:
-        temp_csv: CSV string of temperature forecasts
-        prices: List of price forecasts
-        lookahead_hours: Hours to look ahead in forecast
-        cold_threshold: Temperature threshold for considering "cold"
-        price_threshold_ratio: Price ratio threshold for considering "expensive"
-        min_peak_hits: Minimum number of peaks required
-        aggressiveness: Aggressiveness factor (0.0-5.0) provided by the sensor layer
-        inertia: System thermal inertia factor
+        temp_csv: CSV string of temperature forecasts (not used in simple mode)
+        prices: List of price forecasts for the day (typically 24 hours)
+        lookahead_hours: Hours to look ahead in forecast (typically 24)
+        cold_threshold: Not used in simplified mode
+        price_threshold_ratio: Not used in simplified mode
+        min_peak_hits: Not used in simplified mode
+        aggressiveness: Aggressiveness factor (0.0-5.0) - determines number of boost hours
+        inertia: System thermal inertia factor (not used in simplified mode)
 
     Returns:
-        "preboost" if preboost should be activated, None otherwise
+        "preboost" if current hour is among the cheapest hours, None otherwise
 
     Raises:
         PreboostValidationError: If validation fails critically
     """
     _LOGGER.debug(
-        f"Pre-boost check (IMPROVED): lookahead={lookahead_hours}h, "
-        f"cold_threshold={cold_threshold}°C, aggressiveness={aggressiveness:.2f}, "
-        f"inertia={inertia:.2f}"
+        f"Boost check (SIMPLIFIED): aggressiveness={aggressiveness:.2f}"
     )
 
     try:
-        temps = parse_temperature_csv_safe(temp_csv)
-        if temps is None:
+        # Validate price data
+        if not prices or len(prices) < 1:
+            _LOGGER.debug("No price data available for boost check")
             return None
 
-        if len(temps) < lookahead_hours or (
-            prices and len(prices) < lookahead_hours
-        ):
-            original_lookahead = lookahead_hours
-            lookahead_hours = min(
-                len(temps), len(prices) if prices else len(temps)
+        if not validate_price_data(prices, min(lookahead_hours, len(prices))):
+            return None
+
+        # Calculate number of boost hours based on aggressiveness (0-5)
+        # aggressiveness 0 = 2 hours, aggressiveness 5 = 7 hours
+        # This gives a range of 2-7 cheapest hours to boost
+        boost_hours = int(2 + aggressiveness)
+        boost_hours = max(1, min(boost_hours, 12))  # Limit between 1-12 hours
+        
+        _LOGGER.debug(f"Targeting {boost_hours} cheapest hours for boosting (aggressiveness={aggressiveness})")
+
+        # Get current day's prices (up to 24 hours)
+        day_prices = prices[:min(24, len(prices))]
+        
+        if len(day_prices) < boost_hours:
+            _LOGGER.debug(f"Not enough price data ({len(day_prices)} hours) for boost calculation")
+            return None
+
+        # Find the cheapest hours
+        # Create list of (hour_index, price) tuples and sort by price
+        price_with_index = [(i, price) for i, price in enumerate(day_prices)]
+        price_with_index.sort(key=lambda x: x[1])  # Sort by price
+        
+        # Get indices of the cheapest hours
+        cheapest_hours = set(idx for idx, _ in price_with_index[:boost_hours])
+        
+        # Current hour is index 0
+        current_hour_index = 0
+        
+        if current_hour_index in cheapest_hours:
+            current_price = prices[current_hour_index]
+            cheapest_price = price_with_index[0][1]
+            _LOGGER.info(
+                f"BOOST ACTIVATED: Current hour is among {boost_hours} cheapest hours. "
+                f"Current price: {current_price:.3f}, cheapest: {cheapest_price:.3f}"
             )
+            return "preboost"
+        else:
+            current_price = prices[current_hour_index]
+            rank = next(i for i, (idx, _) in enumerate(price_with_index) if idx == current_hour_index) + 1
             _LOGGER.debug(
-                f"Adjusting lookahead: {original_lookahead}h → {lookahead_hours}h"
+                f"Boost not activated: Current hour ranked #{rank} out of {len(day_prices)} hours "
+                f"(price: {current_price:.3f}), need to be in top {boost_hours}"
             )
-            if lookahead_hours < 2:
-                _LOGGER.warning("Insufficient data for meaningful pre-boost analysis")
-                return None
-
-        if not validate_temperature_data(temps, lookahead_hours):
             return None
-        if not validate_price_data(prices, lookahead_hours):
-            return None
-        if check_future_warming_trend(temps, lookahead_hours):
-            _LOGGER.debug("Pre-boost: Skipping due to warming trend")
-            return None
-
-        # IMPROVED: Use DEFAULT_PRICE_RATIO for consistency
-        max_price = max(prices[:lookahead_hours]) if prices else DEFAULT_PRICE_RATIO
-        if max_price <= 0:
-            _LOGGER.warning(f"Invalid max price for pre-boost analysis, using: {DEFAULT_PRICE_RATIO}")
-            max_price = DEFAULT_PRICE_RATIO
-
-        # Aggressiveness is provided on a 0-5 scale by the sensor layer
-        adjusted_ratio, price_threshold = calculate_adjusted_thresholds(
-            aggressiveness, max_price
-        )
-        peaks = find_cold_expensive_peaks(
-            temps, prices, cold_threshold, price_threshold, lookahead_hours
-        )
-
-        if not peaks:
-            _LOGGER.debug("No cold+expensive peaks found in forecast")
-            return None
-
-        for peak_hour, severity, combined_score, duration in peaks:
-            hours_to_peak = peak_hour
-
-            if duration < PREBOOST_MIN_DURATION_HOURS:
-                _LOGGER.debug(
-                    f"Preboost skipped: Peak too short ({duration}h < "
-                    f"{PREBOOST_MIN_DURATION_HOURS}h)"
-                )
-                continue
-
-            # IMPROVED: Use DEFAULT_PRICE_RATIO for consistency
-            current_price = prices[0] if prices else DEFAULT_PRICE_RATIO
-            cheap_now_threshold = max_price * PREBOOST_CHEAP_NOW_MULTIPLIER
-            if PREBOOST_REQUIRE_VERY_CHEAP_NOW and current_price > cheap_now_threshold:
-                _LOGGER.debug(
-                    f"Preboost skipped: current price {current_price:.3f} > "
-                    f"threshold {cheap_now_threshold:.3f} (not 'very cheap')"
-                )
-                continue
-
-            min_advance, max_advance = calculate_optimal_preboost_timing(
-                inertia, severity
-            )
-
-            _LOGGER.debug(
-                f"Peak at hour {peak_hour}: severity={severity:.2f}, "
-                f"optimal advance: {min_advance:.1f}-{max_advance:.1f}h, "
-                f"actual: {hours_to_peak}h"
-            )
-
-            if min_advance <= hours_to_peak <= max_advance:
-                _LOGGER.info(
-                    f"PREBOOST ACTIVATED (OPTIMAL TIMING): Peak in {hours_to_peak}h "
-                    f"(optimal: {min_advance:.1f}-{max_advance:.1f}h), "
-                    f"severity: {severity:.2f}, duration: {duration}h, "
-                    f"temp: {temps[peak_hour]:.1f}°C, price: {prices[peak_hour]:.3f}"
-                )
-                return "preboost"
-
-            elif hours_to_peak > max_advance:
-                _LOGGER.debug(
-                    f"Peak too far away: {hours_to_peak}h > {max_advance}h "
-                    "(will check again later)"
-                )
-                continue
-
-            elif hours_to_peak < min_advance:
-                _LOGGER.debug(
-                    f"Peak too close: {hours_to_peak}h < {min_advance}h "
-                    "(should have started earlier)"
-                )
-                continue
-
-        _LOGGER.debug("No peaks within optimal timing windows")
-        return None
 
     except Exception as e:
-        _LOGGER.error(f"Unexpected error in preboost check: {e}")
-        raise PreboostValidationError(f"Preboost validation failed: {e}") from e
+        _LOGGER.error(f"Unexpected error in boost check: {e}")
+        raise PreboostValidationError(f"Boost validation failed: {e}") from e
 
 
 # Utility functions

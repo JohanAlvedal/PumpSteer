@@ -77,7 +77,7 @@ input_boolean:
     icon: mdi:robot
 
   pumpsteer_preboost_enabled:
-    name: PumpSteer Preboost
+    name: PumpSteer Boost (Cheapest Hours)
     icon: mdi:rocket-launch
 
 input_datetime:
@@ -168,7 +168,7 @@ template:
           {% else %}
             {% set temp_diff = temp_diff | float(0) %}
             {% if mode == 'preboost' %}
-              🔥 Pre-boost active
+              🔥 Boost active (cheap hours)
             {% elif mode == 'braking_by_price' %}
               💰 Price Braking ({{ price_cat.split('(')[0].strip() if '(' in price_cat else price_cat }})
             {% elif mode == 'braking_by_temp' %}
@@ -222,7 +222,7 @@ template:
         icon: mdi:target
         state_class: measurement
 
-      - name: "PumpSteer Is Preboosting"
+      - name: "PumpSteer Is Boosting"
         unique_id: ps_is_preboosting
         state: >
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
@@ -482,9 +482,9 @@ automation:
                 critical: 0
                 volume: 1.0
 
-  - alias: "PumpSteer - Pre-boost Notification"
+  - alias: "PumpSteer - Boost Notification"
     id: pumpsteer_preboost_notification
-    description: "Notification when pre-boost is activated"
+    description: "Notification when boost mode is activated"
     mode: single
     trigger:
       - platform: state
@@ -493,13 +493,13 @@ automation:
     action:
       - service: notify.mobile_app_iphone13pro
         data:
-          title: "🔥 PumpSteer Pre-boost Activated"
+          title: "🔥 PumpSteer Boost Activated"
           message: >
-            Pre-boost has started to prepare for an upcoming cold and expensive period.
+            Boost mode has started during a cheap price period.
 
             🌡️ Current temp: {{ state_attr('sensor.pumpsteer', 'outdoor_temperature') | default('N/A') }}°C
             🎯 Virtual temp: {{ states('sensor.pumpsteer') | default('N/A') }}°C
-            ⏰ Inertia: {{ state_attr('sensor.pumpsteer', 'inertia') | default('N/A') }}h
+            💰 Current price: {{ state_attr('sensor.pumpsteer', 'current_price') | default('N/A') }} SEK/kWh
           data:
             push:
               sound:
