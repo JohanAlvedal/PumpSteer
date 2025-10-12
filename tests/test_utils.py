@@ -10,6 +10,7 @@ from custom_components.pumpsteer.utils import (
     aggregate_price_series,
     get_price_window_for_hours,
 )
+from custom_components.pumpsteer import compat
 
 
 def test_get_version_reads_manifest():
@@ -55,3 +56,11 @@ def test_get_price_window_for_hours_respects_duration():
     window = get_price_window_for_hours(prices, start_index=4, hours=3, interval_minutes=15)
     assert len(window) == 12
     assert window[0] == prices[4]
+
+
+def test_compat_detect_price_interval_minutes_fallback(monkeypatch):
+    import custom_components.pumpsteer.utils as utils_module
+
+    monkeypatch.delattr(utils_module, "detect_price_interval_minutes", raising=False)
+    prices = [float(i) for i in range(96)]
+    assert compat.detect_price_interval_minutes(prices) == 15
