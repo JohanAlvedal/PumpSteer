@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
 # Import existing modules
-from ..pre_boost import check_combined_preboost
+from ..cheap_boost import check_cheap_boost
 from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
@@ -23,9 +23,7 @@ from ..settings import (
     HOLIDAY_TEMP,
     BRAKING_MODE_TEMP,
     BRAKE_FAKE_TEMP,
-    PREBOOST_MAX_OUTDOOR_TEMP,
     AGGRESSIVENESS_SCALING_FACTOR,
-    PREBOOST_OUTPUT_TEMP,
     WINTER_BRAKE_TEMP_OFFSET,
     CHEAP_PRICE_OVERSHOOT,
     PRECOOL_MARGIN,
@@ -70,7 +68,9 @@ HARDCODED_ENTITIES = {
     "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
     "house_inertia_entity": "input_number.house_inertia",
     "price_model_entity": "input_select.pumpsteer_price_model",
-    "preboost_enabled_entity": "input_boolean.pumpsteer_preboost_enabled",
+    "cheap_boost_enabled_entity": "input_boolean.pumpsteer_cheap_boost_enabled",
+    "cheap_boost_hours_entity": "input_number.pumpsteer_cheap_boost_hours",
+    "cheap_boost_delta_entity": "input_number.pumpsteer_cheap_boost_delta",
 }
 
 NEUTRAL_TEMP_THRESHOLD = 0.5
@@ -230,7 +230,9 @@ class PumpSteerSensor(Entity):
             'aggressiveness': safe_float(get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])) or DEFAULT_AGGRESSIVENESS,
             'inertia': safe_float(get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])) or DEFAULT_HOUSE_INERTIA,
             'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"],
-            'preboost_enabled': (get_state(self.hass, HARDCODED_ENTITIES["preboost_enabled_entity"]) == "on")
+            'cheap_boost_enabled': (get_state(self.hass, HARDCODED_ENTITIES["cheap_boost_enabled_entity"]) == "on"),
+            'cheap_boost_hours': safe_float(get_state(self.hass, HARDCODED_ENTITIES["cheap_boost_hours_entity"])) or 0,
+            'cheap_boost_delta': safe_float(get_state(self.hass, HARDCODED_ENTITIES["cheap_boost_delta_entity"])) or 5.0,
         }
 
 
@@ -245,11 +247,6 @@ class PumpSteerSensor(Entity):
             missing.append("Target temperature")
         if not prices:
             missing.append("Electricity prices")
-
-        # Only require forecast data if preboost is enabled
-        if sensor_data.get('preboost_enabled') and sensor_data['outdoor_temp_forecast_entity'] \
-        and get_state(self.hass, sensor_data['outdoor_temp_forecast_entity']) is None:
-            missing.append("Outdoor temperature forecast entity data not available")
         elif not sensor_data['outdoor_temp_forecast_entity']:
             _LOGGER.debug("Outdoor temperature forecast entity not configured, skipping pre-boost temperature forecast check.")
 
@@ -272,48 +269,41 @@ class PumpSteerSensor(Entity):
         aggressiveness = sensor_data['aggressiveness']
         inertia = sensor_data['inertia']
         outdoor_temp_forecast_entity = sensor_data['outdoor_temp_forecast_entity']
+        
+        # Get cheap boost configuration
+        cheap_boost_enabled = bool(sensor_data.get('cheap_boost_enabled', False))
+        cheap_boost_hours = int(sensor_data.get('cheap_boost_hours', 0))
+        cheap_boost_delta = float(sensor_data.get('cheap_boost_delta', 5.0))
 
-        preboost_mode = None
         temp_forecast_csv = None
 
         # Fetch forecast if entity provided
         if outdoor_temp_forecast_entity:
             temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
 
-        # Allow preboost only if switch is ON and outdoor temperature is low
-        preboost_allowed = bool(sensor_data.get('preboost_enabled', False))
-
-        if (
-            preboost_allowed
-            and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP
-            and temp_forecast_csv
-        ):
+        # Check for cheap boost activation
+        if cheap_boost_enabled and cheap_boost_hours > 0:
             try:
-                preboost_prices = aggregate_price_series(
-                    prices,
-                    price_interval_minutes,
+                is_cheap_boost = check_cheap_boost(
+                    prices=prices,
+                    boost_hours=cheap_boost_hours,
+                    current_slot_index=current_slot_index,
                 )
-                if not preboost_prices:
-                    preboost_prices = prices
-                preboost_mode = check_combined_preboost(
-                    temp_csv=temp_forecast_csv,
-                    prices=preboost_prices,
-                    cold_threshold=target_temp - 2.0,
-                    # Provide aggressiveness in the 0-5 range for pre-boost logic
-                    aggressiveness=aggressiveness,
-                    inertia=inertia,
-                )
+                
+                if is_cheap_boost:
+                    # Calculate boosted temperature by reducing outdoor temp
+                    boost_temp = outdoor_temp - cheap_boost_delta
+                    _LOGGER.info(
+                        f"Cheap boost activated. Reducing outdoor temp by {cheap_boost_delta}°C: "
+                        f"{outdoor_temp}°C -> {boost_temp}°C"
+                    )
+                    return boost_temp, "cheap_boost"
             except Exception as e:
-                _LOGGER.error(f"Error in pre-boost check: {e}")
-                preboost_mode = None
-        elif preboost_allowed and outdoor_temp < PREBOOST_MAX_OUTDOOR_TEMP:
-            _LOGGER.debug("No temperature forecast available for pre-boost check.")
-        elif not preboost_allowed:
-            _LOGGER.debug("Pre-boost disabled by switch; skipping pre-boost evaluation.")
-
-        if preboost_mode == "preboost":
-            _LOGGER.info(f"Pre-boost activated. Setting fake temp to {PREBOOST_OUTPUT_TEMP} °C")
-            return PREBOOST_OUTPUT_TEMP, "preboost"
+                _LOGGER.error(f"Error in cheap boost check: {e}")
+        elif not cheap_boost_enabled:
+            _LOGGER.debug("Cheap boost disabled by switch; skipping cheap boost evaluation.")
+        elif cheap_boost_hours <= 0:
+            _LOGGER.debug("Cheap boost hours set to 0; skipping cheap boost evaluation.")
 
         if temp_forecast_csv and should_precool(
             temp_forecast_csv, summer_threshold + PRECOOL_MARGIN
@@ -519,7 +509,7 @@ class PumpSteerSensor(Entity):
             'cooling': 'temperature',
             'summer_mode': 'summer',
             'neutral': 'neutral',
-            'preboost': 'pre-boost (cold & expensive forecast)',
+            'cheap_boost': 'cheap boost (cheapest hours)',
             'precool': 'pre-cool (warm forecast)',
             'error': 'error in calculation',
         }
@@ -566,7 +556,9 @@ class PumpSteerSensor(Entity):
                 "categories_count": len(categories),
                 "forecast_available": bool(sensor_data['outdoor_temp_forecast_entity'])
             },
-            "preboost_enabled": bool(sensor_data.get('preboost_enabled', False)),
+            "cheap_boost_enabled": bool(sensor_data.get('cheap_boost_enabled', False)),
+            "cheap_boost_hours": sensor_data.get('cheap_boost_hours', 0),
+            "cheap_boost_delta": sensor_data.get('cheap_boost_delta', 5.0),
         }
 
         return attributes
