@@ -33,6 +33,7 @@ from .settings import (
     EXTREME_PRICE_ERROR_THRESHOLD,
     DEFAULT_PRICE_RATIO,  # <-- ADDED for consistency instead of hardcoded values
 )
+from .electricity_price import find_cheapest_hours
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,6 +42,54 @@ class PreboostValidationError(Exception):
     """Raised when preboost validation fails."""
 
     pass
+
+
+def check_cheap_boost(
+    prices: List[float],
+    num_cheap_hours: int = 3,
+    lookahead_hours: int = 24,
+) -> Optional[str]:
+    """
+    Simplified cheap boost logic that activates during the cheapest hours.
+    
+    Args:
+        prices: List of price forecasts (hourly)
+        num_cheap_hours: Number of cheapest hours to boost (from input_number)
+        lookahead_hours: How many hours ahead to consider
+        
+    Returns:
+        "preboost" if current hour is in the cheapest N hours, None otherwise
+    """
+    if not prices or num_cheap_hours <= 0:
+        _LOGGER.debug("Cheap boost: No prices or invalid num_cheap_hours")
+        return None
+        
+    if len(prices) < 2:
+        _LOGGER.debug("Cheap boost: Insufficient price data")
+        return None
+    
+    # Only look at the lookahead window
+    price_window = prices[:min(lookahead_hours, len(prices))]
+    
+    # Find the cheapest hours in the window
+    cheap_hour_indices = find_cheapest_hours(price_window, num_cheap_hours)
+    
+    # Check if the current hour (index 0) is one of the cheapest
+    is_cheap_hour = 0 in cheap_hour_indices
+    
+    if is_cheap_hour:
+        _LOGGER.info(
+            f"CHEAP BOOST ACTIVATED: Current hour is one of the {num_cheap_hours} "
+            f"cheapest hours. Current price: {prices[0]:.3f}, "
+            f"cheap hours: {sorted(cheap_hour_indices)}"
+        )
+        return "preboost"
+    else:
+        _LOGGER.debug(
+            f"Cheap boost: Current hour not in cheapest {num_cheap_hours} hours. "
+            f"Cheap hours: {sorted(cheap_hour_indices)}"
+        )
+        return None
 
 
 def calculate_optimal_preboost_timing(
