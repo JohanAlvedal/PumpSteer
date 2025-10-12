@@ -55,7 +55,8 @@ def base_sensor_data(**kwargs):
         "aggressiveness": 3.0,
         "inertia": 1.0,
         "outdoor_temp_forecast_entity": None,
-        "preboost_enabled": False,
+        "cheap_boost_enabled": False,
+        "cheap_boost_active": False,
     }
     data.update(kwargs)
     return data
@@ -110,6 +111,42 @@ def test_very_cheap_price_overshoots_target():
     sensor.CHEAP_PRICE_OVERSHOOT = original_overshoot
     assert mode == "heating"
     assert fake_temp < data["outdoor_temp"]
+
+
+def test_cheap_boost_activates_on_cheapest_slots():
+    s = create_sensor()
+    prices = [0.6, 0.1, 0.4, 0.5]
+    boosted = base_sensor_data(
+        indoor_temp=19.0,
+        target_temp=21.0,
+        cheap_boost_enabled=True,
+    )
+    normal = base_sensor_data(
+        indoor_temp=19.0,
+        target_temp=21.0,
+        cheap_boost_enabled=False,
+    )
+
+    boosted_fake_temp, boosted_mode = s._calculate_output_temperature(
+        boosted,
+        prices,
+        "normal",
+        1,
+        60,
+    )
+    normal_fake_temp, normal_mode = s._calculate_output_temperature(
+        normal,
+        prices,
+        "normal",
+        1,
+        60,
+    )
+
+    assert boosted["cheap_boost_active"] is True
+    assert normal.get("cheap_boost_active") is False
+    assert boosted_mode == "cheap_boost"
+    assert normal_mode == "heating"
+    assert boosted_fake_temp < normal_fake_temp
 
 
 def test_cheap_price_neutral_behavior():

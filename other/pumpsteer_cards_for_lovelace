@@ -11,8 +11,8 @@ entities:
   - entity: sensor.pumpsteer_operating_mode
     name: Driftläge
     secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_preboosting
-    name: Preboost aktiv
+  - entity: sensor.pumpsteer_cheap_boost_active
+    name: Billigboost aktiv
     secondary_info: last-changed
   - entity: sensor.pumpsteer_is_braking
     name: Broms aktiv
@@ -233,8 +233,8 @@ entities:
   - entity: sensor.pumpsteer_status_summary
     name: Status
     secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_preboosting
-    name: Preboost aktiv
+  - entity: sensor.pumpsteer_cheap_boost_active
+    name: Billigboost aktiv
     secondary_info: last-changed
   - entity: sensor.pumpsteer_is_braking
     name: Broms aktiv
