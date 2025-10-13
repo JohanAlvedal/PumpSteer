@@ -55,7 +55,6 @@ def base_sensor_data(**kwargs):
         "aggressiveness": 3.0,
         "inertia": 1.0,
         "outdoor_temp_forecast_entity": None,
-        "preboost_enabled": False,
     }
     data.update(kwargs)
     return data

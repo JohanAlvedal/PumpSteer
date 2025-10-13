@@ -52,7 +52,6 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 * 🧊 Braking mode: limits heating during high prices
 * ☀️ Summer mode: disables heating control during warm weather
 * 🏝️ Holiday mode: temporarily reduces temperature when away
-* 🚀 Pre-boost: stores heat before cold or high-price periods
 * ❄️ Precool: pauses heating ahead of forecasted warm weather
 * 📈 Switchable price model (`hybrid` or `percentiles`)
 * 🤖 ML analysis: learns how your house responds (session-based) (beta, work in progress)
@@ -120,7 +119,6 @@ Once configured, PumpSteer will automatically receive fresh weather data for opt
 | `input_text`     | `hourly_forecast_temperatures`  | Temperature forecast (24 CSV values)    |
 | `input_boolean`  | `holiday_mode`                  | Activates holiday mode                  |
 | `input_boolean`  | `autotune_inertia`              | Allow system to adjust `house_inertia`  |
-| `input_boolean`  | `pumpsteer_preboost_enabled`    | Enable pre-boost before cold/expensive periods |
 | `input_select`   | `pumpsteer_price_model`         | Price classification model (`hybrid` or `percentiles`) |
 | `input_datetime` | `holiday_start` / `holiday_end` | Automatically enable holiday mode       |
 
@@ -173,7 +171,6 @@ Virtual (fake) outdoor temperature sent to your heat pump.
 | `Decision Reason`            | Reason for current decision                         |
 | `Price Categories All Hours` | Classification for all hours                        |
 | `Current Hour`               | Current hour of the day                             |
-| `Preboost Enabled`           | Whether pre-boost mode is allowed                   |
 | `Data Quality`               | Availability and completeness of input data         |
 
 ---
@@ -237,7 +234,7 @@ The integration needs:
 * Indoor temperature sensor (`input_number.indoor_target_temperature` + actual indoor temperature entity)
 * Outdoor temperature sensor
 * Electricity price sensor
-* Optional: hourly outdoor temperature forecast, holiday switches, pre-boost toggle, etc.
+* Optional: hourly outdoor temperature forecast, holiday switches, etc.
 
 You do **not** need to provide flow temperature, set-point, compressor status, or other proprietary heat pump sensors. As long as the heat pump follows the virtual outdoor temperature, PumpSteer can operate.
 

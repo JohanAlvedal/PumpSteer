@@ -76,10 +76,6 @@ input_boolean:
     name: Autotune Inertia
     icon: mdi:robot
 
-  pumpsteer_preboost_enabled:
-    name: PumpSteer Preboost
-    icon: mdi:rocket-launch
-
 input_datetime:
   holiday_start:
     name: Holiday Start
@@ -136,9 +132,7 @@ template:
           {{ state_attr('sensor.pumpsteer', 'mode') | default('Starting...') | title }}
         icon: >
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
-          {% if mode == 'preboost' %}
-            mdi:flash
-          {% elif mode == 'heating' %}
+          {% if mode == 'heating' %}
             mdi:fire
           {% elif mode == 'cooling' %}
             mdi:snowflake
@@ -167,9 +161,7 @@ template:
             🔄 Starting up...
           {% else %}
             {% set temp_diff = temp_diff | float(0) %}
-            {% if mode == 'preboost' %}
-              🔥 Pre-boost active
-            {% elif mode == 'braking_by_price' %}
+            {% if mode == 'braking_by_price' %}
               💰 Price Braking ({{ price_cat.split('(')[0].strip() if '(' in price_cat else price_cat }})
             {% elif mode == 'braking_by_temp' %}
               🌡️ Temp Braking ({{ temp_diff | round(1) }}°C above target)
@@ -221,13 +213,6 @@ template:
           {{ state_attr('sensor.pumpsteer', 'aggressiveness') | default(0) }}
         icon: mdi:target
         state_class: measurement
-
-      - name: "PumpSteer Is Preboosting"
-        unique_id: ps_is_preboosting
-        state: >
-          {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
-          {{ mode == 'preboost' if mode is not none else false }}
-        icon: mdi:fire
 
       - name: "PumpSteer Is Braking"
         unique_id: ps_is_braking
@@ -475,31 +460,6 @@ automation:
             💰 Price: {{ state_attr('sensor.pumpsteer', 'current_price') | default('N/A') }} SEK/kWh
             📊 Category: {{ state_attr('sensor.pumpsteer', 'price_category') | default('N/A') }}
             🏠 Mode: {{ state_attr('sensor.pumpsteer', 'mode') | default('N/A') | title }}
-          data:
-            push:
-              sound:
-                name: default
-                critical: 0
-                volume: 1.0
-
-  - alias: "PumpSteer - Pre-boost Notification"
-    id: pumpsteer_preboost_notification
-    description: "Notification when pre-boost is activated"
-    mode: single
-    trigger:
-      - platform: state
-        entity_id: sensor.pumpsteer_operating_mode
-        to: "Preboost"
-    action:
-      - service: notify.mobile_app_iphone13pro
-        data:
-          title: "🔥 PumpSteer Pre-boost Activated"
-          message: >
-            Pre-boost has started to prepare for an upcoming cold and expensive period.
-
-            🌡️ Current temp: {{ state_attr('sensor.pumpsteer', 'outdoor_temperature') | default('N/A') }}°C
-            🎯 Virtual temp: {{ states('sensor.pumpsteer') | default('N/A') }}°C
-            ⏰ Inertia: {{ state_attr('sensor.pumpsteer', 'inertia') | default('N/A') }}h
           data:
             push:
               sound:
