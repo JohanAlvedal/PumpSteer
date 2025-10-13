@@ -16,14 +16,8 @@ HOLIDAY_TEMP: Final[float] = 16.0  # °C - Target temperature when holiday mode 
 BRAKING_MODE_TEMP: Final[float] = (
     25.0  # °C - Virtual outdoor temperature when braking due to high price
 )
-PREBOOST_OUTPUT_TEMP: Final[float] = (
-    -15.0
-)  # °C - Virtual outdoor temperature when pre-boosting
 AGGRESSIVENESS_SCALING_FACTOR: Final[float] = (
     0.5  # Factor for aggressiveness in normal mode
-)
-PREBOOST_MAX_OUTDOOR_TEMP: Final[float] = (
-    5.0  # °C - Max outdoor temp for pre-boost to be considered
 )
 
 # === TEMPERATURE CONTROL LOGIC ===
@@ -97,33 +91,7 @@ VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00  # 300% of average price
 # - Prevents situations where objectively cheap prices are classified as "normal"
 #   just because the recent average was very low
 
-# === PRE-BOOST STRATEGY SETTINGS ===
-MIN_PRICE_THRESHOLD_RATIO: Final[float] = 0.5
-MAX_PRICE_THRESHOLD_RATIO: Final[float] = 0.9
-PREBOOST_AGGRESSIVENESS_SCALING_FACTOR: Final[float] = 0.04
-BASE_PRICE_THRESHOLD_RATIO: Final[float] = 0.9
-MAX_PREBOOST_HOURS: Final[int] = 6  # How many hours ahead to look for pre-boost
-PREBOOST_TEMP_THRESHOLD: Final[float] = (
-    2.0  # °C - How many degrees colder than target to trigger pre-boost
-)
 
-# === IMPROVED PRE-BOOST TIMING CONSTANTS ===
-PREBOOST_MIN_ADVANCE_FACTOR: Final[float] = 0.5  # Min advance = inertia * 0.5
-PREBOOST_MAX_ADVANCE_FACTOR: Final[float] = 1.2  # Max advance = inertia * 1.2
-PREBOOST_MIN_ADVANCE_HOURS: Final[float] = 1.0  # Absolute minimum advance time
-PREBOOST_MAX_ADVANCE_HOURS: Final[float] = 3.0  # Absolute maximum advance time
-SEVERITY_ADJUSTMENT_FACTOR: Final[float] = 0.3  # How much severity affects timing
-
-# === NEW PRE-BOOST REQUIREMENTS ===
-PREBOOST_REQUIRE_VERY_CHEAP_NOW: Final[bool] = (
-    True  # Enable requirement for very cheap prices right now
-)
-PREBOOST_MIN_DURATION_HOURS: Final[int] = (
-    2  # Minimum peak duration required to trigger preboost
-)
-PREBOOST_CHEAP_NOW_MULTIPLIER: Final[float] = (
-    0.6  # E.g. 60% of max price = "very cheap"
-)
 
 # === VALIDATION CONSTANTS ===
 MIN_REASONABLE_TEMP: Final[float] = -50.0  # °C - Minimum reasonable temperature
@@ -135,28 +103,7 @@ MAX_REASONABLE_PRICE: Final[float] = (
     15.0  # SEK/kWh - Maximum reasonable electricity price
 )
 
-# === PRE-BOOST SEVERITY CALCULATION CONSTANTS ===
-TEMP_SEVERITY_DIVISOR: Final[float] = (
-    3.0  # Divisor for temperature severity calculation
-)
-PRICE_SEVERITY_BASE: Final[float] = (
-    0.7  # Base threshold for price severity (70% of max)
-)
-PRICE_SEVERITY_DIVISOR: Final[float] = 0.2  # Divisor for price severity calculation
-DURATION_SEVERITY_DIVISOR: Final[float] = (
-    3.0  # Divisor for duration severity calculation
-)
-MAX_TEMP_SEVERITY: Final[float] = 2.0  # Maximum temperature severity score
-MAX_PRICE_SEVERITY: Final[float] = 2.0  # Maximum price severity score
-MAX_DURATION_SEVERITY: Final[float] = 1.5  # Maximum duration severity score
-DEFAULT_PRICE_RATIO: Final[float] = 0.5  # Default price ratio when max_price is invalid
-MAX_DURATION_LOOKAHEAD: Final[int] = 4  # Max hours to look ahead for peak duration
-MIN_ADVANCE_SAFETY_MARGIN: Final[float] = (
-    0.5  # Safety margin when min > max advance time
-)
-EXTREME_PRICE_ERROR_THRESHOLD: Final[int] = (
-    5  # Max extreme values before validation fails
-)
+
 
 
 # UPDATED validation function to include new settings
@@ -197,12 +144,7 @@ def validate_core_settings() -> None:
     if VERY_EXPENSIVE_MULTIPLIER > 5.0:
         errors.append("VERY_EXPENSIVE_MULTIPLIER seems unreasonably high (>5.0)")
 
-    # Validate pre-boost timing constants
-    if PREBOOST_MIN_ADVANCE_FACTOR >= PREBOOST_MAX_ADVANCE_FACTOR:
-        errors.append("Min advance factor must be less than max advance factor")
 
-    if PREBOOST_MIN_ADVANCE_HOURS >= PREBOOST_MAX_ADVANCE_HOURS:
-        errors.append("Min advance hours must be less than max advance hours")
 
     # Validate reasonable values
     if MIN_REASONABLE_TEMP >= MAX_REASONABLE_TEMP:

@@ -82,7 +82,6 @@ features:
   - Electricity price-based optimization (Nordpool integration)
   - Machine learning for adaptive control and auto-tuning
   - Holiday mode for energy savings
-  - Pre-boost functionality before cold/expensive periods
   - Price classification (hybrid/percentiles models)
   - Thermal inertia auto-tuning
   - Weather forecast integration (24-hour CSV format)
@@ -97,7 +96,6 @@ key_entities:
   input_booleans:
     - holiday_mode
     - autotune_inertia
-    - pumpsteer_preboost_enabled
   
   input_text:
     - hourly_forecast_temperatures (24 CSV values)
@@ -120,7 +118,6 @@ optimization_goals:
     - Minimize temperature drift from target
     - Adapt to house thermal characteristics
     - Prevent excessive heating during high price periods
-    - Pre-boost before cold weather or expensive periods
     - Support holiday mode for extended absences
 
 # Additional Notes
