@@ -1,7 +1,9 @@
-import logging
 import json
+import logging
+import math
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List, Any, Union
+from typing import Any, List, Optional, Tuple, Union
 from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.typing import StateType
@@ -615,3 +617,64 @@ def validate_config_completeness(config: dict) -> Tuple[bool, List[str]]:
             issues.append(f"Config key {key} should be string, got {type(value)}")
 
     return len(issues) == 0, issues
+
+
+def detect_price_interval_minutes(prices: List[Any]) -> int:
+    """Detect the interval in minutes between price points."""
+    if not prices:
+        return 60
+
+    count = len(prices)
+    if count <= 0:
+        return 60
+
+    common_intervals = [5, 10, 15, 20, 30, 60, 120]
+    for interval in common_intervals:
+        if count * interval == 1440:
+            return interval
+
+    if 1440 % count == 0:
+        interval = 1440 // count
+        if interval > 0:
+            return interval
+
+    estimated = max(1, math.floor(1440 / max(1, count)))
+    if estimated <= 0:
+        return 60
+
+    closest = min(common_intervals, key=lambda candidate: abs(candidate - estimated))
+    return closest
+
+
+def compute_price_slot_index(
+    current_time: datetime,
+    price_interval_minutes: int,
+    total_slots: int,
+) -> int:
+    """Compute the index of the current price slot."""
+    if total_slots <= 0:
+        return 0
+
+    interval = price_interval_minutes if price_interval_minutes > 0 else 60
+    minutes_since_midnight = current_time.hour * 60 + current_time.minute
+    slot_index = minutes_since_midnight // interval
+    return max(0, min(total_slots - 1, slot_index))
+
+
+def get_price_window_for_hours(
+    prices: List[float],
+    current_slot_index: int,
+    hours: int,
+    price_interval_minutes: int,
+) -> List[float]:
+    """Return a slice of prices covering the requested number of hours."""
+    if not prices or current_slot_index < 0:
+        return []
+
+    interval = price_interval_minutes if price_interval_minutes > 0 else 60
+    total_minutes = max(0, hours) * 60
+    slots_needed = max(1, math.ceil(total_minutes / interval))
+
+    start = min(current_slot_index, len(prices) - 1)
+    end = min(len(prices), start + slots_needed)
+    return prices[start:end]
