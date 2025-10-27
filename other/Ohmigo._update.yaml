@@ -1,17 +1,34 @@
-##
-## If you have Ohmigo set up, this automation will keep its temperature 
-## sensor updated with the current temperature reading from PumpSteer.
-##
-alias: Update Ohmigo sensor
-description: ""
+alias: Update Ohmigo Sensor
+description: Håll Ohmigo i synk med pumpsteer, avrundat till 0,5 °C.
 triggers:
+  - trigger: state
+    entity_id:
+      - sensor.pumpsteer
+    attribute: fake_outdoor_temperature
+  - trigger: homeassistant
+    event: start
   - trigger: time_pattern
-    minutes: /5
-conditions: []
+    minutes: /10
+conditions:
+  - condition: template
+    value_template: >
+      {% set src = states('sensor.pumpsteer') | float %}
+
+      {% set new = ((src * 2) | round(0) / 2) %}
+
+      {% set cur = states('number.ohmigohass_temperature') | float(default=9999)
+      %}
+
+      {{ cur == 9999 or ((new - cur) | abs > 0.2) }}
 actions:
-  - data:
-      value: "{{ states('sensor.pumpsteer') | float }}"
+  - action: number.set_value
+    data:
+      value: >
+        {% set src = states('sensor.pumpsteer') | float %} {% set val = ((src *
+        2) | round(0) / 2) %} {{ (val | int) if (val % 1 == 0) else (val |
+        round(1)) }}
     target:
-      entity_id: number.ohmigohass_temperature # Replace this with your Ohmigo temperature entity.
-    action: number.set_value
-mode: single
+      entity_id:
+        - number.ohmigohass_temperature
+    enabled: true
+mode: restart
