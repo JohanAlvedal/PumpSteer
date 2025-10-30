@@ -1,7 +1,8 @@
 # sensor.py
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import InvalidOperation
 from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
@@ -71,6 +72,7 @@ HARDCODED_ENTITIES = {
 NEUTRAL_TEMP_THRESHOLD = 0.5
 DEFAULT_SUMMER_THRESHOLD = 18.0
 DEFAULT_AGGRESSIVENESS = 3.0
+INITIAL_STARTUP_DELAY_SECONDS = 30
 
 
 def safe_get_current_price_and_category(
@@ -133,6 +135,10 @@ class PumpSteerSensor(Entity):
         self._ml_session_started = False
         self._ml_session_start_mode = None
         self._last_price_category = "unknown"
+        self._startup_grace_deadline: Optional[datetime] = (
+            dt_util.now() + timedelta(seconds=INITIAL_STARTUP_DELAY_SECONDS)
+        )
+        self._startup_grace_logged = False
 
         if ML_AVAILABLE:
             try:
@@ -217,13 +223,31 @@ class PumpSteerSensor(Entity):
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch sensor data from Home Assistant."""
+        summer_threshold = safe_float(
+            get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])
+        )
+        if summer_threshold is None:
+            summer_threshold = DEFAULT_SUMMER_THRESHOLD
+
+        aggressiveness = safe_float(
+            get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])
+        )
+        if aggressiveness is None:
+            aggressiveness = DEFAULT_AGGRESSIVENESS
+
+        inertia = safe_float(
+            get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])
+        )
+        if inertia is None:
+            inertia = DEFAULT_HOUSE_INERTIA
+
         return {
             'indoor_temp': safe_float(get_state(self.hass, config.get("indoor_temp_entity"))),
             'outdoor_temp': safe_float(get_state(self.hass, config.get("real_outdoor_entity"))),
             'target_temp': safe_float(get_state(self.hass, HARDCODED_ENTITIES["target_temp_entity"])),
-            'summer_threshold': safe_float(get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])) or DEFAULT_SUMMER_THRESHOLD,
-            'aggressiveness': safe_float(get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])) or DEFAULT_AGGRESSIVENESS,
-            'inertia': safe_float(get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])) or DEFAULT_HOUSE_INERTIA,
+            'summer_threshold': summer_threshold,
+            'aggressiveness': aggressiveness,
+            'inertia': inertia,
             'outdoor_temp_forecast_entity': HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"],
         }
 
@@ -389,11 +413,26 @@ class PumpSteerSensor(Entity):
             _LOGGER.warning(f"Could not retrieve electricity prices from {entity_id}")
             return [], 0.0, "unknown", [], 60, 0
 
-        try:
-            prices = [float(p) for p in prices_raw if isinstance(p, (float, int)) and p is not None]
-        except (ValueError, TypeError) as e:
-            _LOGGER.error(f"Error converting prices to float: {e}")
-            return [], 0.0, "unknown", [], 60, 0
+        prices: List[float] = []
+        for idx, raw_price in enumerate(prices_raw):
+            if raw_price is None:
+                continue
+
+            if isinstance(raw_price, bool):
+                _LOGGER.debug(
+                    "Skipping boolean price value at index %s from %s", idx, entity_id
+                )
+                continue
+
+            try:
+                prices.append(float(raw_price))
+            except (TypeError, ValueError, InvalidOperation):
+                _LOGGER.warning(
+                    "Invalid price value at index %s from %s: %r",
+                    idx,
+                    entity_id,
+                    raw_price,
+                )
 
         if not prices:
             _LOGGER.warning("No valid prices found after conversion")
@@ -540,6 +579,26 @@ class PumpSteerSensor(Entity):
             self._last_price_category = price_category
 
             missing = self._validate_required_data(sensor_data, prices)
+
+            if (
+                missing
+                and self._startup_grace_deadline
+                and dt_util.now() < self._startup_grace_deadline
+            ):
+                if not self._startup_grace_logged:
+                    _LOGGER.info(
+                        "Startup grace period: delaying update until sensors report data (%s)",
+                        ", ".join(missing),
+                    )
+                    self._startup_grace_logged = True
+
+                self._attributes = {
+                    "Status": "Waiting for initial sensor data",
+                    "Missing": ", ".join(missing),
+                    "Last Checked": update_time.isoformat(),
+                }
+                return
+
             if missing:
                 self._state = STATE_UNAVAILABLE
                 self._attributes = {
@@ -548,6 +607,10 @@ class PumpSteerSensor(Entity):
                     "Current Hour": now_hour,
                 }
                 return
+
+            if self._startup_grace_deadline:
+                self._startup_grace_deadline = None
+                self._startup_grace_logged = False
 
             holiday = is_holiday_mode_active(
                 self.hass,
