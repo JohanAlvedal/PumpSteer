@@ -1,4 +1,6 @@
-# ml_sensor.py – Improved ML analysis sensor for PumpSteer
+###############################################################################
+# ml_sensor.py – Adaptive ML analysis sensor for PumpSteer (v2.0)
+###############################################################################
 
 import logging
 from typing import Dict, Any
@@ -12,27 +14,24 @@ import homeassistant.util.dt as dt_util
 
 from ..ml_adaptive import PumpSteerMLCollector
 from ..utils import safe_float, get_state, get_version
+from ..ml_settings import ML_MIN_SESSIONS_FOR_ANALYSIS
 
 _LOGGER = logging.getLogger(__name__)
 
-
 SW_VERSION = get_version()
 
-# Important ML-related entities - these are critical for PumpSteer control
+# Related Home Assistant entities used for cross-reference
 ML_RELATED_ENTITIES = {
-    # Core ML control entities
-    "autotune_boolean": "input_boolean.autotune_inertia",  # Enable/disable auto-tuning
-    "house_inertia": "input_number.house_inertia",  # House thermal inertia
-    # Integral control entities (critical for temperature regulation)
-    "integral_error": "input_number.integral_temp_error",  # Accumulated temperature error
-    "integral_gain": "input_number.pumpsteer_integral_gain",  # Integral control gain
-    # Status tracking
-    "last_gain_adjustment": "input_text.last_gain_adjustment",  # Last automatic adjustment info
+    "autotune_boolean": "input_boolean.autotune_inertia",
+    "house_inertia": "input_number.house_inertia",
+    "integral_error": "input_number.integral_temp_error",
+    "integral_gain": "input_number.pumpsteer_integral_gain",
+    "last_gain_adjustment": "input_text.last_gain_adjustment",
 }
 
 
 class PumpSteerMLSensor(Entity):
-    """Sensor that displays insights from the PumpSteer ML system."""
+    """Sensor that displays insights and learning results from PumpSteer ML."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         """Initialize ML sensor."""
@@ -40,9 +39,9 @@ class PumpSteerMLSensor(Entity):
         self._attr_name = "PumpSteer ML Analysis"
         self._attr_unique_id = f"{config_entry.entry_id}_ml_analysis"
         self._state = "initializing"
-        self._attributes = {}
-        self.ml = None
-        self._last_error = None
+        self._attributes: Dict[str, Any] = {}
+        self.ml: PumpSteerMLCollector | None = None
+        self._last_error: str | None = None
 
         self._attr_device_info = DeviceInfo(
             identifiers={("pumpsteer", config_entry.entry_id)},
@@ -52,15 +51,17 @@ class PumpSteerMLSensor(Entity):
             sw_version=SW_VERSION,
         )
 
-        # Initialize ML collector with error handling
         try:
             self.ml = PumpSteerMLCollector(hass)
-            _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized")
+            _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized successfully")
         except Exception as e:
             _LOGGER.error(f"ML sensor: Failed to initialize ML collector: {e}")
             self.ml = None
             self._last_error = f"Initialization failed: {e}"
 
+    # ------------------------------------------------------------------
+    # Standard entity properties
+    # ------------------------------------------------------------------
     @property
     def name(self):
         return self._attr_name
@@ -79,23 +80,26 @@ class PumpSteerMLSensor(Entity):
 
     @property
     def available(self) -> bool:
-        """Sensor is available if ML collector is working."""
         return self.ml is not None and self._state != STATE_UNAVAILABLE
 
     @property
     def icon(self) -> str:
-        """Icon for ML sensor."""
+        """Dynamic icon."""
         if self._state == "error":
             return "mdi:alert-circle"
-        elif self._state == "collecting":
+        if self._state == "collecting":
             return "mdi:database-search"
-        elif isinstance(self._state, str) and self._state.endswith("%"):
-            return "mdi:chart-line"
-        else:
+        if self._state == "learning":
             return "mdi:brain"
+        if self._state == "ready":
+            return "mdi:chart-line"
+        return "mdi:brain"
 
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
     async def async_added_to_hass(self):
-        """Load ML data when sensor is added."""
+        """Load ML data on startup."""
         if self.ml and hasattr(self.ml, "async_load_data"):
             try:
                 await self.ml.async_load_data()
@@ -104,8 +108,8 @@ class PumpSteerMLSensor(Entity):
                 _LOGGER.error(f"ML sensor: Failed to load data: {e}")
                 self._last_error = f"Data loading failed: {e}"
 
-    async def async_will_remove_from_hass(self) -> None:
-        """Handle cleanup when entity is removed."""
+    async def async_will_remove_from_hass(self):
+        """Clean up when entity is removed."""
         if self.ml and hasattr(self.ml, "async_shutdown"):
             try:
                 await self.ml.async_shutdown()
@@ -114,36 +118,19 @@ class PumpSteerMLSensor(Entity):
         self.ml = None
         await super().async_will_remove_from_hass()
 
+    # ------------------------------------------------------------------
+    # Helper functions
+    # ------------------------------------------------------------------
     def _get_control_system_data(self) -> Dict[str, Any]:
-        """Get data from Home Assistant control system entities."""
+        """Fetch core control parameters from HA entities."""
         try:
-            # Auto-tune status
-            autotune_state = self.hass.states.get(
-                ML_RELATED_ENTITIES["autotune_boolean"]
-            )
-            autotune_on = autotune_state.state == "on" if autotune_state else False
+            autotune_state = self.hass.states.get(ML_RELATED_ENTITIES["autotune_boolean"])
+            autotune_on = autotune_state and autotune_state.state == "on"
 
-            # Get all critical control values
-            integral_error = (
-                safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_error"]))
-                or 0.0
-            )
-            integral_gain = (
-                safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_gain"]))
-                or 0.0
-            )
-            house_inertia = safe_float(
-                get_state(self.hass, ML_RELATED_ENTITIES["house_inertia"])
-            )
-            last_adjustment = get_state(
-                self.hass, ML_RELATED_ENTITIES["last_gain_adjustment"]
-            )
-
-            _LOGGER.debug(
-                f"ML sensor control data: autotune={autotune_on}, "
-                f"inertia={house_inertia}, integral_gain={integral_gain}, "
-                f"integral_error={integral_error}"
-            )
+            integral_error = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_error"])) or 0.0
+            integral_gain = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_gain"])) or 0.0
+            house_inertia = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["house_inertia"]))
+            last_adjustment = get_state(self.hass, ML_RELATED_ENTITIES["last_gain_adjustment"])
 
             return {
                 "autotune_active": autotune_on,
@@ -162,101 +149,56 @@ class PumpSteerMLSensor(Entity):
                 "last_gain_adjustment": None,
             }
 
-    def _determine_state(
-        self, insights: Dict[str, Any], control_data: Dict[str, Any]
-    ) -> str:
-        """Determine sensor state based on ML insights and system status."""
-        if not insights:
-            return "no data"
+    def _determine_state(self, insights: Dict[str, Any]) -> str:
+        """Decide what the main state string should be."""
+        summary = insights.get("summary", {}) or {}
+        total = summary.get("total_sessions", 0) or 0
+        coeffs = summary.get("coefficients")
 
-        # Check ML status first
-        status = insights.get("ml_status", {})
-        if not isinstance(status, dict):
-            status = {}
-
-        if status.get("collecting_data"):
+        # Too few sessions collected → still collecting data
+        if total < ML_MIN_SESSIONS_FOR_ANALYSIS:
             return "collecting"
 
-        # Try to show success rate if available
-        perf = insights.get("performance", {})
-        if isinstance(perf, dict):
-            success = perf.get("success_rate")
-            if isinstance(success, (int, float)) and 0 <= success <= 100:
-                return f"{success:.0f}%"
+        # Enough sessions but model has not produced coefficients yet
+        if not coeffs or (isinstance(coeffs, list) and len(coeffs) == 0):
+            return "learning"
 
-        # Fallback states
-        if status.get("ml_status") == "ready":
-            return "ready"
-        elif insights.get("sessions_collected", 0) == 0:
-            return "no data"
-        else:
-            return "analyzing"
+        # Model trained and coefficients exist → ready
+        return "ready"
 
-    def _build_attributes(
-        self, insights: Dict[str, Any], control_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Build comprehensive attributes dictionary."""
-        # Safely extract performance data
-        perf = (
-            insights.get("performance", {})
-            if isinstance(insights.get("performance"), dict)
-            else {}
-        )
-        status = (
-            insights.get("ml_status", {})
-            if isinstance(insights.get("ml_status"), dict)
-            else {}
-        )
+    def _build_attributes(self, insights: Dict[str, Any], control_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a clear and concise attribute dictionary."""
+        summary = insights.get("summary", {})
         recs = insights.get("recommendations", [])
 
-        # Ensure recommendations is a list
-        if not isinstance(recs, list):
-            recs = []
-
-        # Format recommendations
-        recommendations_text = recs if recs else "Collecting data…"
-
-        # Build attributes with safe access
         attributes = {
-            # ML Performance
-            "success_rate": (
-                round(perf.get("success_rate"), 2)
-                if isinstance(perf.get("success_rate"), (int, float))
-                else None
-            ),
-            "avg_heating_duration": perf.get("avg_heating_duration"),
-            "most_used_aggressiveness": perf.get("most_used_aggressiveness"),
-            "total_heating_sessions": perf.get("total_heating_sessions") or 0,
-            # Recommendations
-            "recommendations": recommendations_text,
-            # Control System Status
-            "auto_tune_active": control_data.get("autotune_active", False),
-            "inertia": (
-                round(control_data["inertia"], 3)
-                if isinstance(control_data.get("inertia"), (int, float))
-                else None
-            ),
-            "integral_temp_error": round(control_data["integral_error"], 2),
-            "integral_gain": round(control_data["integral_gain"], 3),
-            "last_gain_adjustment": (
-                control_data.get("last_gain_adjustment")
-                if control_data.get("last_gain_adjustment") not in [None, "unknown", ""]
-                else "-"
-            ),
-            # ML System Status
-            "ml_status": status.get("ml_status", "unknown"),
-            "collecting_data": status.get("collecting_data", False),
-            "sessions_collected": status.get("sessions_collected", 0),
-            # Meta
+            "total_sessions": summary.get("total_sessions"),
+            "avg_duration": summary.get("avg_duration"),
+            "avg_drift": summary.get("avg_drift"),
+            "avg_inertia": summary.get("avg_inertia"),
+            "avg_aggressiveness": summary.get("avg_aggressiveness"),
+            "coefficients": summary.get("coefficients"),
+            "recommendations": recs or ["Collecting data…"],
+            "last_learning_update": summary.get("updated"),
+            # control system info
+            "auto_tune_active": control_data.get("autotune_active"),
+            "inertia": control_data.get("inertia"),
+            "integral_gain": control_data.get("integral_gain"),
+            "integral_error": control_data.get("integral_error"),
+            "last_gain_adjustment": control_data.get("last_gain_adjustment"),
+            # meta
             "last_updated": dt_util.now().isoformat(),
             "last_error": self._last_error,
+            "model_ready": bool(summary.get("coefficients")),
         }
 
-        # Remove None values to keep attributes clean
         return {k: v for k, v in attributes.items() if v is not None}
 
+    # ------------------------------------------------------------------
+    # Update loop
+    # ------------------------------------------------------------------
     async def async_update(self):
-        """Update ML sensor with comprehensive error handling."""
+        """Refresh ML information and update sensor attributes."""
         if not self.ml:
             self._state = STATE_UNAVAILABLE
             self._attributes = {
@@ -267,26 +209,25 @@ class PumpSteerMLSensor(Entity):
             return
 
         try:
-            # Get ML insights with validation
-            insights = self.ml.get_learning_insights()
-            if not isinstance(insights, dict):
-                _LOGGER.warning(
-                    "ML sensor: get_learning_insights() returned invalid data"
-                )
-                insights = {}
+            # === Pull data from the new ML adaptive system ===
+            insights = {}
+            try:
+                summary = self.ml.get_learning_summary()
+                recs = self.ml.get_recommendations()
+                insights["summary"] = summary or {}
+                insights["recommendations"] = recs or []
+            except Exception as err:
+                _LOGGER.warning(f"ML sensor: could not read learning summary: {err}")
+                insights = {"summary": {}, "recommendations": [f"Error: {err}"]}
 
-            # Get control system data
             control_data = self._get_control_system_data()
 
-            # Determine state
-            self._state = self._determine_state(insights, control_data)
-
-            # Build attributes
+            # determine overall state
+            self._state = self._determine_state(insights)
             self._attributes = self._build_attributes(insights, control_data)
 
-            # Clear error if update was successful
             if self._last_error:
-                _LOGGER.info("ML sensor: Recovered from previous error")
+                _LOGGER.info("ML sensor: recovered from previous error")
                 self._last_error = None
 
         except Exception as e:
@@ -301,11 +242,14 @@ class PumpSteerMLSensor(Entity):
             }
 
 
+# ----------------------------------------------------------------------
+# Home Assistant setup
+# ----------------------------------------------------------------------
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up ML sensor."""
+    """Set up PumpSteer ML sensor entity."""
     ml_sensor = PumpSteerMLSensor(hass, config_entry)
     async_add_entities([ml_sensor], update_before_add=True)
