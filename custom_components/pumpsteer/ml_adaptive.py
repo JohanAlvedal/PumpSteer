@@ -228,19 +228,46 @@ class PumpSteerMLCollector:
             s for s in self.learning_sessions if s.get("summary", {}).get("mode") == "heating"
         ]
 
-        if len(heating_sessions) < 5:
+        valid_summaries: List[Dict[str, Any]] = []
+        skipped_sessions = 0
+
+        for session in heating_sessions:
+            summary = session.get("summary", {})
+
+            comfort_drift = summary.get("comfort_drift")
+            duration = summary.get("duration_minutes")
+            aggressiveness = summary.get("aggressiveness")
+            inertia = summary.get("inertia")
+
+            if comfort_drift is None or duration is None:
+                skipped_sessions += 1
+                continue
+
+            valid_summaries.append({
+                "comfort_drift": comfort_drift,
+                "duration_minutes": duration,
+                "aggressiveness": aggressiveness if aggressiveness is not None else 0,
+                "inertia": inertia if inertia is not None else 1.0,
+            })
+
+        if skipped_sessions:
+            _LOGGER.warning(
+                "ML: Skipped %s heating sessions missing comfort drift or duration data",
+                skipped_sessions,
+            )
+
+        if len(valid_summaries) < 5:
             _LOGGER.debug("ML: Not enough sessions for regression learning.")
             return
 
         try:
             X = []
             y = []
-            for s in heating_sessions[-50:]:
-                summ = s.get("summary", {})
-                aggr = summ.get("aggressiveness", 0)
-                inertia = summ.get("inertia", 1.0)
-                dur = summ.get("duration_minutes", 0)
-                drift = summ.get("comfort_drift", 0)
+            for summary in valid_summaries[-50:]:
+                aggr = summary.get("aggressiveness", 0)
+                inertia = summary.get("inertia", 1.0)
+                dur = summary.get("duration_minutes", 0)
+                drift = summary.get("comfort_drift", 0)
                 X.append([aggr, inertia, dur])
                 y.append(drift)
 
@@ -249,11 +276,20 @@ class PumpSteerMLCollector:
             self.model_coefficients = coeff.tolist()
 
             self.learning_summary = {
-                "total_sessions": len(heating_sessions),
-                "avg_duration": round(statistics.mean([s["summary"]["duration_minutes"] for s in heating_sessions]), 1),
-                "avg_drift": round(statistics.mean([s["summary"]["comfort_drift"] for s in heating_sessions]), 2),
-                "avg_inertia": round(statistics.mean([s["summary"]["inertia"] for s in heating_sessions]), 2),
-                "avg_aggressiveness": round(statistics.mean([s["summary"]["aggressiveness"] for s in heating_sessions]), 2),
+                "total_sessions": len(valid_summaries),
+                "avg_duration": round(
+                    statistics.mean([s["duration_minutes"] for s in valid_summaries]),
+                    1,
+                ),
+                "avg_drift": round(
+                    statistics.mean([s["comfort_drift"] for s in valid_summaries]), 2
+                ),
+                "avg_inertia": round(
+                    statistics.mean([s["inertia"] for s in valid_summaries]), 2
+                ),
+                "avg_aggressiveness": round(
+                    statistics.mean([s["aggressiveness"] for s in valid_summaries]), 2
+                ),
                 "coefficients": [round(c, 4) for c in coeff],
                 "updated": dt_util.now().isoformat(),
             }
