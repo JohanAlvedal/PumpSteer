@@ -20,7 +20,6 @@ from ..electricity_price import async_hybrid_classify_with_history, classify_pri
 from ..settings import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
-    BRAKING_MODE_TEMP,
     BRAKE_FAKE_TEMP,
     AGGRESSIVENESS_SCALING_FACTOR,
     WINTER_BRAKE_TEMP_OFFSET,
