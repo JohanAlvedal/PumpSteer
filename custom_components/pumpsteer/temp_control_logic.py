@@ -83,7 +83,8 @@ def calculate_temperature_output(
     # The fake temperature is increased to make the heat pump work less (or cool).
     elif diff > 0.5:
         fake_temp += diff * aggressiveness * BRAKING_COMPENSATION_FACTOR
-        fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), brake_temp)
+        brake_cap = max(min(brake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
+        fake_temp = brake_cap
         mode = "braking_by_temp"
         _LOGGER.debug(
             f"TempControl: Braking (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}"
