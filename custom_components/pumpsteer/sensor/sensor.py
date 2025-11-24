@@ -326,10 +326,11 @@ class PumpSteerSensor(Entity):
                     price_brake_window,
                     aggressiveness,
                 )
-                return BRAKING_MODE_TEMP, "braking_by_price"
+                # Use dynamically computed brake_temp here instead of fixed BRAKING_MODE_TEMP
+                return brake_temp, "braking_by_price"
 
         if mode not in ["braking_by_temp", "heating"] and price_is_high:
-            price_brake_temp = BRAKING_MODE_TEMP
+            price_brake_temp = brake_temp
             slot_label = f"slot {current_slot_index}"
             _LOGGER.info(
                 f"Blocking heating at {slot_label} due to {price_category} price (setting fake temp to {price_brake_temp} °C)"
