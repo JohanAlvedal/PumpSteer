@@ -24,6 +24,7 @@ from ..settings import (
     BRAKE_FAKE_TEMP,
     AGGRESSIVENESS_SCALING_FACTOR,
     WINTER_BRAKE_TEMP_OFFSET,
+    WINTER_BRAKE_THRESHOLD,
     CHEAP_PRICE_OVERSHOOT,
     PRECOOL_MARGIN,
 )
@@ -285,7 +286,7 @@ class PumpSteerSensor(Entity):
         # Dynamic braking temperature based on outdoor temp
         brake_temp = (
             outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
-            if outdoor_temp < summer_threshold
+            if outdoor_temp < WINTER_BRAKE_THRESHOLD
             else BRAKE_FAKE_TEMP
         )
 

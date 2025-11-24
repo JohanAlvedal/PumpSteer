@@ -27,6 +27,7 @@ BRAKE_FAKE_TEMP: Final[float] = 25.0
 PRECOOL_LOOKAHEAD: Final[int] = 24  # Hours ahead to look for precooling
 PRECOOL_MARGIN: Final[float] = 3.0  # °C margin added to summer threshold for precooling
 WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0  # °C offset above outdoor temp when braking in winter
+WINTER_BRAKE_THRESHOLD: Final[float] = 5.0  # °C threshold for applying winter brake offset
 CHEAP_PRICE_OVERSHOOT: Final[float] = 1.5  # °C to overshoot target when prices are very cheap
 HEATING_COMPENSATION_FACTOR: Final[float] = (
     0.2  # Factor for lowering fake temp per °C deficit and aggressiveness unit
