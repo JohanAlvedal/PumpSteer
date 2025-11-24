@@ -11,6 +11,8 @@ from custom_components.pumpsteer.temp_control_logic import calculate_temperature
 from custom_components.pumpsteer.settings import (
     BRAKE_FAKE_TEMP,
     HEATING_COMPENSATION_FACTOR,
+    WINTER_BRAKE_TEMP_OFFSET,
+    WINTER_BRAKE_THRESHOLD,
     PRECOOL_MARGIN,
 )
 import pytest
@@ -156,6 +158,54 @@ def test_fake_temp_constraint_applied():
     # The fake_temp should be constrained to BRAKE_FAKE_TEMP (25.0)
     assert fake_temp <= BRAKE_FAKE_TEMP
     assert fake_temp == BRAKE_FAKE_TEMP  # Should be exactly BRAKE_FAKE_TEMP due to constraint
+
+
+def test_brake_temp_uses_offset_below_five_degrees():
+    """Ensure braking only adds offset to outdoor temp when it's below 5 °C."""
+    s = create_sensor()
+    data = base_sensor_data(
+        indoor_temp=23.0,
+        target_temp=21.0,
+        outdoor_temp=WINTER_BRAKE_THRESHOLD - 1.0,
+        aggressiveness=1.0,
+    )
+
+    fake_temp, mode = s._calculate_output_temperature(data, [], "normal", 0)
+
+    assert mode == "braking_by_temp"
+    assert fake_temp == data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
+
+
+def test_brake_temp_caps_when_indoor_is_much_warmer():
+    """Braking temp should not exceed the winter offset even with large indoor surplus."""
+    s = create_sensor()
+    data = base_sensor_data(
+        indoor_temp=30.0,
+        target_temp=20.0,
+        outdoor_temp=WINTER_BRAKE_THRESHOLD - 6.0,
+        aggressiveness=5.0,
+    )
+
+    fake_temp, mode = s._calculate_output_temperature(data, [], "normal", 0)
+
+    assert mode == "braking_by_temp"
+    assert fake_temp == data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
+
+
+def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
+    """Ensure braking uses the global cap when outdoor temp is 5 °C or warmer."""
+    s = create_sensor()
+    data = base_sensor_data(
+        indoor_temp=23.0,
+        target_temp=21.0,
+        outdoor_temp=WINTER_BRAKE_THRESHOLD + 1.0,
+        aggressiveness=1.0,
+    )
+
+    fake_temp, mode = s._calculate_output_temperature(data, [], "normal", 0)
+
+    assert mode == "braking_by_temp"
+    assert fake_temp == BRAKE_FAKE_TEMP
 
 
 def test_price_brake_consistent_across_temperatures():
