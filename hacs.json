@@ -2,5 +2,6 @@
   "name": "PumpSteer",
   "domains": ["pumpsteer"],
   "homeassistant": "2023.12.0",
+  "content_in_root": false,
   "render_readme": true
 }
