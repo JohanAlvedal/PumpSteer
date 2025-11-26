@@ -15,7 +15,7 @@ PumpSteer is a custom Home Assistant integration that dynamically optimizes your
 
 ## ⚠️ Disclaimer 
 
-I'm not an expert in programming, energy systems, or automation. This setup is based on personal experiments and use. I cannot guarantee it will work for everyone, and I take no responsibility for any[...]
+I'm not an expert in programming, energy systems, or automation. This setup is based on personal experiments and use. I cannot guarantee it will work for everyone, and I take no responsibility for anything.
 
 **Use at your own risk and thoroughly test it in your environment.**
 
@@ -23,7 +23,7 @@ I'm not an expert in programming, energy systems, or automation. This setup is b
 
 ## 🗃️ Recorder Data Requirement
 
-PumpSteer calculates price levels using 72 hours of raw electricity price history from Home Assistant's recorder. Long-term statistics are not used, so ensure the recorder keeps at least three days of[...]
+PumpSteer calculates price levels using 72 hours of raw electricity price history from Home Assistant's recorder. Long-term statistics are not used, so ensure the recorder keeps at least three days off data
 
 ---
 
