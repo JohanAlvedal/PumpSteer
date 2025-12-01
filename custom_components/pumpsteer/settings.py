@@ -27,7 +27,7 @@ BRAKE_FAKE_TEMP: Final[float] = 25.0
 PRECOOL_LOOKAHEAD: Final[int] = 24  # Hours ahead to look for precooling
 PRECOOL_MARGIN: Final[float] = 3.0  # °C margin added to summer threshold for precooling
 WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0  # °C offset above outdoor temp when braking in winter
-WINTER_BRAKE_THRESHOLD: Final[float] = 5.0  # °C threshold for applying winter brake offset
+WINTER_BRAKE_THRESHOLD: Final[float] = 7.0  # °C threshold for applying winter brake offset
 CHEAP_PRICE_OVERSHOOT: Final[float] = 1.5  # °C to overshoot target when prices are very cheap
 HEATING_COMPENSATION_FACTOR: Final[float] = (
     0.2  # Factor for lowering fake temp per °C deficit and aggressiveness unit
@@ -35,6 +35,18 @@ HEATING_COMPENSATION_FACTOR: Final[float] = (
 BRAKING_COMPENSATION_FACTOR: Final[float] = (
     0.4  # Factor for raising fake temp per °C surplus and aggressiveness unit
 )
+
+# === COMFORT CONTROL SETTINGS ===
+# Defines when the system considers the indoor temperature "too cold"
+# to allow price braking. Previously hardcoded as -0.5 °C inside the logic.
+#
+# If indoor_temp - target_temp < HEATING_THRESHOLD:
+#     → PumpSteer enters heating mode regardless of price.
+#
+# Increasing the value to -1.0 or -1.5 allows more price braking
+# even when the house is below the target temperature.
+
+HEATING_THRESHOLD: Final[float] = -1.5  # °C
 
 # === ELECTRICITY PRICE CLASSIFICATION ===
 DEFAULT_PERCENTILES: Final[List[int]] = [
