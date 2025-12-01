@@ -5,6 +5,7 @@ from .settings import (
     MAX_FAKE_TEMP,
     HEATING_COMPENSATION_FACTOR,
     BRAKING_COMPENSATION_FACTOR,
+    HEATING_THRESHOLD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def calculate_temperature_output(
     # HEATING mode (too cold indoors)
     # If indoor temperature is significantly below target, activate heating.
     # The fake temperature is reduced to make the heat pump work harder.
-    if diff < -0.5:
+    if diff < HEATING_THRESHOLD:
         fake_temp += diff * aggressiveness * HEATING_COMPENSATION_FACTOR
         # Previously: fake_temp = max(min(fake_temp, 30.0), -15.0)
         # Now: use global safety limits
