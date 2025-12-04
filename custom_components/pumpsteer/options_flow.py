@@ -15,7 +15,6 @@ HARDCODED_ENTITIES = {
     "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
     "holiday_start_datetime_entity": "input_datetime.holiday_start",
     "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
     "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
 }
 
@@ -90,7 +89,6 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             "holiday_mode_boolean_entity": "Holiday mode boolean",
             "holiday_start_datetime_entity": "Holiday start datetime",
             "holiday_end_datetime_entity": "Holiday end datetime",
-            "auto_tune_inertia_entity": "Autotune inertia boolean",
         }
 
         for field, description in user_configurable_entities.items():

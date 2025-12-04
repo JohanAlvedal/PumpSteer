@@ -46,11 +46,11 @@ coding_standards:
     - Store persistent data in /config directory
     
   patterns:
-    - Separate configuration constants into dedicated settings modules (settings.py, ml_settings.py)
+    - Separate configuration constants into dedicated settings modules (settings.py)
     - Use config_flow.py for integration setup
     - Use options_flow.py for user configuration options
     - Implement sensors in sensor/ directory
-    - Keep business logic in separate modules (temp_control_logic.py, ml_adaptive.py, etc.)
+    - Keep business logic in separate modules (temp_control_logic.py, etc.)
 
 # Development Workflow
 development_rules:
@@ -95,7 +95,6 @@ key_entities:
   
   input_booleans:
     - holiday_mode
-    - autotune_inertia
   
   input_text:
     - hourly_forecast_temperatures (24 CSV values)
@@ -108,8 +107,6 @@ key_entities:
     - pumpsteer_price_model (hybrid/percentiles)
 
 data_storage:
-  - ML data: /config/pumpsteer_ml_data.json (max 100 sessions)
-  - Adaptive state: /config/adaptive_state.json (auto-tuned inertia)
 
 # Goals and Optimization
 optimization_goals:

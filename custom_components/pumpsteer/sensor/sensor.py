@@ -40,15 +40,6 @@ from ..utils import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Simple ML import
-try:
-    from ..ml_adaptive import PumpSteerMLCollector
-    ML_AVAILABLE = True
-    _LOGGER.info("ML features available")
-except ImportError as e:
-    ML_AVAILABLE = False
-    _LOGGER.warning(f"ML features disabled: {e}")
-
 
 DOMAIN = "pumpsteer"
 
@@ -128,22 +119,6 @@ class PumpSteerSensor(Entity):
             sw_version=SW_VERSION,
         )
 
-        # Simple ML initialization
-        self.ml_collector = None
-        self._ml_session_started = False
-        self._ml_session_start_mode = None
-        self._last_price_category = "unknown"
-
-        if ML_AVAILABLE:
-            try:
-                self.ml_collector = PumpSteerMLCollector(hass)
-                _LOGGER.info("PumpSteer: ML system enabled")
-            except Exception as e:
-                _LOGGER.warning(f"PumpSteer: ML initialization failed: {e}")
-                self.ml_collector = None
-        else:
-            _LOGGER.info("PumpSteer: Running without ML features")
-
         config_entry.add_update_listener(self.async_options_update_listener)
         _LOGGER.debug("PumpSteerSensor: Initialization complete")
 
@@ -185,29 +160,6 @@ class PumpSteerSensor(Entity):
     @property
     def should_poll(self) -> bool:
         return True
-
-    async def async_added_to_hass(self) -> None:
-        """Called when the entity is added to Home Assistant."""
-        if self.ml_collector and hasattr(self.ml_collector, 'async_load_data'):
-            try:
-                await self.ml_collector.async_load_data()
-                _LOGGER.debug("ML data loaded successfully")
-            except Exception as e:
-                _LOGGER.error(f"Failed to load ML data: {e}")
-                self.ml_collector = None
-
-        await super().async_added_to_hass()
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Handle entity removal from Home Assistant."""
-        if self.ml_collector and hasattr(self.ml_collector, "async_shutdown"):
-            try:
-                await self.ml_collector.async_shutdown()
-            except Exception as e:
-                _LOGGER.error(f"Error during ML collector shutdown: {e}")
-        self.ml_collector = None
-        await super().async_will_remove_from_hass()
-
 
     async def async_options_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Handle options update event."""
@@ -338,39 +290,6 @@ class PumpSteerSensor(Entity):
 
         fake_temp = min(fake_temp, BRAKE_FAKE_TEMP)
         return fake_temp, mode
-
-
-    def _collect_ml_data(self, sensor_data: Dict[str, Any], mode: str, fake_temp: float) -> None:
-        """Collect data for machine learning."""
-        if not self.ml_collector:
-            return
-
-        try:
-            ml_data = {
-                "indoor_temp": sensor_data.get('indoor_temp'),
-                "outdoor_temp": sensor_data.get('outdoor_temp'),
-                "target_temp": sensor_data.get('target_temp'),
-                "aggressiveness": sensor_data.get('aggressiveness', 0),
-                "inertia": sensor_data.get('inertia'),
-                "mode": mode,
-                "fake_temp": fake_temp,
-                "price_category": self._last_price_category,
-                "timestamp": dt_util.now().isoformat()
-            }
-
-            if not self._ml_session_started:
-                self.ml_collector.start_session(ml_data)
-                self._ml_session_started = True
-                self._ml_session_start_mode = mode
-
-            self.ml_collector.update_session(ml_data)
-
-            if (self._ml_session_start_mode != mode and mode in ['neutral', 'summer_mode']):
-                self.ml_collector.end_session("mode_change", ml_data)
-                self._ml_session_started = False
-
-        except Exception as e:
-            _LOGGER.debug(f"ML data collection error (non-critical): {e}")
 
 
     async def _get_price_data(
@@ -581,9 +500,6 @@ class PumpSteerSensor(Entity):
                 price_interval_minutes,
                 current_slot_index,
             )
-
-            if self.ml_collector:
-                self._collect_ml_data(sensor_data, mode, fake_temp)
 
             self._last_update_time = update_time
 

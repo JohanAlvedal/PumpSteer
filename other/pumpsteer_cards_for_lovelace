@@ -7,7 +7,6 @@ entities:
   - entity: sensor.pumpsteer
     name: Fejkad utetemperatur
     secondary_info: last-changed
-  - entity: sensor.pumpsteer_ml_analysis
   - entity: sensor.pumpsteer_operating_mode
     name: Driftläge
     secondary_info: last-changed
@@ -43,7 +42,6 @@ entities:
   - entity: sensor.pumpsteer_price_category
   - entity: sensor.pumpsteer_status_summary
   - entity: sensor.pumpsteer_efficiency_score
-  - entity: input_boolean.autotune_inertia
   - entity: input_boolean.pumpsteer_preboost_enabled
   - entity: input_select.pumpsteer_price_model
 state_color: true
@@ -256,7 +254,6 @@ entities:
   - entity: input_number.house_inertia
     name: Husets Tröghet
     secondary_info: last-changed
-  - entity: input_boolean.autotune_inertia
     name: Autotune aktiverat
   - entity: input_boolean.pumpsteer_preboost_enabled
   - entity: sensor.pumpsteer_data_quality
@@ -396,8 +393,6 @@ entities:
     name: Prismodell
   - entity: input_boolean.holiday_mode
     name: Semesterläge
-  - entity: input_boolean.autotune_inertia
-    name: Auto-Tune ML
   - type: divider
   - type: attribute
     entity: sensor.pumpsteer
@@ -411,43 +406,34 @@ entities:
     icon: mdi:home-analytics
 ```
 
-## 5. ML och Analys
 
 ```yaml
 type: entities
 title: 🤖 Maskininlärning
 show_header_toggle: false
 entities:
-  - entity: sensor.pumpsteer_ml_analysis
-    name: ML Analys Status
     icon: mdi:brain
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: success_rate
     name: Framgångsgrad
     icon: mdi:chart-line
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: avg_heating_duration
     name: Snitt Uppvärmningstid
     icon: mdi:clock
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: most_used_aggressiveness
     name: Mest Använd Aggressivitet
     icon: mdi:gauge
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: total_heating_sessions
     name: Antal Uppvärmningar
     icon: mdi:fire
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: auto_tune_active
     name: Auto-Tune Aktiv
     icon: mdi:robot
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: last_updated
     name: Senast Uppdaterad
     icon: mdi:clock-outline
@@ -646,67 +632,52 @@ entities:
     name: Semester
 ```
 
-## 14. ML Rekommendationer (separat kort)
 
 ```yaml
 type: entities
-title: 💡 ML Rekommendationer
 show_header_toggle: false
 entities:
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: recommendations
     name: AI Råd
     icon: mdi:lightbulb
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: success_rate
     name: Nuvarande Framgång
     icon: mdi:percent
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: most_used_aggressiveness
     name: Din Aggressivitet
     icon: mdi:speedometer
-  - entity: input_boolean.autotune_inertia
     name: Auto-Tune Aktivera
     icon: mdi:robot
 ```
 
-## 15. ML Statistik
 
 ```yaml
 type: entities
-title: 📈 ML Statistik
 show_header_toggle: false
 entities:
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: total_heating_sessions
     name: Totalt Antal Uppvärmningar
     icon: mdi:counter
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: avg_heating_duration
     name: Genomsnittlig Tid
     icon: mdi:timer
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: success_rate
     name: Framgångsgrad
     icon: mdi:chart-donut
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: most_used_aggressiveness
     name: Populäraste Inställning
     icon: mdi:trending-up
   - type: section
     label: System
-  - entity: sensor.pumpsteer_ml_analysis
-    name: ML Status
     icon: mdi:brain
   - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
     attribute: auto_tune_active
     name: Auto-Tune
     icon: mdi:robot
