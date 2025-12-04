@@ -72,10 +72,6 @@ input_boolean:
     icon: mdi:beach
     initial: false
 
-  autotune_inertia:
-    name: Autotune Inertia
-    icon: mdi:robot
-
 input_datetime:
   holiday_start:
     name: Holiday Start
@@ -340,38 +336,27 @@ template:
         icon: mdi:medal
         state_class: measurement
 
-      # ML-related sensors
-      - name: "PumpSteer ML Success Rate"
         unique_id: ps_ml_success_rate
         unit_of_measurement: "%"
         icon: mdi:chart-line
         state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'success_rate') | default('unknown') }}
 
-      - name: "PumpSteer ML Avg Heating Duration"
         unique_id: ps_ml_avg_heating_duration
         unit_of_measurement: "min"
         icon: mdi:timer-outline
         state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'avg_heating_duration') | default('unknown') }}
 
-      - name: "PumpSteer ML Most Used Aggressiveness"
         unique_id: ps_ml_most_used_aggressiveness
         icon: mdi:target
         state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'most_used_aggressiveness') | default('unknown') }}
 
-      - name: "PumpSteer ML Total Heating Sessions"
         unique_id: ps_ml_total_heating_sessions
         icon: mdi:fire
         state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'total_heating_sessions') | default('unknown') }}
 
-      - name: "PumpSteer ML Recommendation"
         unique_id: ps_ml_recommendation
         icon: mdi:lightbulb-on-outline
         state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'recommendations') | default('No recommendations yet') }}
           
       # --- ADDED: Difference between PumpSteer (virtual) and real outdoor temperature ---
       - name: "PumpSteer Delta"
@@ -467,87 +452,3 @@ automation:
                 critical: 0
                 volume: 1.0
 
-  - alias: Apply all ML recommendations
-    triggers:
-      - entity_id: sensor.pumpsteer_ml_analysis
-        trigger: state
-        attribute: recommendations
-    conditions:
-      - condition: state
-        entity_id: input_boolean.autotune_inertia
-        state: "on"
-    actions:
-      # Sätt house_inertia endast om giltigt värde hittas
-      - condition: >-
-          {% set recommendations = state_attr('sensor.pumpsteer_ml_analysis', 'recommendations') %}
-          {% if recommendations is not none and recommendations is iterable and recommendations is not string %}
-            {% set found_value = namespace(found=false) %}
-            {% for rec in recommendations %}
-              {% if rec is string and 'house_inertia' in rec %}
-                {% set values = rec | regex_findall('(\d+\.?\d*)') %}
-                {% if values | length > 0 %}
-                  {% set found_value.found = true %}
-                  {% break %}
-                {% endif %}
-              {% endif %}
-            {% endfor %}
-            {{ found_value.found }}
-          {% else %}
-            {{ false }}
-          {% endif %}
-      - target:
-          entity_id: input_number.house_inertia
-        data:
-          value: >-
-            {% set recommendations = state_attr('sensor.pumpsteer_ml_analysis', 'recommendations') %}
-            {% for rec in recommendations %}
-              {% if rec is string and 'house_inertia' in rec %}
-                {% set values = rec | regex_findall('(\d+\.?\d*)') %}
-                {% if values | length > 0 %}
-                  {{ values | first | float }}
-                  {% break %}
-                {% endif %}
-              {% endif %}
-            {% endfor %}
-        action: input_number.set_value
-      
-      # Sätt integral_temp_error med bättre fallback
-      - data:
-          value: >-
-            {% set attr_value = state_attr('sensor.pumpsteer_ml_analysis', 'integral_temp_error') %}
-            {% if attr_value is not none and attr_value != 'unavailable' and attr_value != 'unknown' %}
-              {{ attr_value | float(0) }}
-            {% else %}
-              {{ states('input_number.integral_temp_error') | float(0) }}
-            {% endif %}
-        action: input_number.set_value
-        target:
-          entity_id: input_number.integral_temp_error
-      
-      # Sätt pumpsteer_integral_gain med bättre fallback
-      - data:
-          value: >-
-            {% set attr_value = state_attr('sensor.pumpsteer_ml_analysis', 'integral_gain') %}
-            {% if attr_value is not none and attr_value != 'unavailable' and attr_value != 'unknown' %}
-              {{ attr_value | float(0) }}
-            {% else %}
-              {{ states('input_number.pumpsteer_integral_gain') | float(0) }}
-            {% endif %}
-        action: input_number.set_value
-        target:
-          entity_id: input_number.pumpsteer_integral_gain
-      
-      # Logga resultatet
-      - data:
-          message: >-
-            ML Auto-tune applied: 
-            Inertia={{ states('input_number.house_inertia') }},
-            Integral_Gain={{ states('input_number.pumpsteer_integral_gain') }}, 
-            Integral_Temp_Error={{ states('input_number.integral_temp_error') }}
-          level: info
-        action: system_log.write
-      
-      # Skicka notifikation
-      - action: notify.persistent_notification
-        data:
-          message: "ML recommendations applied successfully"

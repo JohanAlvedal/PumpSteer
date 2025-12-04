@@ -54,9 +54,6 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 * 🏝️ Holiday mode: temporarily reduces temperature when away
 * ❄️ Precool: pauses heating ahead of forecasted warm weather
 * 📈 Switchable price model (`hybrid` or `percentiles`)
-* 🤖 ML analysis: learns how your house responds (session-based) (beta, work in progress)
-* 🔁 Auto-adjustment of `house_inertia` (if enabled beta, work in progress)
-* 🧠 Recommendations for improved comfort/savings balance (beta, work in progress)
 * ⚙️ Adjustable heating and braking compensation factors
 * 🎛️ Fine-tuning via `input_number`, `input_text`, `input_boolean`, `input_datetime`
 * 🖼️ Extra sensors for UI visualization
@@ -118,7 +115,6 @@ Once configured, PumpSteer will automatically receive fresh weather data for opt
 | `input_number`   | `house_inertia`                 | How slow/fast the house responds (0–10) |
 | `input_text`     | `hourly_forecast_temperatures`  | Temperature forecast (24 CSV values)    |
 | `input_boolean`  | `holiday_mode`                  | Activates holiday mode                  |
-| `input_boolean`  | `autotune_inertia`              | Allow system to adjust `house_inertia`  |
 | `input_select`   | `pumpsteer_price_model`         | Price classification model (`hybrid` or `percentiles`) |
 | `input_datetime` | `holiday_start` / `holiday_end` | Automatically enable holiday mode       |
 
@@ -173,28 +169,6 @@ Virtual (fake) outdoor temperature sent to your heat pump.
 | `Current Hour`               | Current hour of the day                             |
 | `Data Quality`               | Availability and completeness of input data         |
 
----
-
-## 🧠 Sensor: `sensor.pumpsteer_ml_analysis`
-
-ML sensor showing analysis and recommendations based on your house's behavior.
-
-### Attributes:
-
-| Attribute                  | Description                                         |
-| -------------------------- | --------------------------------------------------- |
-| `success_rate`             | How often the system reached the target temperature |
-| `avg_heating_duration`     | Average heating session duration (min)              |
-| `most_used_aggressiveness` | Most used aggressiveness level                      |
-| `total_heating_sessions`   | Total number of sessions                            |
-| `recommendations`          | Text suggestions based on system performance        |
-| `auto_tune_active`         | If automatic inertia adjustment is active           |
-| `last_updated`             | Last analysis update timestamp                      |
-
-Recommendations can be shown in UI or in markdown cards.
-
----
-
 ## 🧠 How it works
 
 PumpSteer controls your heat pump's perceived demand using a fake outdoor temperature:
@@ -205,7 +179,6 @@ PumpSteer controls your heat pump's perceived demand using a fake outdoor temper
 * Disables heating when it's warm outside (summer mode)
 * Pre-cools ahead of warm periods when the forecast exceeds the summer threshold
 * Lowers target temp to 16 °C during holidays
-* Learns over time how your house reacts and adjusts settings (if `autotune_inertia` is enabled)
 
 All control is done locally without any cloud dependency.
 
@@ -220,12 +193,6 @@ PumpSteer does **not** talk to the heat pump over Modbus, REST, or any proprieta
 ### What is thermal inertia and how is it calculated?
 
 `house_inertia` describes how quickly your building responds to heating or braking. A low value (≈0.5–1.5) means the house reacts fast, so PumpSteer can shift temperatures aggressively. A high val[...]
-
-If you enable `input_boolean.autotune_inertia`, the machine-learning module keeps track of every heating session: it records how far the indoor temperature was from the target, how long it took to rec[...]
-
-### What does the ML module actually learn?
-
-The ML collector watches the indoor temperature, target temperature, aggressiveness, and inertia during every heating cycle. It estimates success rate, typical heating duration, and how often comfort [...]
 
 ### Which sensors must be connected to PumpSteer?
 
@@ -248,8 +215,6 @@ You do **not** need to provide flow temperature, set-point, compressor status, o
 
 * Errors and warnings are logged in Home Assistant
 * Sensor shows `unavailable` when data is missing
-* ML data is stored in `pumpsteer_ml_data.json` (max 100 sessions)
-* Auto-tuned `inertia` is saved in `adaptive_state.json`
 
 ---
 
