@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.template import as_datetime
+from homeassistant.util.dt import as_datetime
 from homeassistant.const import STATE_ON  # Import STATE_ON
 from .settings import HOLIDAY_TEMP
 
