@@ -72,9 +72,9 @@ def is_holiday_mode_active(
 
     try:
         # Convert the entity states (which are strings) into datetime objects.
-        # `as_datetime` handles various datetime string formats and timezones.
-        holiday_start_time = as_datetime(holiday_start_state.state)
-        holiday_end_time = as_datetime(holiday_end_state.state)
+        # `parse_datetime` handles various datetime string formats and timezones.
+        holiday_start_time = parse_datetime(holiday_start_state.state)
+        holiday_end_time = parse_datetime(holiday_end_state.state)
 
         # Get the current time, ensuring it has the same timezone information as the holiday times
         # for accurate comparison.
