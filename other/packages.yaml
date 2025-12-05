@@ -96,9 +96,8 @@ input_select:
     icon: mdi:chart-line
 
 # ═══════════════════════════════════════════════════════════
-# TEMPLATE SENSORS
+# TEMPLATE SENSORS – Updated for 15-minute intervals (96 slots/day)
 # ═══════════════════════════════════════════════════════════
-
 template:
   - sensor:
       - name: "Real Outdoor Temperature"
@@ -124,7 +123,7 @@ template:
         icon: mdi:home-thermometer-outline
         availability: >
           {{ state_attr('sensor.pumpsteer', 'indoor_temperature') is not none and
-            state_attr('sensor.pumpsteer', 'target_temperature') is not none }}
+             state_attr('sensor.pumpsteer', 'target_temperature') is not none }}
 
       - name: "PumpSteer Operating Mode"
         unique_id: ps_operating_mode
@@ -156,7 +155,6 @@ template:
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
           {% set price_cat = state_attr('sensor.pumpsteer', 'price_category') %}
           {% set temp_diff = state_attr('sensor.pumpsteer', 'temp_error_c') %}
-
           {% if mode is none or price_cat is none or temp_diff is none %}
             🔄 Starting up...
           {% else %}
@@ -198,7 +196,7 @@ template:
         icon: mdi:cash-clock
         availability: >
           {{ state_attr('sensor.pumpsteer', 'current_price') is not none and
-            state_attr('sensor.pumpsteer', 'max_price') is not none }}
+             state_attr('sensor.pumpsteer', 'max_price') is not none }}
 
       - name: "PumpSteer Inertia"
         unique_id: ps_inertia
@@ -248,17 +246,17 @@ template:
             mdi:help-circle
           {% endif %}
 
-      - name: "PumpSteer Next Hour Prediction"
-        unique_id: ps_next_hour_prediction
+      - name: "PumpSteer Next slot Prediction"
+        unique_id: ps_next_slot_prediction
         state: >
           {% set prices = state_attr('sensor.pumpsteer', 'next_3_hours_prices') %}
           {% set current_price = state_attr('sensor.pumpsteer', 'current_price') | float(0) %}
-          {% if prices is iterable and prices | length > 1 %}
-            {% set next_price = prices[1] | float(0) %}
+          {% if prices is iterable and prices | length > 4 %}
+            {% set next_price = prices[4] | float(0) %}  {# 1 hour ahead (4×15min) #}
             {% if current_price > 0 %}
               {% set change = ((next_price - current_price) / current_price * 100) | round(0) %}
               {% if change > 5 %}
-              Rising ({{ change }}%)
+                Rising ({{ change }}%)
               {% elif change < -5 %}
                 Falling ({{ change }}%)
               {% else %}
@@ -279,9 +277,9 @@ template:
             {% set pc = dq.prices_count | int(0) %}
             {% set cc = dq.categories_count | int(0) %}
             {% set fc = dq.forecast_available %}
-            {% if pc >= 24 and cc >= 24 and fc %}
+            {% if pc >= 96 and cc >= 96 and fc %}
               🟢 Excellent
-            {% elif pc >= 12 and cc >= 12 %}
+            {% elif pc >= 48 and cc >= 48 %}
               🟡 Good
             {% elif pc > 0 %}
               🟠 Limited
@@ -297,12 +295,11 @@ template:
         state: >
           {% set status = state_attr('sensor.pumpsteer', 'status') %}
           {% set data_quality = state_attr('sensor.pumpsteer', 'data_quality') %}
-          
           {% if status == 'ok' and data_quality %}
             {% set dq = data_quality %}
-            {% if dq.prices_count >= 24 and dq.categories_count >= 24 %}
+            {% if dq.prices_count >= 96 and dq.categories_count >= 96 %}
               🟢 Healthy
-            {% elif dq.prices_count >= 12 %}
+            {% elif dq.prices_count >= 48 %}
               🟡 Limited Data
             {% else %}
               🟠 Poor Data
@@ -340,40 +337,29 @@ template:
         icon: mdi:medal
         state_class: measurement
 
-      # ML-related sensors
-      - name: "PumpSteer ML Success Rate"
-        unique_id: ps_ml_success_rate
-        unit_of_measurement: "%"
-        icon: mdi:chart-line
-        state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'success_rate') | default('unknown') }}
-
-      - name: "PumpSteer ML Avg Heating Duration"
-        unique_id: ps_ml_avg_heating_duration
-        unit_of_measurement: "min"
-        icon: mdi:timer-outline
-        state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'avg_heating_duration') | default('unknown') }}
-
-      - name: "PumpSteer ML Most Used Aggressiveness"
-        unique_id: ps_ml_most_used_aggressiveness
-        icon: mdi:target
-        state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'most_used_aggressiveness') | default('unknown') }}
+######## ML-related sensors #####################################################
 
       - name: "PumpSteer ML Total Heating Sessions"
         unique_id: ps_ml_total_heating_sessions
         icon: mdi:fire
         state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'total_heating_sessions') | default('unknown') }}
+          {{ state_attr('sensor.pumpsteer_ml_analysis', 'total_sessions') | default('unknown') }}
 
       - name: "PumpSteer ML Recommendation"
         unique_id: ps_ml_recommendation
         icon: mdi:lightbulb-on-outline
         state: >
-          {{ state_attr('sensor.pumpsteer_ml_analysis', 'recommendations') | default('No recommendations yet') }}
-          
-      # --- ADDED: Difference between PumpSteer (virtual) and real outdoor temperature ---
+          {# Truncate combined recommendations to stay within HA state length limits #}
+          {% set recs = state_attr('sensor.pumpsteer_ml_analysis', 'recommendations') %}
+          {% if recs is string %}
+            {{ recs | truncate(240, True, '…') }}
+          {% elif recs is iterable and recs | length > 0 %}
+            {{ recs | join(' | ') | truncate(240, True, '…') }}
+          {% else %}
+            No recommendations yet
+          {% endif %}
+################################################################################
+# --- ADDED: Difference between PumpSteer (virtual) and real outdoor temperature ---
       - name: "PumpSteer Delta"
         unique_id: pumpsteer_delta
         unit_of_measurement: "°C"
@@ -400,10 +386,45 @@ template:
           {{ states('input_text.hourly_forecast_temperatures') }}
         attributes:
           values: >
-            {% set raw = states('input_text.hourly_forecast_temperatures') %}
-            {% set list = raw.split(',') %}
-            {{ list | map('float') | list }}
-      
+            {% set raw = states('input_text.hourly_forecast_temperatures') | default('') | trim %}
+            {% if raw == '' or raw in ['unknown', 'unavailable'] %}
+              [] 
+            {% else %}
+              {% set list = raw.split(',') %}
+              {% set numbers = [] %}
+              {% for item in list %}
+                {% if item | trim != '' %}
+                  {% set numbers = numbers + [ item | float(0) ] %}
+                {% endif %}
+              {% endfor %}
+              {{ numbers }}
+            {% endif %}
+
+  - sensor:
+      - name: "PumpSteer ML Coeff Aggressiveness"
+        unit_of_measurement: ""
+        state: >
+          {% set coeffs = state_attr('sensor.pumpsteer_ml_analysis', 'coefficients') %}
+          {% if coeffs is iterable and coeffs|length > 0 %}
+            {{ coeffs[0] }}
+          {% else %} 0 {% endif %}
+
+      - name: "PumpSteer ML Coeff Inertia"
+        unit_of_measurement: ""
+        state: >
+          {% set coeffs = state_attr('sensor.pumpsteer_ml_analysis', 'coefficients') %}
+          {% if coeffs is iterable and coeffs|length > 1 %}
+            {{ coeffs[1] }}
+          {% else %} 0 {% endif %}
+
+      - name: "PumpSteer ML Coeff Duration"
+        unit_of_measurement: ""
+        state: >
+          {% set coeffs = state_attr('sensor.pumpsteer_ml_analysis', 'coefficients') %}
+          {% if coeffs is iterable and coeffs|length > 2 %}
+            {{ coeffs[2] }}
+          {% else %} 0 {% endif %}
+
 # ═══════════════════════════════════════════════════════════
 # STATISTICS SENSORS
 # ═══════════════════════════════════════════════════════════
