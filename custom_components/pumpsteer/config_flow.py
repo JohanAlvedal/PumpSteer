@@ -102,11 +102,15 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if entity_id:
                 if not await self._entity_exists(entity_id):
                     _LOGGER.warning(
-                        f"Hardcoded entity not found: {entity_id} ({description}) - This should be created by the package"
+                        "Hardcoded entity not found: %s (%s) - This should be created by the package",
+                        entity_id,
+                        description,
                     )
                 elif not await self._entity_available(entity_id):
                     _LOGGER.warning(
-                        f"Hardcoded entity unavailable: {entity_id} ({description}) - Check package configuration"
+                        "Hardcoded entity unavailable: %s (%s) - Check package configuration",
+                        entity_id,
+                        description,
                     )
 
         return errors

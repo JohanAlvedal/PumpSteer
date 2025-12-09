@@ -40,9 +40,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                 updated_data = entry.data.copy()
                 updated_data.update(combined_data)
 
-                self.hass.config_entries.async_update_entry(
-                    entry, data=updated_data
-                )
+                self.hass.config_entries.async_update_entry(entry, data=updated_data)
 
                 return self.async_create_entry(title="", data={})
 
@@ -109,11 +107,15 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             if entity_id:
                 if not await self._entity_exists(entity_id):
                     _LOGGER.warning(
-                        f"Hardcoded entity not found: {entity_id} ({description}) - Check package configuration"
+                        "Hardcoded entity not found: %s (%s) - Check package configuration",
+                        entity_id,
+                        description
                     )
                 elif not await self._entity_available(entity_id):
                     _LOGGER.warning(
-                        f"Hardcoded entity unavailable: {entity_id} ({description}) - Check package configuration"
+                        "Hardcoded entity unavailable: %s (%s) - Check package configuration",
+                        entity_id,
+                        description
                     )
 
         return errors

@@ -47,17 +47,17 @@ def validate_price_list(price_list: List[float], min_samples: int = MIN_SAMPLES_
     try:
         float_prices = [float(p) for p in price_list]
     except (ValueError, TypeError) as e:
-        _LOGGER.error(f"Non-numeric values found in price list: {e}")
+        _LOGGER.error("Non-numeric values found in price list: %s", e)
         return False
 
     # Log warnings for unusual (but not necessarily invalid) price values
     negative_prices = [p for p in float_prices if p < 0]
     if negative_prices:
-        _LOGGER.warning(f"Found {len(negative_prices)} negative prices in dataset")
+        _LOGGER.warning("Found %d negative prices in dataset", len(negative_prices))
 
     extreme_prices = [p for p in float_prices if p > MAX_PRICE_WARNING_THRESHOLD]
     if extreme_prices:
-        _LOGGER.warning(f"Found {len(extreme_prices)} extremely high prices (>{MAX_PRICE_WARNING_THRESHOLD} kr/kWh)")
+        _LOGGER.warning("Found %d extremely high prices (>%s kr/kWh)", len(extreme_prices), MAX_PRICE_WARNING_THRESHOLD)
 
     return True
 
@@ -73,7 +73,7 @@ def classify_prices(price_list: List[float], percentiles: List[float] = None) ->
 
     # Validate the input price list before attempting classification
     if not validate_price_list(price_list):
-        _LOGGER.debug(f"Invalid price list for classification (length: {len(price_list) if price_list else 0})")
+        _LOGGER.debug("Invalid price list for classification (length: %d)", len(price_list) if price_list else 0)
         # Return "unknown" categories if the list is invalid
         return ["unknown"] * len(price_list) if price_list else []
 
@@ -196,7 +196,7 @@ async def async_hybrid_classify_with_history(
                 if s.state not in ("unknown", "unavailable"):
                     trailing_prices.append(float(s.state))
             except (ValueError, TypeError):
-                _LOGGER.debug(f"Skipping invalid state value from history: {s.state}")
+                _LOGGER.debug("Skipping invalid state value from history: %s", s.state)
                 continue
 
         # Calculate the average price from the retrieved historical data
@@ -206,11 +206,11 @@ async def async_hybrid_classify_with_history(
         else:
             avg_price = get_daily_average(trailing_prices)  # Use historical average
 
-        _LOGGER.debug(f"Retrieved {len(trailing_prices)} trailing prices from history")
-        _LOGGER.debug(f"Trailing average: {avg_price}")
+        _LOGGER.debug("Retrieved %d trailing prices from history", len(trailing_prices))
+        _LOGGER.debug("Trailing average: %s", avg_price)
 
     except Exception as e:
-        _LOGGER.error(f"Error retrieving price history: {e}")
+        _LOGGER.error("Error retrieving price history: %s", e)
         avg_price = get_daily_average(price_list)  # Fallback to current list average on error
 
     # Fallback to standard percentile classification if the calculated average is invalid (e.g., zero)
@@ -346,7 +346,7 @@ async def async_get_forecast_prices(
         # Get entity's attributes which often contain future prices
         state = hass.states.get(price_entity_id)
         if not state:
-            _LOGGER.warning(f"Could not find entity: {price_entity_id}")
+            _LOGGER.warning("Could not find entity: %s", price_entity_id)
             return []
 
         # Many electricity price integrations store future prices in attributes
@@ -381,7 +381,7 @@ async def async_get_forecast_prices(
                             break
 
                 except (ValueError, TypeError, KeyError) as e:
-                    _LOGGER.debug(f"Skipping invalid price data: {e}")
+                    _LOGGER.debug("Skipping invalid price data: %s", e)
                     continue
 
         # Sort by time
@@ -389,7 +389,7 @@ async def async_get_forecast_prices(
         return forecast_prices[:hours_ahead]
 
     except Exception as e:
-        _LOGGER.error(f"Error retrieving forecast prices: {e}")
+        _LOGGER.error("Error retrieving forecast prices: %s", e)
         return []
 
 

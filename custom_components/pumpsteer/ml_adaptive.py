@@ -49,8 +49,9 @@ class PumpSteerMLCollector:
             _LOGGER.setLevel(logging.DEBUG)
 
         _LOGGER.info(
-            f"{ML_NOTIFICATION_PREFIX} ML Collector initialized (v{ML_MODULE_VERSION}) "
-            f"- learning and adaptive mode enabled."
+            "%s ML Collector initialized (v%s) - learning and adaptive mode enabled.",
+            ML_NOTIFICATION_PREFIX,
+            ML_MODULE_VERSION,
         )
 
     # ----------------------------------------------------------------------
@@ -60,7 +61,9 @@ class PumpSteerMLCollector:
         try:
             await self.hass.async_add_executor_job(self._load_data_sync)
             _LOGGER.info(
-                f"ML: Loaded {len(self.learning_sessions)} sessions from {self.data_file}"
+                "ML: Loaded %d sessions from %s",
+                len(self.learning_sessions),
+                self.data_file,
             )
         except Exception as e:
             _LOGGER.error(f"ML: Failed to load data: {e}")
@@ -81,14 +84,14 @@ class PumpSteerMLCollector:
         file_version = data.get("version", "unknown")
         if file_version != ML_DATA_VERSION:
             _LOGGER.warning(
-                f"ML: Data version mismatch (found {file_version}, expected {ML_DATA_VERSION})"
+                "ML: Data version mismatch (found %s, expected %s)", file_version, ML_DATA_VERSION
             )
 
     async def async_save_data(self) -> None:
         try:
             await self.hass.async_add_executor_job(self._save_data_sync)
         except Exception as e:
-            _LOGGER.error(f"ML: Error saving data: {e}")
+            _LOGGER.error("ML: Error saving data: %s", e)
 
     def _save_data_sync(self) -> None:
         data = {
@@ -120,7 +123,7 @@ class PumpSteerMLCollector:
         }
 
         _LOGGER.debug(
-            f"ML: New session started (mode={initial_data.get('mode', 'unknown')})"
+            "ML: New session started (mode=%s)", initial_data.get('mode', 'unknown')
         )
 
     def update_session(self, update_data: Dict[str, Any]) -> None:
@@ -208,8 +211,8 @@ class PumpSteerMLCollector:
             self.current_session = None
 
             _LOGGER.info(
-                f"ML: Session summary: ΔT={temp_rise:.2f}°C, drift={comfort_drift:.2f}°C, "
-                f"dur={duration_minutes:.1f}min, aggr={aggressiveness}, inertia={inertia}"
+                "ML: Session summary: ΔT=%.2f°C, drift=%.2f°C, dur=%.1fmin, aggr=%s, inertia=%s",
+                temp_rise, comfort_drift, duration_minutes, aggressiveness, inertia
             )
 
             # Trigger learning update
@@ -217,7 +220,7 @@ class PumpSteerMLCollector:
             self.hass.async_create_task(self.async_save_data())
 
         except Exception as e:
-            _LOGGER.error(f"ML: Error summarizing session: {e}")
+            _LOGGER.error("ML: Error summarizing session: %s", e)
 
     # ----------------------------------------------------------------------
     # Learning Logic
@@ -295,11 +298,12 @@ class PumpSteerMLCollector:
             }
 
             _LOGGER.info(
-                f"ML: Learning update complete — model coeff: {self.learning_summary['coefficients']}"
+                "ML: Learning update complete — model coeff: %s",
+                self.learning_summary['coefficients']
             )
 
         except Exception as e:
-            _LOGGER.error(f"ML: Error in learning model update: {e}")
+            _LOGGER.error("ML: Error in learning model update: %s", e)
 
     # ----------------------------------------------------------------------
     # Recommendations
@@ -335,7 +339,7 @@ class PumpSteerMLCollector:
             return msg
 
         except Exception as e:
-            _LOGGER.error(f"ML: Error generating learned recommendations: {e}")
+            _LOGGER.error("ML: Error generating learned recommendations: %s", e)
             return ["Error generating recommendations."]
 
     # ----------------------------------------------------------------------

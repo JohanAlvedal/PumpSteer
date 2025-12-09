@@ -26,9 +26,15 @@ MAX_FAKE_TEMP: Final[float] = 25.0
 BRAKE_FAKE_TEMP: Final[float] = 25.0
 PRECOOL_LOOKAHEAD: Final[int] = 24  # Hours ahead to look for precooling
 PRECOOL_MARGIN: Final[float] = 3.0  # °C margin added to summer threshold for precooling
-WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0  # °C offset above outdoor temp when braking in winter
-WINTER_BRAKE_THRESHOLD: Final[float] = 7.0  # °C threshold for applying winter brake offset
-CHEAP_PRICE_OVERSHOOT: Final[float] = 1.5  # °C to overshoot target when prices are very cheap
+WINTER_BRAKE_TEMP_OFFSET: Final[float] = (
+    10.0  # °C offset above outdoor temp when braking in winter
+)
+WINTER_BRAKE_THRESHOLD: Final[float] = (
+    7.0  # °C threshold for applying winter brake offset
+)
+CHEAP_PRICE_OVERSHOOT: Final[float] = (
+    1.5  # °C to overshoot target when prices are very cheap
+)
 HEATING_COMPENSATION_FACTOR: Final[float] = (
     0.2  # Factor for lowering fake temp per °C deficit and aggressiveness unit
 )
@@ -79,10 +85,10 @@ MAX_PRICE_WARNING_THRESHOLD: Final[float] = (
 
 # === HYBRID CLASSIFICATION THRESHOLDS ===
 # CORRECTED: Complete set of multipliers for all categories
-VERY_CHEAP_MULTIPLIER: Final[float] = 0.60   # 60% of average price
-CHEAP_MULTIPLIER: Final[float] = 0.90        # 90% of average price
-NORMAL_MULTIPLIER: Final[float] = 1.40       # 140% of average price
-EXPENSIVE_MULTIPLIER: Final[float] = 2.00    # 200% of average price
+VERY_CHEAP_MULTIPLIER: Final[float] = 0.60  # 60% of average price
+CHEAP_MULTIPLIER: Final[float] = 0.90  # 90% of average price
+NORMAL_MULTIPLIER: Final[float] = 1.40  # 140% of average price
+EXPENSIVE_MULTIPLIER: Final[float] = 2.00  # 200% of average price
 VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00  # 300% of average price
 
 # === EXPLANATION OF DESIGN DECISIONS ===
@@ -92,7 +98,7 @@ VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00  # 300% of average price
 # - Useful for identifying truly exceptional price spikes
 # - Helps differentiate between "very expensive" and "crisis level" pricing
 
-# 2. ABSOLUTE_CHEAP_LIMIT: YES, KEEP AT 0.60 SEK/kWh  
+# 2. ABSOLUTE_CHEAP_LIMIT: YES, KEEP AT 0.60 SEK/kWh
 # - Still relevant as safety net for hybrid classification
 # - Ensures that genuinely cheap absolute prices aren't missed
 # - Example: If average is 2.00 SEK/kWh, 90% would be 1.80 SEK/kWh
@@ -105,7 +111,6 @@ VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00  # 300% of average price
 #   just because the recent average was very low
 
 
-
 # === VALIDATION CONSTANTS ===
 MIN_REASONABLE_TEMP: Final[float] = -50.0  # °C - Minimum reasonable temperature
 MAX_REASONABLE_TEMP: Final[float] = 50.0  # °C - Maximum reasonable temperature
@@ -115,8 +120,6 @@ MIN_REASONABLE_PRICE: Final[float] = (
 MAX_REASONABLE_PRICE: Final[float] = (
     15.0  # SEK/kWh - Maximum reasonable electricity price
 )
-
-
 
 
 # UPDATED validation function to include new settings
@@ -157,8 +160,6 @@ def validate_core_settings() -> None:
     if VERY_EXPENSIVE_MULTIPLIER > 5.0:
         errors.append("VERY_EXPENSIVE_MULTIPLIER seems unreasonably high (>5.0)")
 
-
-
     # Validate reasonable values
     if MIN_REASONABLE_TEMP >= MAX_REASONABLE_TEMP:
         errors.append("Min reasonable temp must be less than max reasonable temp")
@@ -169,7 +170,7 @@ def validate_core_settings() -> None:
     # ADDED: Validate ABSOLUTE_CHEAP_LIMIT is reasonable
     if ABSOLUTE_CHEAP_LIMIT <= 0:
         errors.append("ABSOLUTE_CHEAP_LIMIT must be positive")
-    
+
     if ABSOLUTE_CHEAP_LIMIT > 2.0:
         errors.append("ABSOLUTE_CHEAP_LIMIT seems unreasonably high (>2.0 SEK/kWh)")
 
@@ -183,8 +184,9 @@ def validate_core_settings() -> None:
 try:
     validate_core_settings()
     _LOGGER.debug(
-        f"PumpSteer core settings loaded successfully (version {PUMPSTEER_VERSION})"
+        "PumpSteer core settings loaded successfully (version %s)",
+        PUMPSTEER_VERSION,
     )
 except Exception as e:
-    _LOGGER.error(f"Failed to load PumpSteer settings: {e}")
+    _LOGGER.error("Failed to load PumpSteer settings: %s", e)
     raise
