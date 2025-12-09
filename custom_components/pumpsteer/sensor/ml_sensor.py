@@ -51,13 +51,8 @@ class PumpSteerMLSensor(Entity):
             sw_version=SW_VERSION,
         )
 
-        try:
-            self.ml = PumpSteerMLCollector(hass)
-            _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized successfully")
-        except Exception as e:
-            _LOGGER.error("ML sensor: Failed to initialize ML collector: %s", e)
-            self.ml = None
-            self._last_error = f"Initialization failed: {e}"
+        self.ml = PumpSteerMLCollector(hass)
+        _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized successfully")
 
     # ------------------------------------------------------------------
     # Standard entity properties
@@ -101,20 +96,14 @@ class PumpSteerMLSensor(Entity):
     async def async_added_to_hass(self):
         """Load ML data on startup."""
         if self.ml and hasattr(self.ml, "async_load_data"):
-            try:
-                await self.ml.async_load_data()
-                _LOGGER.debug("ML sensor: Data loaded successfully")
-            except Exception as e:
-                _LOGGER.error("ML sensor: Failed to load data: %s", e)
-                self._last_error = f"Data loading failed: {e}"
+            await self.ml.async_load_data()
+            _LOGGER.debug("ML sensor: Data loaded successfully")
 
     async def async_will_remove_from_hass(self):
         """Clean up when entity is removed."""
         if self.ml and hasattr(self.ml, "async_shutdown"):
-            try:
-                await self.ml.async_shutdown()
-            except Exception as e:
-                _LOGGER.error("ML sensor: Error during shutdown: %s", e)
+            await self.ml.async_shutdown()
+
         self.ml = None
         await super().async_will_remove_from_hass()
 
@@ -123,43 +112,32 @@ class PumpSteerMLSensor(Entity):
     # ------------------------------------------------------------------
     def _get_control_system_data(self) -> Dict[str, Any]:
         """Fetch core control parameters from HA entities."""
-        try:
-            autotune_state = self.hass.states.get(
-                ML_RELATED_ENTITIES["autotune_boolean"]
-            )
-            autotune_on = autotune_state and autotune_state.state == "on"
 
-            integral_error = (
-                safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_error"]))
-                or 0.0
-            )
-            integral_gain = (
-                safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_gain"]))
-                or 0.0
-            )
-            house_inertia = safe_float(
-                get_state(self.hass, ML_RELATED_ENTITIES["house_inertia"])
-            )
-            last_adjustment = get_state(
-                self.hass, ML_RELATED_ENTITIES["last_gain_adjustment"]
-            )
+        autotune_state = self.hass.states.get(ML_RELATED_ENTITIES["autotune_boolean"])
+        autotune_on = autotune_state and autotune_state.state == "on"
 
-            return {
-                "autotune_active": autotune_on,
-                "integral_error": integral_error,
-                "integral_gain": integral_gain,
-                "inertia": house_inertia,
-                "last_gain_adjustment": last_adjustment,
-            }
-        except Exception as e:
-            _LOGGER.warning("ML sensor: Error getting control system data: %s", e)
-            return {
-                "autotune_active": False,
-                "integral_error": 0.0,
-                "integral_gain": 0.0,
-                "inertia": None,
-                "last_gain_adjustment": None,
-            }
+        integral_error = (
+            safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_error"]))
+            or 0.0
+        )
+        integral_gain = (
+            safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_gain"]))
+            or 0.0
+        )
+        house_inertia = safe_float(
+            get_state(self.hass, ML_RELATED_ENTITIES["house_inertia"])
+        )
+        last_adjustment = get_state(
+            self.hass, ML_RELATED_ENTITIES["last_gain_adjustment"]
+        )
+
+        return {
+            "autotune_active": autotune_on,
+            "integral_error": integral_error,
+            "integral_gain": integral_gain,
+            "inertia": house_inertia,
+            "last_gain_adjustment": last_adjustment,
+        }
 
     def _determine_state(self, insights: Dict[str, Any]) -> str:
         """Decide what the main state string should be."""
@@ -222,38 +200,23 @@ class PumpSteerMLSensor(Entity):
             }
             return
 
-        try:
-            # === Pull data from the new ML adaptive system ===
-            insights = {}
-            try:
-                summary = self.ml.get_learning_summary()
-                recs = self.ml.get_recommendations()
-                insights["summary"] = summary or {}
-                insights["recommendations"] = recs or []
-            except Exception as err:
-                _LOGGER.warning("ML sensor: could not read learning summary: %s", err)
-                insights = {"summary": {}, "recommendations": [f"Error: {err}"]}
+        # === Pull data from the new ML adaptive system ===
+        insights = {}
 
-            control_data = self._get_control_system_data()
+        summary = self.ml.get_learning_summary()
+        recs = self.ml.get_recommendations()
+        insights["summary"] = summary or {}
+        insights["recommendations"] = recs or []
 
-            # determine overall state
-            self._state = self._determine_state(insights)
-            self._attributes = self._build_attributes(insights, control_data)
+        control_data = self._get_control_system_data()
 
-            if self._last_error:
-                _LOGGER.info("ML sensor: recovered from previous error")
-                self._last_error = None
+        # determine overall state
+        self._state = self._determine_state(insights)
+        self._attributes = self._build_attributes(insights, control_data)
 
-        except Exception as e:
-            _LOGGER.error("ML sensor update failed: %s", e, exc_info=True)
-            self._state = "error"
-            self._last_error = str(e)
-            self._attributes = {
-                "error": str(e),
-                "last_error": self._last_error,
-                "last_updated": dt_util.now().isoformat(),
-                "error_count": self._attributes.get("error_count", 0) + 1,
-            }
+        if self._last_error:
+            _LOGGER.info("ML sensor: recovered from previous error")
+            self._last_error = None
 
 
 # ----------------------------------------------------------------------

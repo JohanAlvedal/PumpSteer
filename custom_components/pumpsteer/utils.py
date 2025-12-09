@@ -98,27 +98,22 @@ def get_state(
         _LOGGER.warning("Invalid entity_id type: %s", type(entity_id))
         return default
 
-    try:
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.warning("Entity %s not found", entity_id)
-            return default
-
-        if entity.state in [
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-            "unavailable",
-            "unknown",
-            None,
-        ]:
-            _LOGGER.debug("Entity %s is %s", entity_id, entity.state)
-            return default
-
-        return entity.state
-
-    except Exception as e:
-        _LOGGER.error("Error getting state for %s: %s", entity_id, e)
+    entity = hass.states.get(entity_id)
+    if not entity:
+        _LOGGER.warning("Entity %s not found", entity_id)
         return default
+
+    if entity.state in [
+        STATE_UNAVAILABLE,
+        STATE_UNKNOWN,
+        "unavailable",
+        "unknown",
+        None,
+    ]:
+        _LOGGER.debug("Entity %s is %s", entity_id, entity.state)
+        return default
+
+    return entity.state
 
 
 def get_attr(
@@ -140,27 +135,20 @@ def get_attr(
         _LOGGER.debug("Missing entity_id or attribute: %s, %s", entity_id, attribute)
         return default
 
-    try:
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.warning(
-                "Entity %s not found for attribute %s", entity_id, attribute
-            )
-            return default
-
-        if not hasattr(entity, "attributes") or entity.attributes is None:
-            _LOGGER.debug("Entity %s has no attributes", entity_id)
-            return default
-
-        if attribute not in entity.attributes:
-            _LOGGER.debug("Attribute %s not found in entity %s", attribute, entity_id)
-            return default
-
-        return entity.attributes.get(attribute, default)
-
-    except Exception as e:
-        _LOGGER.error("Error getting attribute %s for %s: %s", attribute, entity_id, e)
+    entity = hass.states.get(entity_id)
+    if not entity:
+        _LOGGER.warning("Entity %s not found for attribute %s", entity_id, attribute)
         return default
+
+    if not hasattr(entity, "attributes") or entity.attributes is None:
+        _LOGGER.debug("Entity %s has no attributes", entity_id)
+        return default
+
+    if attribute not in entity.attributes:
+        _LOGGER.debug("Attribute %s not found in entity %s", attribute, entity_id)
+        return default
+
+    return entity.attributes.get(attribute, default)
 
 
 def safe_get_price_data(
@@ -268,52 +256,47 @@ def safe_parse_temperature_forecast(
         _LOGGER.warning("No temperature forecast data or invalid format")
         return None
 
-    try:
-        # Clean and split data
-        temp_strings = [t.strip() for t in hourly_temps_csv.split(",") if t.strip()]
-        if not temp_strings:
-            _LOGGER.warning("Empty temperature forecast after parsing")
-            return None
-
-        # Limit number of hours if specified
-        if max_hours is not None and max_hours > 0:
-            temp_strings = temp_strings[:max_hours]
-
-        temperatures = []
-        parse_errors = []
-        extreme_temps = []
-
-        for i, temp_str in enumerate(temp_strings):
-            try:
-                temp = float(temp_str)
-
-                # Sanity check for temperatures
-                if temp < MIN_REASONABLE_TEMP or temp > MAX_REASONABLE_TEMP:
-                    extreme_temps.append((i, temp))
-
-                temperatures.append(temp)
-
-            except (ValueError, TypeError) as e:
-                parse_errors.append((i, temp_str, str(e)))
-                continue
-
-        # Log warnings for problems
-        if parse_errors:
-            _LOGGER.warning("Temperature parsing errors: %s", parse_errors)
-
-        if extreme_temps:
-            _LOGGER.warning("Extreme temperature values detected: %s", extreme_temps)
-
-        if not temperatures:
-            _LOGGER.error("No valid temperatures found in forecast")
-            return None
-
-        _LOGGER.debug("Parsed %s temperature values", len(temperatures))
-        return temperatures
-
-    except Exception as e:
-        _LOGGER.error("Error parsing temperature forecast: %s", e)
+    # Clean and split data
+    temp_strings = [t.strip() for t in hourly_temps_csv.split(",") if t.strip()]
+    if not temp_strings:
+        _LOGGER.warning("Empty temperature forecast after parsing")
         return None
+
+    # Limit number of hours if specified
+    if max_hours is not None and max_hours > 0:
+        temp_strings = temp_strings[:max_hours]
+
+    temperatures = []
+    parse_errors = []
+    extreme_temps = []
+
+    for i, temp_str in enumerate(temp_strings):
+        try:
+            temp = float(temp_str)
+
+            # Sanity check for temperatures
+            if temp < MIN_REASONABLE_TEMP or temp > MAX_REASONABLE_TEMP:
+                extreme_temps.append((i, temp))
+
+            temperatures.append(temp)
+
+        except (ValueError, TypeError) as e:
+            parse_errors.append((i, temp_str, str(e)))
+            continue
+
+    # Log warnings for problems
+    if parse_errors:
+        _LOGGER.warning("Temperature parsing errors: %s", parse_errors)
+
+    if extreme_temps:
+        _LOGGER.warning("Extreme temperature values detected: %s", extreme_temps)
+
+    if not temperatures:
+        _LOGGER.error("No valid temperatures found in forecast")
+        return None
+
+    _LOGGER.debug("Parsed %s temperature values", len(temperatures))
+    return temperatures
 
 
 def should_precool(
@@ -404,21 +387,19 @@ def _validate_single_entity(
     if not entity_id or not isinstance(entity_id, str):
         return f"Invalid entity ID for {description}: {entity_id}"
 
-    try:
-        entity = hass.states.get(entity_id)
-        if not entity:
-            return f"Entity not found: {description} ({entity_id})"
+    entity = hass.states.get(entity_id)
+    if not entity:
+        return f"Entity not found: {description} ({entity_id})"
 
-        if check_state and entity.state in [
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-            "unavailable",
-            "unknown",
-        ]:
-            return f"Entity unavailable: {description} ({entity_id}) - state: {entity.state}"
-
-    except Exception as e:
-        return f"Error validating entity {description} ({entity_id}): {e}"
+    if check_state and entity.state in [
+        STATE_UNAVAILABLE,
+        STATE_UNKNOWN,
+        "unavailable",
+        "unknown",
+    ]:
+        return (
+            f"Entity unavailable: {description} ({entity_id}) - state: {entity.state}"
+        )
 
     return None
 
@@ -445,45 +426,38 @@ def safe_get_entity_state_with_description(
         _LOGGER.error("No entity_id provided for %s", description)
         return None
 
-    try:
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.error("Entity %s (%s) not found", entity_id, description)
-            return None
+    entity = hass.states.get(entity_id)
+    if not entity:
+        _LOGGER.error("Entity %s (%s) not found", entity_id, description)
+        return None
 
-        if entity.state in [
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-            "unavailable",
-            "unknown",
-            None,
-        ]:
+    if entity.state in [
+        STATE_UNAVAILABLE,
+        STATE_UNKNOWN,
+        "unavailable",
+        "unknown",
+        None,
+    ]:
+        _LOGGER.warning("Entity %s (%s) is %s", entity_id, description, entity.state)
+        return None
+
+    state = entity.state
+
+    # Type check if specified
+    if expected_type is not None:
+        try:
+            expected_type(state)
+        except (ValueError, TypeError):
             _LOGGER.warning(
-                "Entity %s (%s) is %s", entity_id, description, entity.state
+                "Entity %s (%s) state '%s' cannot be converted to %s",
+                entity_id,
+                description,
+                state,
+                expected_type.__name__,
             )
             return None
 
-        state = entity.state
-
-        # Type check if specified
-        if expected_type is not None:
-            try:
-                expected_type(state)
-            except (ValueError, TypeError):
-                _LOGGER.warning(
-                    "Entity %s (%s) state '%s' cannot be converted to %s",
-                    entity_id,
-                    description,
-                    state,
-                    expected_type.__name__,
-                )
-                return None
-
-        return state
-
-    except Exception as e:
-        _LOGGER.error("Error getting state for %s (%s): %s", entity_id, description, e)
-        return None
+    return state
 
 
 def safe_array_slice(array: List[Any], start: int, length: int) -> List[Any]:
@@ -559,27 +533,24 @@ def log_entity_diagnostics(hass: HomeAssistant, entity_id: str) -> None:
         hass: HomeAssistant instance
         entity_id: Entity ID to diagnose
     """
-    try:
-        entity = hass.states.get(entity_id)
-        if not entity:
-            _LOGGER.debug("Diagnostics: Entity %s not found", entity_id)
-            return
 
-        _LOGGER.debug("Diagnostics for %s:", entity_id)
-        _LOGGER.debug("  State: %s", entity.state)
-        _LOGGER.debug("  Domain: %s", entity.domain)
-        _LOGGER.debug("  Last changed: %s", entity.last_changed)
-        _LOGGER.debug("  Last updated: %s", entity.last_updated)
+    entity = hass.states.get(entity_id)
+    if not entity:
+        _LOGGER.debug("Diagnostics: Entity %s not found", entity_id)
+        return
 
-        if entity.attributes:
-            _LOGGER.debug("  Attributes: %s", list(entity.attributes.keys()))
-            # Log some important attributes
-            for attr in ["unit_of_measurement", "device_class", "friendly_name"]:
-                if attr in entity.attributes:
-                    _LOGGER.debug("    %s: %s", attr, entity.attributes[attr])
+    _LOGGER.debug("Diagnostics for %s:", entity_id)
+    _LOGGER.debug("  State: %s", entity.state)
+    _LOGGER.debug("  Domain: %s", entity.domain)
+    _LOGGER.debug("  Last changed: %s", entity.last_changed)
+    _LOGGER.debug("  Last updated: %s", entity.last_updated)
 
-    except Exception as e:
-        _LOGGER.error("Error in entity diagnostics for %s: %s", entity_id, e)
+    if entity.attributes:
+        _LOGGER.debug("  Attributes: %s", list(entity.attributes.keys()))
+        # Log some important attributes
+        for attr in ["unit_of_measurement", "device_class", "friendly_name"]:
+            if attr in entity.attributes:
+                _LOGGER.debug("    %s: %s", attr, entity.attributes[attr])
 
 
 def create_error_summary(errors: List[str], max_display: int = 5) -> str:

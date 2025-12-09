@@ -194,47 +194,38 @@ async def async_hybrid_classify_with_history(
         hours=trailing_hours
     )  # Start time for historical data fetch
 
-    try:
-        recorder = get_instance(hass)
+    recorder = get_instance(hass)
 
-        def get_price_history():
-            return get_significant_states(hass, start_time, end_time, [price_entity_id])
+    def get_price_history():
+        return get_significant_states(hass, start_time, end_time, [price_entity_id])
 
-        history = await recorder.async_add_executor_job(get_price_history)
+    history = await recorder.async_add_executor_job(get_price_history)
 
-        states = history.get(
-            price_entity_id, []
-        )  # Extract states for the specific entity
-        trailing_prices = []
+    states = history.get(price_entity_id, [])  # Extract states for the specific entity
+    trailing_prices = []
 
-        # Process historical states to extract valid numeric prices
-        for s in states:
-            try:
-                if s.state not in ("unknown", "unavailable"):
-                    trailing_prices.append(float(s.state))
-            except (ValueError, TypeError):
-                _LOGGER.debug("Skipping invalid state value from history: %s", s.state)
-                continue
+    # Process historical states to extract valid numeric prices
+    for s in states:
+        try:
+            if s.state not in ("unknown", "unavailable"):
+                trailing_prices.append(float(s.state))
+        except (ValueError, TypeError):
+            _LOGGER.debug("Skipping invalid state value from history: %s", s.state)
+            continue
 
-        # Calculate the average price from the retrieved historical data
-        if not trailing_prices:
-            _LOGGER.warning(
-                "Could not retrieve trailing prices; fallback to daily average of current list."
-            )
-            avg_price = get_daily_average(
-                price_list
-            )  # Fallback to current list average if history fails
-        else:
-            avg_price = get_daily_average(trailing_prices)  # Use historical average
-
-        _LOGGER.debug("Retrieved %d trailing prices from history", len(trailing_prices))
-        _LOGGER.debug("Trailing average: %s", avg_price)
-
-    except Exception as e:
-        _LOGGER.error("Error retrieving price history: %s", e)
+    # Calculate the average price from the retrieved historical data
+    if not trailing_prices:
+        _LOGGER.warning(
+            "Could not retrieve trailing prices; fallback to daily average of current list."
+        )
         avg_price = get_daily_average(
             price_list
-        )  # Fallback to current list average on error
+        )  # Fallback to current list average if history fails
+    else:
+        avg_price = get_daily_average(trailing_prices)  # Use historical average
+
+    _LOGGER.debug("Retrieved %d trailing prices from history", len(trailing_prices))
+    _LOGGER.debug("Trailing average: %s", avg_price)
 
     # Fallback to standard percentile classification if the calculated average is invalid (e.g., zero)
     if avg_price <= 0:
@@ -380,67 +371,64 @@ async def async_get_forecast_prices(
     """
     Retrieve future electricity prices for PumpSteer's 6-hour forecast.
     """
-    try:
-        # Get entity's attributes which often contain future prices
-        state = hass.states.get(price_entity_id)
-        if not state:
-            _LOGGER.warning("Could not find entity: %s", price_entity_id)
-            return []
-
-        # Many electricity price integrations store future prices in attributes
-        raw_prices = state.attributes.get("raw_today", []) + state.attributes.get(
-            "raw_tomorrow", []
-        )
-
-        if not raw_prices:
-            _LOGGER.debug("No future prices found in entity attributes")
-            return []
-
-        # Filter only future hours
-        current_time = dt_now()
-        forecast_prices = []
-
-        for price_data in raw_prices:
-            if (
-                isinstance(price_data, dict)
-                and "start" in price_data
-                and "value" in price_data
-            ):
-                try:
-                    # Convert start time to datetime if needed
-                    start_time = price_data["start"]
-                    if isinstance(start_time, str):
-                        start_time = datetime.fromisoformat(
-                            start_time.replace("Z", "+00:00")
-                        )
-
-                    # Only future prices
-                    if start_time > current_time:
-                        forecast_prices.append(
-                            {
-                                "timestamp": start_time,
-                                "price": float(price_data["value"]),
-                                "hours_from_now": int(
-                                    (start_time - current_time).total_seconds() / 3600
-                                ),
-                            }
-                        )
-
-                        # Limit to desired number of hours
-                        if len(forecast_prices) >= hours_ahead:
-                            break
-
-                except (ValueError, TypeError, KeyError) as e:
-                    _LOGGER.debug("Skipping invalid price data: %s", e)
-                    continue
-
-        # Sort by time
-        forecast_prices.sort(key=lambda x: x["timestamp"])
-        return forecast_prices[:hours_ahead]
-
-    except Exception as e:
-        _LOGGER.error("Error retrieving forecast prices: %s", e)
+    # Get entity's attributes which often contain future prices
+    state = hass.states.get(price_entity_id)
+    if not state:
+        _LOGGER.warning("Could not find entity: %s", price_entity_id)
         return []
+
+    # Many electricity price integrations store future prices in attributes
+    raw_prices = state.attributes.get("raw_today", []) + state.attributes.get(
+        "raw_tomorrow", []
+    )
+
+    if not raw_prices:
+        _LOGGER.debug("No future prices found in entity attributes")
+        return []
+
+    # Filter only future hours
+    current_time = dt_now()
+    forecast_prices = []
+
+    for price_data in raw_prices:
+        if (
+            isinstance(price_data, dict)
+            and "start" in price_data
+            and "value" in price_data
+        ):
+            try:
+                # Convert start time to datetime if needed
+                start_time = price_data["start"]
+                if isinstance(start_time, str):
+                    start_time = datetime.fromisoformat(
+                        start_time.replace("Z", "+00:00")
+                    )
+
+                # Only future prices
+                if start_time > current_time:
+                    forecast_prices.append(
+                        {
+                            "timestamp": start_time,
+                            "price": float(price_data["value"]),
+                            "hours_from_now": int(
+                                (start_time - current_time).total_seconds() / 3600
+                            ),
+                        }
+                    )
+
+                    # Limit to desired number of hours
+                    if len(forecast_prices) >= hours_ahead:
+                        break
+
+            except (ValueError, TypeError, KeyError) as e:
+                _LOGGER.debug("Skipping invalid price data: %s", e)
+                continue
+
+    # Sort by time
+    forecast_prices.sort(key=lambda x: x["timestamp"])
+    return forecast_prices[:hours_ahead]
+
+
 
 
 def calculate_boost_potential(

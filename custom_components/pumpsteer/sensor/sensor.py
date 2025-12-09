@@ -129,12 +129,9 @@ class PumpSteerSensor(Entity):
         self._last_price_category = "unknown"
 
         if ML_AVAILABLE:
-            try:
-                self.ml_collector = PumpSteerMLCollector(hass)
-                _LOGGER.info("PumpSteer: ML system enabled")
-            except Exception as e:
-                _LOGGER.warning("PumpSteer: ML initialization failed: %s", e)
-                self.ml_collector = None
+            self.ml_collector = PumpSteerMLCollector(hass)
+            _LOGGER.info("PumpSteer: ML system enabled")
+
         else:
             _LOGGER.info("PumpSteer: Running without ML features")
 
@@ -180,22 +177,15 @@ class PumpSteerSensor(Entity):
     async def async_added_to_hass(self) -> None:
         """Called when the entity is added to Home Assistant."""
         if self.ml_collector and hasattr(self.ml_collector, "async_load_data"):
-            try:
-                await self.ml_collector.async_load_data()
-                _LOGGER.debug("ML data loaded successfully")
-            except Exception as e:
-                _LOGGER.error("Failed to load ML data: %s", e)
-                self.ml_collector = None
+            await self.ml_collector.async_load_data()
+            _LOGGER.debug("ML data loaded successfully")
 
         await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self) -> None:
         """Handle entity removal from Home Assistant."""
         if self.ml_collector and hasattr(self.ml_collector, "async_shutdown"):
-            try:
-                await self.ml_collector.async_shutdown()
-            except Exception as e:
-                _LOGGER.error("Error during ML collector shutdown: %s", e)
+            await self.ml_collector.async_shutdown()
         self.ml_collector = None
         await super().async_will_remove_from_hass()
 
@@ -303,17 +293,13 @@ class PumpSteerSensor(Entity):
             fake_temp = outdoor_temp
             mode = "neutral"
         else:
-            try:
-                fake_temp, mode = calculate_temperature_output(
-                    indoor_temp,
-                    target_temp_for_logic,
-                    outdoor_temp,
-                    aggressiveness,
-                    brake_temp,
-                )
-            except Exception as e:
-                _LOGGER.error("Error in temperature calculation: %s", e)
-                fake_temp, mode = outdoor_temp, "error"
+            fake_temp, mode = calculate_temperature_output(
+                indoor_temp,
+                target_temp_for_logic,
+                outdoor_temp,
+                aggressiveness,
+                brake_temp,
+            )
 
             temp_deficit = target_temp_for_logic - indoor_temp
             normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
@@ -355,35 +341,31 @@ class PumpSteerSensor(Entity):
         if not self.ml_collector:
             return
 
-        try:
-            ml_data = {
-                "indoor_temp": sensor_data.get("indoor_temp"),
-                "outdoor_temp": sensor_data.get("outdoor_temp"),
-                "target_temp": sensor_data.get("target_temp"),
-                "aggressiveness": sensor_data.get("aggressiveness", 0),
-                "inertia": sensor_data.get("inertia"),
-                "mode": mode,
-                "fake_temp": fake_temp,
-                "price_category": self._last_price_category,
-                "timestamp": dt_util.now().isoformat(),
-            }
+        ml_data = {
+            "indoor_temp": sensor_data.get("indoor_temp"),
+            "outdoor_temp": sensor_data.get("outdoor_temp"),
+            "target_temp": sensor_data.get("target_temp"),
+            "aggressiveness": sensor_data.get("aggressiveness", 0),
+            "inertia": sensor_data.get("inertia"),
+            "mode": mode,
+            "fake_temp": fake_temp,
+            "price_category": self._last_price_category,
+            "timestamp": dt_util.now().isoformat(),
+        }
 
-            if not self._ml_session_started:
-                self.ml_collector.start_session(ml_data)
-                self._ml_session_started = True
-                self._ml_session_start_mode = mode
+        if not self._ml_session_started:
+            self.ml_collector.start_session(ml_data)
+            self._ml_session_started = True
+            self._ml_session_start_mode = mode
 
-            self.ml_collector.update_session(ml_data)
+        self.ml_collector.update_session(ml_data)
 
-            if self._ml_session_start_mode != mode and mode in [
-                "neutral",
-                "summer_mode",
-            ]:
-                self.ml_collector.end_session("mode_change", ml_data)
-                self._ml_session_started = False
-
-        except Exception as e:
-            _LOGGER.debug("ML data collection error (non-critical): %s", e)
+        if self._ml_session_start_mode != mode and mode in [
+            "neutral",
+            "summer_mode",
+        ]:
+            self.ml_collector.end_session("mode_change", ml_data)
+            self._ml_session_started = False
 
     async def _get_price_data(
         self, config: Dict[str, Any], current_time: datetime
@@ -428,19 +410,15 @@ class PumpSteerSensor(Entity):
         )
         categories = []
 
-        try:
-            if mode == "percentiles":
-                categories = classify_prices(prices)
-            else:
-                categories = await async_hybrid_classify_with_history(
-                    self.hass,
-                    price_list=prices,
-                    price_entity_id=entity_id,
-                    trailing_hours=72,
-                )
-        except Exception as e:
-            _LOGGER.error("Error classifying prices: %s", e)
-            categories = ["unknown"] * len(prices)
+        if mode == "percentiles":
+            categories = classify_prices(prices)
+        else:
+            categories = await async_hybrid_classify_with_history(
+                self.hass,
+                price_list=prices,
+                price_entity_id=entity_id,
+                trailing_hours=72,
+            )
 
         current_price, price_category = safe_get_current_price_and_category(
             prices, categories, current_slot_index, mode
@@ -548,75 +526,66 @@ class PumpSteerSensor(Entity):
 
     async def async_update(self) -> None:
         """Update sensor data."""
-        try:
-            update_time = dt_util.now()
-            now_hour = update_time.hour
 
-            config = {**self._config_entry.data, **self._config_entry.options}
-            sensor_data = self._get_sensor_data(config)
-            (
-                prices,
-                current_price,
-                price_category,
-                categories,
-                price_interval_minutes,
-                current_slot_index,
-            ) = await self._get_price_data(config, update_time)
-            self._last_price_category = price_category
+        update_time = dt_util.now()
+        now_hour = update_time.hour
 
-            missing = self._validate_required_data(sensor_data, prices)
-            if missing:
-                self._state = STATE_UNAVAILABLE
-                self._attributes = {
-                    "Status": f"Missing: {', '.join(missing)}",
-                    "Last Updated": update_time.isoformat(),
-                    "Current Hour": now_hour,
-                }
-                return
+        config = {**self._config_entry.data, **self._config_entry.options}
+        sensor_data = self._get_sensor_data(config)
+        (
+            prices,
+            current_price,
+            price_category,
+            categories,
+            price_interval_minutes,
+            current_slot_index,
+        ) = await self._get_price_data(config, update_time)
+        self._last_price_category = price_category
 
-            holiday = is_holiday_mode_active(
-                self.hass,
-                HARDCODED_ENTITIES["holiday_mode_boolean_entity"],
-                HARDCODED_ENTITIES["holiday_start_datetime_entity"],
-                HARDCODED_ENTITIES["holiday_end_datetime_entity"],
-            )
-
-            if holiday:
-                sensor_data["target_temp"] = HOLIDAY_TEMP
-
-            fake_temp, mode = self._calculate_output_temperature(
-                sensor_data,
-                price_category,
-                current_slot_index,
-            )
-            self._state = round(fake_temp, 1)
-
-            self._attributes = self._build_attributes(
-                sensor_data,
-                prices,
-                current_price,
-                price_category,
-                mode,
-                holiday,
-                categories,
-                now_hour,
-                price_interval_minutes,
-                current_slot_index,
-            )
-
-            if self.ml_collector:
-                self._collect_ml_data(sensor_data, mode, fake_temp)
-
-            self._last_update_time = update_time
-
-        except Exception as e:
-            _LOGGER.error("Error during update: %s", e, exc_info=True)
+        missing = self._validate_required_data(sensor_data, prices)
+        if missing:
             self._state = STATE_UNAVAILABLE
             self._attributes = {
-                "Status": f"Error: {e}",
-                "Last Updated": dt_util.now().isoformat(),
-                "Error Details": str(e),
+                "Status": f"Missing: {', '.join(missing)}",
+                "Last Updated": update_time.isoformat(),
+                "Current Hour": now_hour,
             }
+            return
+
+        holiday = is_holiday_mode_active(
+            self.hass,
+            HARDCODED_ENTITIES["holiday_mode_boolean_entity"],
+            HARDCODED_ENTITIES["holiday_start_datetime_entity"],
+            HARDCODED_ENTITIES["holiday_end_datetime_entity"],
+        )
+
+        if holiday:
+            sensor_data["target_temp"] = HOLIDAY_TEMP
+
+        fake_temp, mode = self._calculate_output_temperature(
+            sensor_data,
+            price_category,
+            current_slot_index,
+        )
+        self._state = round(fake_temp, 1)
+
+        self._attributes = self._build_attributes(
+            sensor_data,
+            prices,
+            current_price,
+            price_category,
+            mode,
+            holiday,
+            categories,
+            now_hour,
+            price_interval_minutes,
+            current_slot_index,
+        )
+
+        if self.ml_collector:
+            self._collect_ml_data(sensor_data, mode, fake_temp)
+
+        self._last_update_time = update_time
 
 
 async def async_setup_entry(
