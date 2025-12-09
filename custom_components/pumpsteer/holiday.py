@@ -31,7 +31,7 @@ def is_holiday_mode_active(
         True if holiday mode is active, False otherwise.
     """
     # 1. Check Holiday Mode Boolean Switch
-    # This step ensures that Holiday Mode is explicitly enabled by the user via a Home Assistant helper entity (e.g., an input_boolean).
+    # Ensures that Holiday Mode is explicitly enabled by the user via a Home Assistant helper entity
     if holiday_mode_boolean_entity_id:
         boolean_state = hass.states.get(holiday_mode_boolean_entity_id)
         # If the entity doesn't exist or its state is not 'on', holiday mode is not active.

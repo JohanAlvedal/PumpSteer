@@ -16,6 +16,7 @@ def test_get_version_reads_manifest():
 def test_get_version_missing_manifest(monkeypatch):
     def fake_open(*args, **kwargs):
         raise FileNotFoundError
+
     monkeypatch.setattr(builtins, "open", fake_open)
     assert get_version() == "unknown"
 
@@ -33,5 +34,7 @@ def test_compute_price_slot_index_clamps_to_range():
 
 def test_get_price_window_for_hours_returns_expected_slice():
     prices = [float(i) for i in range(10)]
-    window = get_price_window_for_hours(prices, current_slot_index=2, hours=3, price_interval_minutes=60)
+    window = get_price_window_for_hours(
+        prices, current_slot_index=2, hours=3, price_interval_minutes=60
+    )
     assert window == [2.0, 3.0, 4.0]

@@ -1,5 +1,3 @@
-# sensor.py
-
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple, List
@@ -254,10 +252,8 @@ class PumpSteerSensor(Entity):
     def _calculate_output_temperature(
         self,
         sensor_data: Dict[str, Any],
-        prices: List[float],
         price_category: str,
         current_slot_index: int,
-        price_interval_minutes: int = 60,
     ) -> Tuple[float, str]:
         """Calculate output temperature based on current conditions."""
         indoor_temp = sensor_data["indoor_temp"]
@@ -265,7 +261,6 @@ class PumpSteerSensor(Entity):
         target_temp = sensor_data["target_temp"]
         summer_threshold = sensor_data["summer_threshold"]
         aggressiveness = sensor_data["aggressiveness"]
-        inertia = sensor_data["inertia"]
         outdoor_temp_forecast_entity = sensor_data["outdoor_temp_forecast_entity"]
 
         temp_forecast_csv = None
@@ -591,10 +586,8 @@ class PumpSteerSensor(Entity):
 
             fake_temp, mode = self._calculate_output_temperature(
                 sensor_data,
-                prices,
                 price_category,
                 current_slot_index,
-                price_interval_minutes,
             )
             self._state = round(fake_temp, 1)
 

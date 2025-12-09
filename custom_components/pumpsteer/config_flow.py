@@ -1,5 +1,5 @@
-import voluptuous as vol
 import logging
+import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -130,6 +130,10 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "unavailable",
             "unknown",
         ]
+
+    def is_matching(self, other_flow: vol.Self) -> bool:
+        """Return True if other_flow is matching this flow."""
+        raise NotImplementedError
 
     @staticmethod
     @callback

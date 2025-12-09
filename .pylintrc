@@ -1,2 +1,10 @@
 [FORMAT]
 max-line-length=120
+
+[MASTER]
+disable=C0114,C0115,C0116,R0801
+ignore-paths=^tests/.*$
+score=no
+
+[REPORTS]
+output-format=colorized

@@ -114,9 +114,9 @@ VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00  # 300% of average price
 # === VALIDATION CONSTANTS ===
 MIN_REASONABLE_TEMP: Final[float] = -50.0  # °C - Minimum reasonable temperature
 MAX_REASONABLE_TEMP: Final[float] = 50.0  # °C - Maximum reasonable temperature
-MIN_REASONABLE_PRICE: Final[float] = (
-    -2.0
-)  # SEK/kWh - Minimum reasonable electricity price (negative prices occur)
+MIN_REASONABLE_PRICE: Final[
+    float
+] = -2.0  # SEK/kWh - Minimum reasonable electricity price (negative prices occur)
 MAX_REASONABLE_PRICE: Final[float] = (
     15.0  # SEK/kWh - Maximum reasonable electricity price
 )

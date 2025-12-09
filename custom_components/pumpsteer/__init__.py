@@ -1,8 +1,8 @@
 """PumpSteer integration."""
 
+import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-import logging
 
 from .options_flow import PumpSteerOptionsFlowHandler
 
@@ -25,6 +25,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return await hass.config_entries.async_unload_platforms(entry, ["sensor"])
 
 
-async def async_get_options_flow(config_entry):
+async def async_get_options_flow():
     """Return the options flow handler."""
-    return PumpSteerOptionsFlowHandler(config_entry)
+    return PumpSteerOptionsFlowHandler()
