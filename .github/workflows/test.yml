@@ -1,4 +1,4 @@
-name: Run Unit Tests
+name: Run tests
 permissions:
   contents: read
 
@@ -9,18 +9,21 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  lint:
+    name: Lint with pylint
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
-          cache: 'pip'
-
+          python-version: ${{ matrix.python-version }}
+        
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -29,11 +32,34 @@ jobs:
           pip install pytest-homeassistant-custom-component
           pip install homeassistant
 
-      - name: Python Lint
+      - name: pylint
         run: |
           pylint $(git ls-files '*.py')
 
-      - name: Run tests (if available)
+  test:
+    name: Test with pytest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+        
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio pylint
+          # Useful plugin for home assistant
+          pip install pytest-homeassistant-custom-component
+          pip install homeassistant
+
+      - name: pytest
         run: |
           if [ -d "tests" ]; then
             echo "📁 Tests directory found - running tests..."
