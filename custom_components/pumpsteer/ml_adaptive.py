@@ -56,20 +56,14 @@ class PumpSteerMLCollector:
             ML_MODULE_VERSION,
         )
 
-    # ----------------------------------------------------------------------
-    # Data Load / Save
-    # ----------------------------------------------------------------------
     async def async_load_data(self) -> None:
-        try:
-            await self.hass.async_add_executor_job(self._load_data_sync)
-            _LOGGER.info(
-                "ML: Loaded %d sessions from %s",
-                len(self.learning_sessions),
-                self.data_file,
-            )
-        except Exception as e:
-            _LOGGER.error("ML: Failed to load data: %s", e)
-            self.learning_sessions = []
+        """Load previously saved learning data from disk."""
+        await self.hass.async_add_executor_job(self._load_data_sync)
+        _LOGGER.info(
+            "ML: Loaded %d sessions from %s",
+            len(self.learning_sessions),
+            self.data_file,
+        )
 
     def _load_data_sync(self) -> None:
         if not Path(self.data_file).exists():
@@ -92,11 +86,8 @@ class PumpSteerMLCollector:
             )
 
     async def async_save_data(self) -> None:
-        try:
-            await self.hass.async_add_executor_job(self._save_data_sync)
-        except Exception as e:
-            _LOGGER.error("ML: Error saving data: %s", e)
-
+        await self.hass.async_add_executor_job(self._save_data_sync)
+     
     def _save_data_sync(self) -> None:
         data = {
             "version": ML_DATA_VERSION,
@@ -112,9 +103,6 @@ class PumpSteerMLCollector:
         with open(self.data_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
-    # ----------------------------------------------------------------------
-    # Session Management
-    # ----------------------------------------------------------------------
     def start_session(self, initial_data: Dict[str, Any]) -> None:
         """Start a new learning session."""
         if self.current_session is not None:
@@ -175,82 +163,75 @@ class PumpSteerMLCollector:
             _LOGGER.warning("ML: Session ended without updates.")
             return
 
-        try:
-            indoor_temps = [
-                u["data"].get("indoor_temp")
-                for u in updates
-                if u["data"].get("indoor_temp") is not None
-            ]
-            outdoor_temps = [
-                u["data"].get("outdoor_temp")
-                for u in updates
-                if u["data"].get("outdoor_temp") is not None
-            ]
-            prices = [
-                u["data"].get("price_now")
-                for u in updates
-                if u["data"].get("price_now") is not None
-            ]
-            targets = [
-                u["data"].get("target_temp")
-                for u in updates
-                if u["data"].get("target_temp") is not None
-            ]
+        indoor_temps = [
+            u["data"].get("indoor_temp")
+            for u in updates
+            if u["data"].get("indoor_temp") is not None
+        ]
+        outdoor_temps = [
+            u["data"].get("outdoor_temp")
+            for u in updates
+            if u["data"].get("outdoor_temp") is not None
+        ]
+        prices = [
+            u["data"].get("price_now")
+            for u in updates
+            if u["data"].get("price_now") is not None
+        ]
+        targets = [
+            u["data"].get("target_temp")
+            for u in updates
+            if u["data"].get("target_temp") is not None
+        ]
 
-            first_temp = indoor_temps[0] if indoor_temps else 0
-            last_temp = indoor_temps[-1] if indoor_temps else 0
-            temp_rise = last_temp - first_temp
-            avg_price = statistics.mean(prices) if prices else 0
-            avg_outdoor = statistics.mean(outdoor_temps) if outdoor_temps else None
-            comfort_drift = abs(targets[-1] - last_temp) if targets else 0
+        first_temp = indoor_temps[0] if indoor_temps else 0
+        last_temp = indoor_temps[-1] if indoor_temps else 0
+        temp_rise = last_temp - first_temp
+        avg_price = statistics.mean(prices) if prices else 0
+        avg_outdoor = statistics.mean(outdoor_temps) if outdoor_temps else None
+        comfort_drift = abs(targets[-1] - last_temp) if targets else 0
 
-            start_time = datetime.fromisoformat(self.current_session["start_time"])
-            end_time = datetime.fromisoformat(self.current_session["end_time"])
-            duration_minutes = (end_time - start_time).total_seconds() / 60
+        start_time = datetime.fromisoformat(self.current_session["start_time"])
+        end_time = datetime.fromisoformat(self.current_session["end_time"])
+        duration_minutes = (end_time - start_time).total_seconds() / 60
 
-            initial = self.current_session.get("initial", {})
-            mode = initial.get("mode", "unknown")
-            aggressiveness = initial.get("aggressiveness", 0)
-            inertia = initial.get("inertia", 1.0)
+        initial = self.current_session.get("initial", {})
+        mode = initial.get("mode", "unknown")
+        aggressiveness = initial.get("aggressiveness", 0)
+        inertia = initial.get("inertia", 1.0)
 
-            summary = {
-                "duration_minutes": round(duration_minutes, 1),
-                "temp_rise": round(temp_rise, 2),
-                "avg_price": round(avg_price, 3),
-                "avg_outdoor_temp": round(avg_outdoor, 1)
-                if avg_outdoor is not None
-                else None,
-                "comfort_drift": round(comfort_drift, 2),
-                "aggressiveness": aggressiveness,
-                "inertia": inertia,
-                "mode": mode,
-                "update_count": len(updates),
-                "success": comfort_drift < ML_SUCCESS_TEMP_DIFF_THRESHOLD,
-            }
+        summary = {
+            "duration_minutes": round(duration_minutes, 1),
+            "temp_rise": round(temp_rise, 2),
+            "avg_price": round(avg_price, 3),
+            "avg_outdoor_temp": round(avg_outdoor, 1)
+            if avg_outdoor is not None
+            else None,
+            "comfort_drift": round(comfort_drift, 2),
+            "aggressiveness": aggressiveness,
+            "inertia": inertia,
+            "mode": mode,
+            "update_count": len(updates),
+            "success": comfort_drift < ML_SUCCESS_TEMP_DIFF_THRESHOLD,
+        }
 
-            self.current_session["summary"] = summary
-            self.learning_sessions.append(self.current_session)
-            self.current_session = None
+        self.current_session["summary"] = summary
+        self.learning_sessions.append(self.current_session)
+        self.current_session = None
 
-            _LOGGER.info(
-                "ML: Session summary: ΔT=%.2f°C, drift=%.2f°C, dur=%.1fmin, aggr=%s, inertia=%s",
-                temp_rise,
-                comfort_drift,
-                duration_minutes,
-                aggressiveness,
-                inertia,
-            )
+        _LOGGER.info(
+            "ML: Session summary: ΔT=%.2f°C, drift=%.2f°C, dur=%.1fmin, aggr=%s, inertia=%s",
+            temp_rise,
+            comfort_drift,
+            duration_minutes,
+            aggressiveness,
+            inertia,
+        )
 
-            # Trigger learning update
-            self._update_learning_model()
-            self.hass.async_create_task(self.async_save_data())
+        # Trigger learning update
+        self._update_learning_model()
+        self.hass.async_create_task(self.async_save_data())
 
-        except Exception as e:
-            _LOGGER.error("ML: Error summarizing session: %s", e)
-
-    # ----------------------------------------------------------------------
-    # Learning Logic
-    # ----------------------------------------------------------------------
     def _update_learning_model(self) -> None:
         """Perform a simple regression analysis on collected sessions."""
         heating_sessions = [
@@ -295,94 +276,75 @@ class PumpSteerMLCollector:
             _LOGGER.debug("ML: Not enough sessions for regression learning.")
             return
 
-        try:
-            x = []
-            y = []
-            for summary in valid_summaries[-50:]:
-                aggr = summary.get("aggressiveness", 0)
-                inertia = summary.get("inertia", 1.0)
-                dur = summary.get("duration_minutes", 0)
-                drift = summary.get("comfort_drift", 0)
-                x.append([aggr, inertia, dur])
-                y.append(drift)
+        x = []
+        y = []
+        for summary in valid_summaries[-50:]:
+            aggr = summary.get("aggressiveness", 0)
+            inertia = summary.get("inertia", 1.0)
+            dur = summary.get("duration_minutes", 0)
+            drift = summary.get("comfort_drift", 0)
+            x.append([aggr, inertia, dur])
+            y.append(drift)
 
-            a = np.column_stack((np.array(x), np.ones(len(x))))
-            coeff, *_ = np.linalg.lstsq(a, np.array(y), rcond=None)
-            self.model_coefficients = coeff.tolist()
+        a = np.column_stack((np.array(x), np.ones(len(x))))
+        coeff, *_ = np.linalg.lstsq(a, np.array(y), rcond=None)
+        self.model_coefficients = coeff.tolist()
 
-            self.learning_summary = {
-                "total_sessions": len(valid_summaries),
-                "avg_duration": round(
-                    statistics.mean([s["duration_minutes"] for s in valid_summaries]),
-                    1,
-                ),
-                "avg_drift": round(
-                    statistics.mean([s["comfort_drift"] for s in valid_summaries]), 2
-                ),
-                "avg_inertia": round(
-                    statistics.mean([s["inertia"] for s in valid_summaries]), 2
-                ),
-                "avg_aggressiveness": round(
-                    statistics.mean([s["aggressiveness"] for s in valid_summaries]), 2
-                ),
-                "coefficients": [round(c, 4) for c in coeff],
-                "updated": dt_util.now().isoformat(),
-            }
+        self.learning_summary = {
+            "total_sessions": len(valid_summaries),
+            "avg_duration": round(
+                statistics.mean([s["duration_minutes"] for s in valid_summaries]),
+                1,
+            ),
+            "avg_drift": round(
+                statistics.mean([s["comfort_drift"] for s in valid_summaries]), 2
+            ),
+            "avg_inertia": round(
+                statistics.mean([s["inertia"] for s in valid_summaries]), 2
+            ),
+            "avg_aggressiveness": round(
+                statistics.mean([s["aggressiveness"] for s in valid_summaries]), 2
+            ),
+            "coefficients": [round(c, 4) for c in coeff],
+            "updated": dt_util.now().isoformat(),
+        }
 
-            _LOGGER.info(
-                "ML: Learning update complete — model coeff: %s",
-                self.learning_summary["coefficients"],
-            )
+        _LOGGER.info(
+            "ML: Learning update complete — model coeff: %s",
+            self.learning_summary["coefficients"],
+        )
 
-        except Exception as e:
-            _LOGGER.error("ML: Error in learning model update: %s", e)
-
-    # ----------------------------------------------------------------------
-    # Recommendations
-    # ----------------------------------------------------------------------
     def get_recommendations(self) -> List[str]:
         """Generate adaptive recommendations based on learned model."""
         if not self.model_coefficients:
             return ["System is still learning — need more sessions."]
 
-        try:
-            coeff = self.model_coefficients
-            a, b, c, d = coeff
+        coeff = self.model_coefficients
+        a, b, c, d = coeff
 
-            msg = []
-            msg.append(
-                f"Learned model: drift ≈ {a:+.3f}·aggr + {b:+.3f}·inertia + {c:+.3f}·duration + {d:+.3f}"
-            )
+        msg = []
+        msg.append(
+            f"Learned model: drift ≈ {a:+.3f}·aggr + {b:+.3f}·inertia + {c:+.3f}·duration + {d:+.3f}"
+        )
 
-            if abs(a) > abs(b):
-                msg.append("→ Aggressiveness affects comfort more than inertia.")
-            else:
-                msg.append("→ Inertia has stronger influence on comfort drift.")
+        if abs(a) > abs(b):
+            msg.append("→ Aggressiveness affects comfort more than inertia.")
+        else:
+            msg.append("→ Inertia has stronger influence on comfort drift.")
 
-            if a > 0:
-                msg.append(
-                    "Higher aggressiveness increases comfort drift (less stable)."
-                )
-            else:
-                msg.append("Higher aggressiveness reduces comfort drift (more stable).")
+        if a > 0:
+            msg.append("Higher aggressiveness increases comfort drift (less stable).")
+        else:
+            msg.append("Higher aggressiveness reduces comfort drift (more stable).")
 
-            if b > 0:
-                msg.append("Higher inertia may worsen drift slightly (too sluggish).")
-            else:
-                msg.append("Higher inertia improves stability (responds faster).")
+        if b > 0:
+            msg.append("Higher inertia may worsen drift slightly (too sluggish).")
+        else:
+            msg.append("Higher inertia improves stability (responds faster).")
 
-            msg.append(
-                "System continues to refine model with every new heating session."
-            )
-            return msg
+        msg.append("System continues to refine model with every new heating session.")
+        return msg
 
-        except Exception as e:
-            _LOGGER.error("ML: Error generating learned recommendations: %s", e)
-            return ["Error generating recommendations."]
-
-    # ----------------------------------------------------------------------
-    # Public Info
-    # ----------------------------------------------------------------------
     def get_learning_summary(self) -> Dict[str, Any]:
         """Return current learning summary and model state."""
         return {
