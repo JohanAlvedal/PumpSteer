@@ -6,7 +6,6 @@ from homeassistant.core import callback
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
-# Import your OptionsFlowHandler here
 from .options_flow import PumpSteerOptionsFlowHandler
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,10 +34,8 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # Add hardcoded entities to user_input
             combined_data = {**user_input, **HARDCODED_ENTITIES}
 
-            # Validate that all entities exist
             errors = await self._validate_entities(combined_data)
 
             if not errors:

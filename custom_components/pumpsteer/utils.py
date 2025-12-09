@@ -284,7 +284,6 @@ def safe_parse_temperature_forecast(
             parse_errors.append((i, temp_str, str(e)))
             continue
 
-    # Log warnings for problems
     if parse_errors:
         _LOGGER.warning("Temperature parsing errors: %s", parse_errors)
 
@@ -347,7 +346,6 @@ def validate_required_entities(
         "holiday_end_datetime_entity": "Holiday End DateTime",
     }
 
-    # Check required entities
     for entity_key, description in required_entities.items():
         entity_id = config.get(entity_key)
         if not entity_id:
@@ -358,7 +356,6 @@ def validate_required_entities(
         if error:
             errors.append(error)
 
-    # Check optional entities (log warnings only)
     for entity_key, description in optional_entities.items():
         entity_id = config.get(entity_key)
         if entity_id:
@@ -443,7 +440,6 @@ def safe_get_entity_state_with_description(
 
     state = entity.state
 
-    # Type check if specified
     if expected_type is not None:
         try:
             expected_type(state)
@@ -547,7 +543,6 @@ def log_entity_diagnostics(hass: HomeAssistant, entity_id: str) -> None:
 
     if entity.attributes:
         _LOGGER.debug("  Attributes: %s", list(entity.attributes.keys()))
-        # Log some important attributes
         for attr in ["unit_of_measurement", "device_class", "friendly_name"]:
             if attr in entity.attributes:
                 _LOGGER.debug("    %s: %s", attr, entity.attributes[attr])

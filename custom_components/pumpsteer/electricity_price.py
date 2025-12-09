@@ -1,5 +1,3 @@
-# electricity_price.py
-
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List
@@ -10,7 +8,6 @@ from homeassistant.components.recorder.history import get_significant_states
 from homeassistant.core import HomeAssistant
 from homeassistant.util.dt import now as dt_now
 
-# === CORRECTED IMPORT - all multipliers included ===
 from .settings import (
     ABSOLUTE_CHEAP_LIMIT,
     CHEAP_MULTIPLIER,
@@ -22,8 +19,8 @@ from .settings import (
     MIN_SAMPLES_FOR_CLASSIFICATION,
     NORMAL_MULTIPLIER,
     PRICE_CATEGORIES,
-    VERY_CHEAP_MULTIPLIER,  # ← ADDED
-    VERY_EXPENSIVE_MULTIPLIER,  # ← ADDED
+    VERY_CHEAP_MULTIPLIER,
+    VERY_EXPENSIVE_MULTIPLIER,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,19 +38,16 @@ def validate_price_list(
     if not price_list or len(price_list) < min_samples:
         return False
 
-    # Check for None values in the list
     if any(p is None for p in price_list):
         _LOGGER.warning("Found None values in price list")
         return False
 
-    # Ensure all values can be converted to floats (are numeric)
     try:
         float_prices = [float(p) for p in price_list]
     except (ValueError, TypeError) as e:
         _LOGGER.error("Non-numeric values found in price list: %s", e)
         return False
 
-    # Log warnings for unusual (but not necessarily invalid) price values
     negative_prices = [p for p in float_prices if p < 0]
     if negative_prices:
         _LOGGER.warning("Found %d negative prices in dataset", len(negative_prices))
@@ -80,7 +74,6 @@ def classify_prices(
     if percentiles is None:
         percentiles = DEFAULT_PERCENTILES
 
-    # Validate the input price list before attempting classification
     if not validate_price_list(price_list):
         _LOGGER.debug(
             "Invalid price list for classification (length: %d)",
@@ -94,35 +87,30 @@ def classify_prices(
 
     price_array = np.array(price_list)
 
-    # Filter out negative prices for percentile calculation
     positive_prices = price_array[price_array >= 0]
 
-    # Calculate thresholds only for non-negative prices
     if len(positive_prices) > 0:
         thresholds = np.percentile(positive_prices, percentiles)
     else:
         # If all prices are negative, all are classified as 'negative_price'
         return ["negative_price"] * len(price_list)
 
-    # Use NumPy for efficient classification based on thresholds
     categories_positive = np.select(
         [
-            positive_prices
-            < thresholds[0],  # Prices below the first percentile threshold
-            positive_prices < thresholds[1],  # Prices between the first and second
-            positive_prices < thresholds[2],  # Prices between the second and third
-            positive_prices < thresholds[3],  # Prices between the third and fourth
+            positive_prices < thresholds[0],
+            positive_prices < thresholds[1],
+            positive_prices < thresholds[2],
+            positive_prices < thresholds[3],
         ],
         [
             "very_cheap",
             "cheap",
             "normal",
             "expensive",
-        ],  # Categories for the above conditions
-        default="very_expensive",  # Default category for prices above the last threshold
+        ],
+        default="very_expensive",
     )
 
-    # Create the final result list by combining negative and positive classifications
     final_categories = []
     positive_index = 0
     for price in price_list:
@@ -149,7 +137,6 @@ def classify_single_price_hybrid(price: float, avg_price: float) -> str:
     if price < 0:
         return "negative_price"
 
-    # Calculate all thresholds based on average price and multipliers
     very_cheap_threshold = avg_price * VERY_CHEAP_MULTIPLIER
     cheap_threshold = avg_price * CHEAP_MULTIPLIER
     normal_threshold = avg_price * NORMAL_MULTIPLIER
@@ -169,7 +156,7 @@ def classify_single_price_hybrid(price: float, avg_price: float) -> str:
     if price <= very_expensive_threshold:
         return "very_expensive"
 
-    # Prices above 300% of average - extremely high
+    # Prices above 300% of average are classified as extremely high
     return "extreme"
 
 
@@ -189,10 +176,8 @@ async def async_hybrid_classify_with_history(
         # If the current price list is invalid, return "unknown" categories
         return ["unknown"] * len(price_list)
 
-    end_time = dt_now()  # Current time
-    start_time = end_time - timedelta(
-        hours=trailing_hours
-    )  # Start time for historical data fetch
+    end_time = dt_now()
+    start_time = end_time - timedelta(hours=trailing_hours)
 
     recorder = get_instance(hass)
 
@@ -201,7 +186,7 @@ async def async_hybrid_classify_with_history(
 
     history = await recorder.async_add_executor_job(get_price_history)
 
-    states = history.get(price_entity_id, [])  # Extract states for the specific entity
+    states = history.get(price_entity_id, [])
     trailing_prices = []
 
     # Process historical states to extract valid numeric prices
@@ -234,7 +219,6 @@ async def async_hybrid_classify_with_history(
         )
         return classify_prices(price_list)
 
-    # CORRECTED CLASSIFICATION LOGIC - using all multipliers consistently
     result = []
     for price in price_list:
         result.append(classify_single_price_hybrid(price, avg_price))
@@ -307,7 +291,7 @@ def count_categories(price_list: List[float]) -> Dict[str, int]:
     counts = {category: 0 for category in PRICE_CATEGORIES}
     counts["unknown"] = 0
     counts["negative_price"] = 0
-    counts["extreme"] = 0  # Added for new extreme category
+    counts["extreme"] = 0
 
     for category in categories:
         counts[category] += 1
@@ -340,9 +324,8 @@ def find_cheapest_hours(price_list: List[float], num_hours: int = 1) -> List[int
 
     # Pair each price with its original index
     indexed_prices = [(i, price) for i, price in enumerate(price_list)]
-    # Sort by price in ascending order
+
     indexed_prices.sort(key=lambda x: x[1])
-    # Return the indices of the cheapest hours
     return [i for i, _ in indexed_prices[: min(num_hours, len(indexed_prices))]]
 
 
@@ -354,15 +337,9 @@ def find_most_expensive_hours(price_list: List[float], num_hours: int = 1) -> Li
     if not price_list or num_hours <= 0:
         return []
 
-    # Pair each price with its original index
     indexed_prices = [(i, price) for i, price in enumerate(price_list)]
-    # Sort by price in descending order
     indexed_prices.sort(key=lambda x: x[1], reverse=True)
-    # Return the indices of the most expensive hours
     return [i for i, _ in indexed_prices[: min(num_hours, len(indexed_prices))]]
-
-
-# === PumpSteer-specific functions ===
 
 
 async def async_get_forecast_prices(
@@ -371,7 +348,6 @@ async def async_get_forecast_prices(
     """
     Retrieve future electricity prices for PumpSteer's 6-hour forecast.
     """
-    # Get entity's attributes which often contain future prices
     state = hass.states.get(price_entity_id)
     if not state:
         _LOGGER.warning("Could not find entity: %s", price_entity_id)
@@ -424,11 +400,8 @@ async def async_get_forecast_prices(
                 _LOGGER.debug("Skipping invalid price data: %s", e)
                 continue
 
-    # Sort by time
     forecast_prices.sort(key=lambda x: x["timestamp"])
     return forecast_prices[:hours_ahead]
-
-
 
 
 def calculate_boost_potential(
