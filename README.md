@@ -1,29 +1,28 @@
 # PumpSteer
 
-PumpSteer is a custom Home Assistant integration that dynamically optimizes your heat pump by manipulating the outdoor temperature sensor input. It helps save energy and money by adjusting your heating. 
-
-**This control system regulates heat supply solely based on outdoor temperature and lacks direct integration with your existing heating system. Therefore, it requires that the basic settings in your house is ok. 
+PumpSteer is a custom Home Assistant integration that optimizes your heat pump in order to reduce your electric bill when using dynamic pricing. The heat pump is controlled via the outdoor temperature sensor input. A secondary benefit is improved comfort by reducing indoor temperature swings due to weather. 
 
 <a href="https://www.buymeacoffee.com/alvjo" target="_blank">
   <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 200px !important;">
 </a>
 
-
 <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=https%3A%2F%2Fgithub.com%2FJohanAlvedal%2FPumpSteer%2Ftree%2Fmain" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Open your Home Assistant instance and start setting up a new integration." /></a>
 
 ---
 
-## ⚠️ Disclaimer 
+## ⚠️ Disclaimer
 
-I'm not an expert in programming, energy systems, or automation. This setup is based on personal experiments and use. I cannot guarantee it will work for everyone, and I take no responsibility for anything.
+You use this integration at your own risk. Heating is a critical system in your home, and incorrect settings may lead to discomfort or damage.
 
-**Use at your own risk and thoroughly test it in your environment.**
+Do not use PumpSteer if your heating system is not performing adequately.
+
+Only use PumpSteer if you understand how it works and have verified that it functions correctly in your specific setup. Always monitor indoor temperatures and system behavior after installation.
 
 ---
 
 ## 🗃️ Recorder Data Requirement
 
-PumpSteer calculates price levels using 72 hours of raw electricity price history from Home Assistant's recorder. Long-term statistics are not used, so ensure the recorder keeps at least three days off data
+PumpSteer calculates price levels using 72 hours of raw electricity price history from the Home Assistant recorder. Long-term statistics are not used, so ensure the recorder keeps at least three days off data
 
 ---
 
@@ -35,43 +34,42 @@ PumpSteer calculates price levels using 72 hours of raw electricity price histor
 
 ![PumpSteer Price & Holiday](docs/img/04.png)
 
-
 ---
 
 ## ✅ Features
 
-* 🔧 Smart virtual control of outdoor temperature
+* 🔧 Smart control of outdoor temperature
 * 🌡️ Dynamic comfort control using:
 
   * Indoor temperature
   * Target indoor temperature
   * Electricity price forecast
-  * Temperature forecast (comma-separated list)
+  * Weather forecast 
   * Thermal inertia
 * 💸 Electricity price adjustment via Nordpool or other sensor
-* 🧊 Braking mode: limits heating during high prices
+* 🧊 Braking mode: limits heating when power is expensive
 * ☀️ Summer mode: disables heating control during warm weather
 * 🏝️ Holiday mode: temporarily reduces temperature when away
 * ❄️ Precool: pauses heating ahead of forecasted warm weather
 * 📈 Switchable price model (`hybrid` or `percentiles`)
 * 🤖 ML analysis: learns how your house responds (session-based) (beta, work in progress)
-* 🔁 Auto-adjustment of `house_inertia` (if enabled beta, work in progress)
+* 🔁 Auto-adjustment of `house_inertia` (beta, disabled by default, work in progress)
 * 🧠 Recommendations for improved comfort/savings balance (beta, work in progress)
 * ⚙️ Adjustable heating and braking compensation factors
 * 🎛️ Fine-tuning via `input_number`, `input_text`, `input_boolean`, `input_datetime`
 * 🖼️ Extra sensors for UI visualization
 
-> 💡 **Note:** Holiday mode is only active when the outdoor temperature is below the summer threshold.
+> 💡 **Note:** Holiday mode is only active when the outdoor temperature above the summer threshold.
 
 ## ❄️ Precool Mode
 
-When the hourly temperature forecast shows that any of the next 24 hours will exceed the summer threshold, PumpSteer enters *precool* mode. It sends the braking temperature to the heat pump so heating[...]
+When the weather forecast shows temperatures exceeding the summer threshold in any of the next 24 hours, PumpSteer enters *precool* mode which turns down the heat in advance.
 
 ---
 
 ## 🔧 Installation via HACS (Custom Repository)
 
-If PumpSteer is not yet available in HACS:
+If PumpSteer is not yet available in HACS, so you need to add it as a custom repository:
 
 1. Go to **HACS > ⋮ > Custom Repositories**
 2. Add: `https://github.com/JohanAlvedal/PumpSteer`
