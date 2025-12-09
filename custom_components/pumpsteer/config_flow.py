@@ -25,12 +25,12 @@ HARDCODED_ENTITIES = {
 
 
 class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for pumpsteer."""
+    """Handle a config flow for pumpsteer"""
 
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step of the config flow."""
+        """Handle the initial step of the config flow"""
         errors = {}
 
         if user_input is not None:
@@ -60,7 +60,7 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _validate_entities(self, user_input):
-        """Validate that all required entities exist and are available."""
+        """Validate that all required entities exist and are available"""
         errors = {}
 
         # Only the entities that the user actually selects
@@ -113,11 +113,11 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return errors
 
     async def _entity_exists(self, entity_id: str) -> bool:
-        """Check if entity exists in Home Assistant."""
+        """Check if entity exists in Home Assistant"""
         return self.hass.states.get(entity_id) is not None
 
     async def _entity_available(self, entity_id: str) -> bool:
-        """Check if entity is available (not unavailable or unknown)."""
+        """Check if entity is available (not unavailable or unknown)"""
         entity = self.hass.states.get(entity_id)
         if not entity:
             return False
@@ -129,11 +129,11 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         ]
 
     def is_matching(self, other_flow: vol.Self) -> bool:
-        """Return True if other_flow is matching this flow."""
+        """Return True if other_flow is matching this flow"""
         raise NotImplementedError
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """Get the options flow for this handler."""
+        """Get the options flow for this handler"""
         return PumpSteerOptionsFlowHandler()

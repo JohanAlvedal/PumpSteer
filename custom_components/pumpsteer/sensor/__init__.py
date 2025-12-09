@@ -11,7 +11,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Register both control and ML analysis sensors."""
+    """Register both control and ML analysis sensors"""
     sensor = PumpSteerSensor(hass, config_entry)
     ml_sensor = PumpSteerMLSensor(hass, config_entry)
     async_add_entities([sensor, ml_sensor], update_before_add=True)

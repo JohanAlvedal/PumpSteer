@@ -27,10 +27,10 @@ ML_RELATED_ENTITIES = {
 
 
 class PumpSteerMLSensor(Entity):
-    """Sensor that displays insights and learning results from PumpSteer ML."""
+    """Sensor that displays insights and learning results from PumpSteer ML"""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
-        """Initialize ML sensor."""
+        """Initialize ML sensor"""
         self.hass = hass
         self._attr_name = "PumpSteer ML Analysis"
         self._attr_unique_id = f"{config_entry.entry_id}_ml_analysis"
@@ -72,7 +72,7 @@ class PumpSteerMLSensor(Entity):
 
     @property
     def icon(self) -> str:
-        """Dynamic icon."""
+        """Dynamic icon"""
         if self._state == "error":
             return "mdi:alert-circle"
         if self._state == "collecting":
@@ -84,13 +84,13 @@ class PumpSteerMLSensor(Entity):
         return "mdi:brain"
 
     async def async_added_to_hass(self):
-        """Load ML data on startup."""
+        """Load ML data on startup"""
         if self.ml and hasattr(self.ml, "async_load_data"):
             await self.ml.async_load_data()
             _LOGGER.debug("ML sensor: Data loaded successfully")
 
     async def async_will_remove_from_hass(self):
-        """Clean up when entity is removed."""
+        """Clean up when entity is removed"""
         if self.ml and hasattr(self.ml, "async_shutdown"):
             await self.ml.async_shutdown()
 
@@ -98,7 +98,7 @@ class PumpSteerMLSensor(Entity):
         await super().async_will_remove_from_hass()
 
     def _get_control_system_data(self) -> Dict[str, Any]:
-        """Fetch core control parameters from HA entities."""
+        """Fetch core control parameters from HA entities"""
 
         autotune_state = self.hass.states.get(ML_RELATED_ENTITIES["autotune_boolean"])
         autotune_on = autotune_state and autotune_state.state == "on"
@@ -127,7 +127,7 @@ class PumpSteerMLSensor(Entity):
         }
 
     def _determine_state(self, insights: Dict[str, Any]) -> str:
-        """Decide what the main state string should be."""
+        """Decide what the main state string should be"""
         summary = insights.get("summary", {}) or {}
         total = summary.get("total_sessions", 0) or 0
         coeffs = summary.get("coefficients")
@@ -146,7 +146,7 @@ class PumpSteerMLSensor(Entity):
     def _build_attributes(
         self, insights: Dict[str, Any], control_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Build a clear and concise attribute dictionary."""
+        """Build a clear and concise attribute dictionary"""
         summary = insights.get("summary", {})
         recs = insights.get("recommendations", [])
 
@@ -174,7 +174,7 @@ class PumpSteerMLSensor(Entity):
         return {k: v for k, v in attributes.items() if v is not None}
 
     async def async_update(self):
-        """Refresh ML information and update sensor attributes."""
+        """Refresh ML information and update sensor attributes"""
         if not self.ml:
             self._state = STATE_UNAVAILABLE
             self._attributes = {
@@ -207,6 +207,6 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up PumpSteer ML sensor entity."""
+    """Set up PumpSteer ML sensor entity"""
     ml_sensor = PumpSteerMLSensor(hass, config_entry)
     async_add_entities([ml_sensor], update_before_add=True)

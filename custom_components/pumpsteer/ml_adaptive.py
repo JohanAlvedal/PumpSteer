@@ -1,12 +1,8 @@
-###############################################################################
-# PumpSteer - ML Adaptive Engine (Learning Version)
-# Author: Johan Älvedal / GPT-5 Assistant
-# Description:
 #   This version extends the original ML collector with richer data logging,
 #   session summaries, and a simple self-learning regression model that
 #   derives optimal inertia and aggressiveness based on comfort drift and
 #   duration performance.
-###############################################################################
+
 
 from datetime import datetime
 from pathlib import Path
@@ -37,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class PumpSteerMLCollector:
-    """Collects, analyzes, and learns from PumpSteer operation sessions."""
+    """Collects, analyzes, and learns from PumpSteer operation sessions"""
 
     def __init__(self, hass: HomeAssistant, data_file_path: str = ML_DATA_FILE_PATH):
         self.hass = hass
@@ -57,7 +53,7 @@ class PumpSteerMLCollector:
         )
 
     async def async_load_data(self) -> None:
-        """Load previously saved learning data from disk."""
+        """Load previously saved learning data from disk"""
         await self.hass.async_add_executor_job(self._load_data_sync)
         _LOGGER.info(
             "ML: Loaded %d sessions from %s",
@@ -104,7 +100,7 @@ class PumpSteerMLCollector:
             json.dump(data, f, indent=2)
 
     def start_session(self, initial_data: Dict[str, Any]) -> None:
-        """Start a new learning session."""
+        """Start a new learning session"""
         if self.current_session is not None:
             self.end_session("interrupted")
 
@@ -119,7 +115,7 @@ class PumpSteerMLCollector:
         )
 
     def update_session(self, update_data: Dict[str, Any]) -> None:
-        """Add detailed data points to the ongoing session."""
+        """Add detailed data points to the ongoing session"""
         if self.current_session is None:
             return
 
@@ -150,7 +146,7 @@ class PumpSteerMLCollector:
     def end_session(
         self, reason: str = "normal", final_data: Optional[Dict[str, Any]] = None
     ) -> None:
-        """Close the session, summarize it, and learn from results."""
+        """Close the session, summarize it, and learn from results"""
         if self.current_session is None:
             return
 
@@ -233,7 +229,7 @@ class PumpSteerMLCollector:
         self.hass.async_create_task(self.async_save_data())
 
     def _update_learning_model(self) -> None:
-        """Perform a simple regression analysis on collected sessions."""
+        """Perform a simple regression analysis on collected sessions"""
         heating_sessions = [
             s
             for s in self.learning_sessions
@@ -315,7 +311,7 @@ class PumpSteerMLCollector:
         )
 
     def get_recommendations(self) -> List[str]:
-        """Generate adaptive recommendations based on learned model."""
+        """Generate adaptive recommendations based on learned model"""
         if not self.model_coefficients:
             return ["System is still learning — need more sessions."]
 
@@ -346,7 +342,7 @@ class PumpSteerMLCollector:
         return msg
 
     def get_learning_summary(self) -> Dict[str, Any]:
-        """Return current learning summary and model state."""
+        """Return current learning summary and model state"""
         return {
             "summary": self.learning_summary,
             "coefficients": self.model_coefficients,
@@ -355,7 +351,7 @@ class PumpSteerMLCollector:
         }
 
     async def async_shutdown(self) -> None:
-        """Graceful shutdown and data save."""
+        """Graceful shutdown and data save"""
         if self.current_session is not None:
             self.end_session("shutdown")
         await self.async_save_data()
