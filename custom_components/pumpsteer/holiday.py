@@ -49,7 +49,7 @@ def is_holiday_mode_active(
         _LOGGER.debug(
             "[PumpSteer - Holiday] Holiday mode boolean entity not configured. Skipping boolean check."
         )
-        pass  # Continue to check the date range if the boolean is not configured
+        # Continue to check the date range if the boolean is not configured
 
     # 2. Check Date Range (Existing Logic)
     # This part verifies if both start and end datetime entities are configured.
@@ -107,15 +107,15 @@ def is_holiday_mode_active(
                 HOLIDAY_TEMP,
             )
             return True
-        else:
-            _LOGGER.debug(
-                "[PumpSteer - Holiday] Holiday mode inactive (date range). Current: %s, "
-                "Start: %s, End: %s",
-                current_time,
-                holiday_start_time,
-                holiday_end_time,
-            )
-            return False
+
+        _LOGGER.debug(
+            "[PumpSteer - Holiday] Holiday mode inactive (date range). Current: %s, "
+            "Start: %s, End: %s",
+            current_time,
+            holiday_start_time,
+            holiday_end_time,
+        )
+        return False
 
     except Exception as e:
         # Catch any unexpected errors during datetime parsing or comparison.
