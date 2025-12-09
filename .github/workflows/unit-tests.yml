@@ -6,7 +6,6 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -25,11 +24,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio
-          # För Home Assistant custom integrations är detta plugin bra:
+          pip install pytest pytest-asyncio pylint
+          # Useful plugin for home assistant
           pip install pytest-homeassistant-custom-component
-          # Lägg till din integrationens beroenden här vid behov
           pip install homeassistant
+
+      - name: Python Lint
+        run: |
+          pylint $(git ls-files '*.py')
 
       - name: Run tests (if available)
         run: |
