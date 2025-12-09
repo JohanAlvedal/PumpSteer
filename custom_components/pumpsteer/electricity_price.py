@@ -323,7 +323,7 @@ def find_cheapest_hours(price_list: List[float], num_hours: int = 1) -> List[int
         return []
 
     # Pair each price with its original index
-    indexed_prices = [(i, price) for i, price in enumerate(price_list)]
+    indexed_prices = list(enumerate(price_list))
 
     indexed_prices.sort(key=lambda x: x[1])
     return [i for i, _ in indexed_prices[: min(num_hours, len(indexed_prices))]]
@@ -337,7 +337,7 @@ def find_most_expensive_hours(price_list: List[float], num_hours: int = 1) -> Li
     if not price_list or num_hours <= 0:
         return []
 
-    indexed_prices = [(i, price) for i, price in enumerate(price_list)]
+    indexed_prices = list(enumerate(price_list))
     indexed_prices.sort(key=lambda x: x[1], reverse=True)
     return [i for i, _ in indexed_prices[: min(num_hours, len(indexed_prices))]]
 
