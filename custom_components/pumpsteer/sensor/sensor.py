@@ -121,7 +121,6 @@ class PumpSteerSensor(Entity):
             sw_version=SW_VERSION,
         )
 
-
         self.ml_collector = None
         self._ml_session_started = False
         self._ml_session_start_mode = None
