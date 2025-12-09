@@ -23,7 +23,7 @@ def get_version() -> str:
     """Load integration version from manifest.json."""
     manifest_path = Path(__file__).resolve().parent / "manifest.json"
     try:
-        with open(manifest_path) as manifest_file:
+        with open(manifest_path, encoding="utf-8") as manifest_file:
             data = json.load(manifest_file)
     except FileNotFoundError:
         _LOGGER.error("manifest.json not found at %s", manifest_path)
@@ -143,7 +143,9 @@ def get_attr(
     try:
         entity = hass.states.get(entity_id)
         if not entity:
-            _LOGGER.warning("Entity %s not found for attribute %s", entity_id, attribute)
+            _LOGGER.warning(
+                "Entity %s not found for attribute %s", entity_id, attribute
+            )
             return default
 
         if not hasattr(entity, "attributes") or entity.attributes is None:
@@ -213,23 +215,25 @@ def safe_get_price_data(
         _LOGGER.error("No valid electricity prices found in list")
         return 0.0, 0.0, 0.0
 
+    current_price = valid_prices[0]
+
     if invalid_count > 0:
         _LOGGER.warning(
             "Found %s invalid price values in list of %s", invalid_count, len(prices)
         )
 
-    # Calculate current price using the original index
+        # Calculate current price using the original index
         if (
             current_hour is not None
             and 0 <= current_hour < len(converted_prices)
             and converted_prices[current_hour] is not None
         ):
-            current_price = converted_prices[current_hour]  # type: ignore[assignment]
+            current_price = converted_prices[current_hour]
         else:
-            current_price = valid_prices[0]  # Fallback to first valid price
             if current_hour is not None:
                 _LOGGER.warning(
-                    "Invalid current_hour %s or price missing, using first price", current_hour
+                    "Invalid current_hour %s or price missing, using first price",
+                    current_hour,
                 )
 
     max_price = max(valid_prices)
@@ -238,7 +242,10 @@ def safe_get_price_data(
 
     _LOGGER.debug(
         "Price data: current=%.3f, max=%.3f, min=%.3f, factor=%.3f",
-        current_price, max_price, min_price, price_factor
+        current_price,
+        max_price,
+        min_price,
+        price_factor,
     )
 
     return current_price, max_price, price_factor
@@ -361,7 +368,7 @@ def validate_required_entities(
     for entity_key, description in required_entities.items():
         entity_id = config.get(entity_key)
         if not entity_id:
-            errors.append("Missing required entity: %s (%s)" % (description, entity_key))
+            errors.append(f"Missing required entity: {description} ({entity_key})")
             continue
 
         error = _validate_single_entity(hass, entity_id, description, strict)
@@ -395,12 +402,12 @@ def _validate_single_entity(
         Error message or None if OK
     """
     if not entity_id or not isinstance(entity_id, str):
-        return "Invalid entity ID for %s: %s" % (description, entity_id)
+        return f"Invalid entity ID for {description}: {entity_id}"
 
     try:
         entity = hass.states.get(entity_id)
         if not entity:
-            return "Entity not found: %s (%s)" % (description, entity_id)
+            return f"Entity not found: {description} ({entity_id})"
 
         if check_state and entity.state in [
             STATE_UNAVAILABLE,
@@ -408,10 +415,10 @@ def _validate_single_entity(
             "unavailable",
             "unknown",
         ]:
-            return "Entity unavailable: %s (%s) - state: %s" % (description, entity_id, entity.state)
+            return f"Entity unavailable: {description} ({entity_id}) - state: {entity.state}"
 
     except Exception as e:
-        return "Error validating entity %s (%s): %s" % (description, entity_id, e)
+        return f"Error validating entity {description} ({entity_id}): {e}"
 
     return None
 
@@ -451,7 +458,9 @@ def safe_get_entity_state_with_description(
             "unknown",
             None,
         ]:
-            _LOGGER.warning("Entity %s (%s) is %s", entity_id, description, entity.state)
+            _LOGGER.warning(
+                "Entity %s (%s) is %s", entity_id, description, entity.state
+            )
             return None
 
         state = entity.state
@@ -462,7 +471,11 @@ def safe_get_entity_state_with_description(
                 expected_type(state)
             except (ValueError, TypeError):
                 _LOGGER.warning(
-                    "Entity %s (%s) state '%s' cannot be converted to %s", entity_id, description, state, expected_type.__name__
+                    "Entity %s (%s) state '%s' cannot be converted to %s",
+                    entity_id,
+                    description,
+                    state,
+                    expected_type.__name__,
                 )
                 return None
 
@@ -532,7 +545,9 @@ def safe_numeric_conversion(
         converted = target_type(value)
         return converted
     except (ValueError, TypeError) as e:
-        _LOGGER.debug("Failed to convert '%s' to %s: %s", value, target_type.__name__, e)
+        _LOGGER.debug(
+            "Failed to convert '%s' to %s: %s", value, target_type.__name__, e
+        )
         return default
 
 
@@ -583,10 +598,10 @@ def create_error_summary(errors: List[str], max_display: int = 5) -> str:
 
     if len(errors) <= max_display:
         return "; ".join(errors)
-    else:
-        displayed = errors[:max_display]
-        remaining = len(errors) - max_display
-        return f"{'; '.join(displayed)}; and {remaining} more..."
+
+    displayed = errors[:max_display]
+    remaining = len(errors) - max_display
+    return f"{'; '.join(displayed)}; and {remaining} more..."
 
 
 def validate_config_completeness(config: dict) -> Tuple[bool, List[str]]:
@@ -614,7 +629,7 @@ def validate_config_completeness(config: dict) -> Tuple[bool, List[str]]:
     # Check that values are strings
     for key, value in config.items():
         if key.endswith("_entity") and value is not None and not isinstance(value, str):
-            issues.append("Config key %s should be string, got %s" % (key, type(value)))
+            issues.append(f"Config key {key} should be string, got {type(value)}")
 
     return len(issues) == 0, issues
 

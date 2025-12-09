@@ -1,5 +1,5 @@
-import voluptuous as vol
 import logging
+import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
@@ -21,9 +21,7 @@ HARDCODED_ENTITIES = {
 
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self) -> None:
-        """Initialize options flow."""
-        super().__init__()
+    """Handle options flow for pumpsteer."""
 
     async def async_step_init(self, user_input=None):
         """Manage the options flow."""
@@ -109,13 +107,13 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     _LOGGER.warning(
                         "Hardcoded entity not found: %s (%s) - Check package configuration",
                         entity_id,
-                        description
+                        description,
                     )
                 elif not await self._entity_available(entity_id):
                     _LOGGER.warning(
                         "Hardcoded entity unavailable: %s (%s) - Check package configuration",
                         entity_id,
-                        description
+                        description,
                     )
 
         return errors

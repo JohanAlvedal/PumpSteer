@@ -8,13 +8,15 @@
 #   duration performance.
 ###############################################################################
 
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, Optional, List
+
 import json
 import logging
 import statistics
 import numpy as np
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, Optional, List
+
 
 from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
@@ -66,7 +68,7 @@ class PumpSteerMLCollector:
                 self.data_file,
             )
         except Exception as e:
-            _LOGGER.error(f"ML: Failed to load data: {e}")
+            _LOGGER.error("ML: Failed to load data: %s", e)
             self.learning_sessions = []
 
     def _load_data_sync(self) -> None:
@@ -74,7 +76,7 @@ class PumpSteerMLCollector:
             _LOGGER.debug("ML: No previous data found.")
             return
 
-        with open(self.data_file, "r") as f:
+        with open(self.data_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         self.learning_sessions = data.get("sessions", [])
@@ -84,7 +86,9 @@ class PumpSteerMLCollector:
         file_version = data.get("version", "unknown")
         if file_version != ML_DATA_VERSION:
             _LOGGER.warning(
-                "ML: Data version mismatch (found %s, expected %s)", file_version, ML_DATA_VERSION
+                "ML: Data version mismatch (found %s, expected %s)",
+                file_version,
+                ML_DATA_VERSION,
             )
 
     async def async_save_data(self) -> None:
@@ -105,7 +109,7 @@ class PumpSteerMLCollector:
         }
 
         Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(self.data_file, "w") as f:
+        with open(self.data_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     # ----------------------------------------------------------------------
@@ -123,7 +127,7 @@ class PumpSteerMLCollector:
         }
 
         _LOGGER.debug(
-            "ML: New session started (mode=%s)", initial_data.get('mode', 'unknown')
+            "ML: New session started (mode=%s)", initial_data.get("mode", "unknown")
         )
 
     def update_session(self, update_data: Dict[str, Any]) -> None:
@@ -172,10 +176,26 @@ class PumpSteerMLCollector:
             return
 
         try:
-            indoor_temps = [u["data"].get("indoor_temp") for u in updates if u["data"].get("indoor_temp") is not None]
-            outdoor_temps = [u["data"].get("outdoor_temp") for u in updates if u["data"].get("outdoor_temp") is not None]
-            prices = [u["data"].get("price_now") for u in updates if u["data"].get("price_now") is not None]
-            targets = [u["data"].get("target_temp") for u in updates if u["data"].get("target_temp") is not None]
+            indoor_temps = [
+                u["data"].get("indoor_temp")
+                for u in updates
+                if u["data"].get("indoor_temp") is not None
+            ]
+            outdoor_temps = [
+                u["data"].get("outdoor_temp")
+                for u in updates
+                if u["data"].get("outdoor_temp") is not None
+            ]
+            prices = [
+                u["data"].get("price_now")
+                for u in updates
+                if u["data"].get("price_now") is not None
+            ]
+            targets = [
+                u["data"].get("target_temp")
+                for u in updates
+                if u["data"].get("target_temp") is not None
+            ]
 
             first_temp = indoor_temps[0] if indoor_temps else 0
             last_temp = indoor_temps[-1] if indoor_temps else 0
@@ -197,7 +217,9 @@ class PumpSteerMLCollector:
                 "duration_minutes": round(duration_minutes, 1),
                 "temp_rise": round(temp_rise, 2),
                 "avg_price": round(avg_price, 3),
-                "avg_outdoor_temp": round(avg_outdoor, 1) if avg_outdoor is not None else None,
+                "avg_outdoor_temp": round(avg_outdoor, 1)
+                if avg_outdoor is not None
+                else None,
                 "comfort_drift": round(comfort_drift, 2),
                 "aggressiveness": aggressiveness,
                 "inertia": inertia,
@@ -212,7 +234,11 @@ class PumpSteerMLCollector:
 
             _LOGGER.info(
                 "ML: Session summary: ΔT=%.2f°C, drift=%.2f°C, dur=%.1fmin, aggr=%s, inertia=%s",
-                temp_rise, comfort_drift, duration_minutes, aggressiveness, inertia
+                temp_rise,
+                comfort_drift,
+                duration_minutes,
+                aggressiveness,
+                inertia,
             )
 
             # Trigger learning update
@@ -228,7 +254,9 @@ class PumpSteerMLCollector:
     def _update_learning_model(self) -> None:
         """Perform a simple regression analysis on collected sessions."""
         heating_sessions = [
-            s for s in self.learning_sessions if s.get("summary", {}).get("mode") == "heating"
+            s
+            for s in self.learning_sessions
+            if s.get("summary", {}).get("mode") == "heating"
         ]
 
         valid_summaries: List[Dict[str, Any]] = []
@@ -246,12 +274,16 @@ class PumpSteerMLCollector:
                 skipped_sessions += 1
                 continue
 
-            valid_summaries.append({
-                "comfort_drift": comfort_drift,
-                "duration_minutes": duration,
-                "aggressiveness": aggressiveness if aggressiveness is not None else 0,
-                "inertia": inertia if inertia is not None else 1.0,
-            })
+            valid_summaries.append(
+                {
+                    "comfort_drift": comfort_drift,
+                    "duration_minutes": duration,
+                    "aggressiveness": aggressiveness
+                    if aggressiveness is not None
+                    else 0,
+                    "inertia": inertia if inertia is not None else 1.0,
+                }
+            )
 
         if skipped_sessions:
             _LOGGER.warning(
@@ -264,18 +296,18 @@ class PumpSteerMLCollector:
             return
 
         try:
-            X = []
+            x = []
             y = []
             for summary in valid_summaries[-50:]:
                 aggr = summary.get("aggressiveness", 0)
                 inertia = summary.get("inertia", 1.0)
                 dur = summary.get("duration_minutes", 0)
                 drift = summary.get("comfort_drift", 0)
-                X.append([aggr, inertia, dur])
+                x.append([aggr, inertia, dur])
                 y.append(drift)
 
-            A = np.column_stack((np.array(X), np.ones(len(X))))
-            coeff, *_ = np.linalg.lstsq(A, np.array(y), rcond=None)
+            a = np.column_stack((np.array(x), np.ones(len(x))))
+            coeff, *_ = np.linalg.lstsq(a, np.array(y), rcond=None)
             self.model_coefficients = coeff.tolist()
 
             self.learning_summary = {
@@ -299,7 +331,7 @@ class PumpSteerMLCollector:
 
             _LOGGER.info(
                 "ML: Learning update complete — model coeff: %s",
-                self.learning_summary['coefficients']
+                self.learning_summary["coefficients"],
             )
 
         except Exception as e:
@@ -318,7 +350,9 @@ class PumpSteerMLCollector:
             a, b, c, d = coeff
 
             msg = []
-            msg.append(f"Learned model: drift ≈ {a:+.3f}·aggr + {b:+.3f}·inertia + {c:+.3f}·duration + {d:+.3f}")
+            msg.append(
+                f"Learned model: drift ≈ {a:+.3f}·aggr + {b:+.3f}·inertia + {c:+.3f}·duration + {d:+.3f}"
+            )
 
             if abs(a) > abs(b):
                 msg.append("→ Aggressiveness affects comfort more than inertia.")
@@ -326,7 +360,9 @@ class PumpSteerMLCollector:
                 msg.append("→ Inertia has stronger influence on comfort drift.")
 
             if a > 0:
-                msg.append("Higher aggressiveness increases comfort drift (less stable).")
+                msg.append(
+                    "Higher aggressiveness increases comfort drift (less stable)."
+                )
             else:
                 msg.append("Higher aggressiveness reduces comfort drift (more stable).")
 
@@ -335,7 +371,9 @@ class PumpSteerMLCollector:
             else:
                 msg.append("Higher inertia improves stability (responds faster).")
 
-            msg.append("System continues to refine model with every new heating session.")
+            msg.append(
+                "System continues to refine model with every new heating session."
+            )
             return msg
 
         except Exception as e:

@@ -4,7 +4,6 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 sys.path.append(str(Path(__file__).resolve().parent))
 
-import ha_test_stubs  # noqa: F401 - sets up Home Assistant stubs
 
 from custom_components.pumpsteer.sensor import sensor
 
@@ -22,13 +21,13 @@ class DummyConfigEntry:
 
 def test_build_attributes_basic():
     sensor_data = {
-        'aggressiveness': 3,
-        'inertia': 2,
-        'target_temp': 21.0,
-        'indoor_temp': 20.5,
-        'outdoor_temp': 5.0,
-        'summer_threshold': 15.0,
-        'outdoor_temp_forecast_entity': True,
+        "aggressiveness": 3,
+        "inertia": 2,
+        "target_temp": 21.0,
+        "indoor_temp": 20.5,
+        "outdoor_temp": 5.0,
+        "summer_threshold": 15.0,
+        "outdoor_temp_forecast_entity": True,
     }
     prices = [1.2, 1.5, 1.1, 1.3]
     current_price = 1.2
@@ -61,13 +60,13 @@ def test_build_attributes_basic():
 
 def test_decision_reason_very_cheap_heating():
     sensor_data = {
-        'aggressiveness': 3,
-        'inertia': 2,
-        'target_temp': 21.0,
-        'indoor_temp': 21.0,
-        'outdoor_temp': 5.0,
-        'summer_threshold': 15.0,
-        'outdoor_temp_forecast_entity': True,
+        "aggressiveness": 3,
+        "inertia": 2,
+        "target_temp": 21.0,
+        "indoor_temp": 21.0,
+        "outdoor_temp": 5.0,
+        "summer_threshold": 15.0,
+        "outdoor_temp_forecast_entity": True,
     }
     prices = [0.5, 0.6]
     current_price = 0.5
@@ -97,13 +96,13 @@ def test_decision_reason_very_cheap_heating():
 
 def test_decision_reason_precool():
     sensor_data = {
-        'aggressiveness': 3,
-        'inertia': 2,
-        'target_temp': 21.0,
-        'indoor_temp': 21.0,
-        'outdoor_temp': 5.0,
-        'summer_threshold': 15.0,
-        'outdoor_temp_forecast_entity': True,
+        "aggressiveness": 3,
+        "inertia": 2,
+        "target_temp": 21.0,
+        "indoor_temp": 21.0,
+        "outdoor_temp": 5.0,
+        "summer_threshold": 15.0,
+        "outdoor_temp_forecast_entity": True,
     }
     prices = [1.0, 1.2]
     current_price = 1.0
@@ -129,4 +128,3 @@ def test_decision_reason_precool():
         current_slot_index=0,
     )
     assert attrs["decision_reason"] == "precool - Triggered by pre-cool (warm forecast)"
-
