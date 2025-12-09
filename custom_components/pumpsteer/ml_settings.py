@@ -1,86 +1,66 @@
-# ml_settings.py - Machine Learning specific settings
-# Separate configuration file for ML functionality
-
 from typing import Final
 import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-# === ML VERSION INFO ===
 ML_MODULE_VERSION: Final[str] = "1.0.0"
 
-# === ML DATA COLLECTION ===
 ML_DATA_FILE_PATH: Final[str] = "/config/pumpsteer_ml_data.json"
-ML_MAX_SAVED_SESSIONS: Final[int] = 100  # Maximum sessions to keep in file
-ML_MAX_SESSION_UPDATES: Final[int] = 100  # Maximum updates per session in memory
-ML_TRIMMED_UPDATES: Final[int] = 50  # Trim to this many when max is reached
-ML_DATA_VERSION: Final[str] = "1.0"  # Data format version
+ML_MAX_SAVED_SESSIONS: Final[int] = 100
+ML_MAX_SESSION_UPDATES: Final[int] = 100
+ML_TRIMMED_UPDATES: Final[int] = 50
+ML_DATA_VERSION: Final[str] = "1.0"
 
-# === ML ANALYSIS THRESHOLDS ===
-ML_MIN_SESSIONS_FOR_ANALYSIS: Final[int] = 3  # Minimum sessions needed for analysis
-ML_MIN_SESSIONS_FOR_RECOMMENDATIONS: Final[int] = 5  # Minimum for recommendations
-ML_MIN_SESSIONS_FOR_AUTOTUNE: Final[int] = 5  # Minimum for auto-tune
-ML_MIN_HEATING_SESSIONS: Final[int] = 3  # Minimum heating sessions for analysis
-ML_ANALYSIS_RECENT_SESSIONS: Final[int] = 10  # How many recent sessions to analyze
+ML_MIN_SESSIONS_FOR_ANALYSIS: Final[int] = 3
+ML_MIN_SESSIONS_FOR_RECOMMENDATIONS: Final[int] = 5
+ML_MIN_SESSIONS_FOR_AUTOTUNE: Final[int] = 5
+ML_MIN_HEATING_SESSIONS: Final[int] = 3
+ML_ANALYSIS_RECENT_SESSIONS: Final[int] = 10
 
-# === ML SUCCESS CRITERIA ===
-ML_SUCCESS_DURATION_THRESHOLD: Final[float] = 90.0  # Minutes - under this = success
-ML_SUCCESS_TEMP_DIFF_THRESHOLD: Final[float] = 0.3  # °C - minimum temp diff for success
-ML_FAILURE_DURATION_THRESHOLD: Final[float] = 180.0  # Minutes - over this = failure
-ML_MIN_DATA_POINTS: Final[int] = 2  # Minimum data points for trend analysis
+ML_SUCCESS_DURATION_THRESHOLD: Final[float] = 90.0
+ML_SUCCESS_TEMP_DIFF_THRESHOLD: Final[float] = 0.3
+ML_FAILURE_DURATION_THRESHOLD: Final[float] = 180.0
+ML_MIN_DATA_POINTS: Final[int] = 2
 
-# === ML PERFORMANCE ANALYSIS ===
-ML_LONG_DURATION_THRESHOLD: Final[float] = 150.0  # Minutes - indicates slow house
-ML_SHORT_DURATION_THRESHOLD: Final[float] = 20.0  # Minutes - indicates fast house
-ML_HIGH_INERTIA_THRESHOLD: Final[float] = (
-    3.0  # House inertia >= 3.0 indicates slow response
-)
-ML_LOW_INERTIA_THRESHOLD: Final[float] = (
-    1.0  # House inertia <= 1.0 indicates fast response
-)
-ML_HIGH_AGGRESSIVENESS_THRESHOLD: Final[int] = 4  # Aggressiveness - high savings
-ML_LOW_AGGRESSIVENESS_THRESHOLD: Final[int] = 2  # Aggressiveness - comfort focus
+ML_LONG_DURATION_THRESHOLD: Final[float] = 150.0
+ML_SHORT_DURATION_THRESHOLD: Final[float] = 20.0
+ML_HIGH_INERTIA_THRESHOLD: Final[float] = 3.0
+ML_LOW_INERTIA_THRESHOLD: Final[float] = 1.0
+ML_HIGH_AGGRESSIVENESS_THRESHOLD: Final[int] = 4
+ML_LOW_AGGRESSIVENESS_THRESHOLD: Final[int] = 2
 
-# === ML RECOMMENDATION THRESHOLDS ===
-ML_EXCELLENT_SUCCESS_RATE: Final[float] = 85.0  # % - excellent performance
-ML_POOR_SUCCESS_RATE: Final[float] = 60.0  # % - needs improvement
-ML_HIGH_SUCCESS_RATE_THRESHOLD: Final[float] = 70.0  # % - aggressiveness too high
-ML_INERTIA_ADJUSTMENT_STEP: Final[float] = 0.5  # Step size for inertia adjustments
-ML_AGGRESSIVENESS_ADJUSTMENT_STEP: Final[int] = 1  # Step size for aggressiveness
+ML_EXCELLENT_SUCCESS_RATE: Final[float] = 85.0
+ML_POOR_SUCCESS_RATE: Final[float] = 60.0
+ML_HIGH_SUCCESS_RATE_THRESHOLD: Final[float] = 70.0
+ML_INERTIA_ADJUSTMENT_STEP: Final[float] = 0.5
+ML_AGGRESSIVENESS_ADJUSTMENT_STEP: Final[int] = 1
 
-# === ML AUTO-TUNE SETTINGS ===
-ML_AUTOTUNE_MIN_DAYS_BETWEEN: Final[int] = 2  # Days between auto-tune adjustments
-ML_DRIFT_HIGH_THRESHOLD: Final[float] = 0.3  # Temperature drift - increase gain
-ML_DRIFT_LOW_THRESHOLD: Final[float] = -0.3  # Temperature drift - decrease gain
-ML_GAIN_ADJUSTMENT_STEP: Final[float] = 0.05  # Step size for gain adjustments
-ML_MAX_INTEGRAL_GAIN: Final[float] = 1.0  # Maximum integral gain value
-ML_MIN_INTEGRAL_GAIN: Final[float] = 0.0  # Minimum integral gain value
+ML_AUTOTUNE_MIN_DAYS_BETWEEN: Final[int] = 2
+ML_DRIFT_HIGH_THRESHOLD: Final[float] = 0.3
+ML_DRIFT_LOW_THRESHOLD: Final[float] = -0.3
+ML_GAIN_ADJUSTMENT_STEP: Final[float] = 0.05
+ML_MAX_INTEGRAL_GAIN: Final[float] = 1.0
+ML_MIN_INTEGRAL_GAIN: Final[float] = 0.0
 
-# === ML HOUSE INERTIA AUTO-TUNE ===
-ML_INERTIA_MAX_VALUE: Final[float] = 5.0  # Maximum house inertia value
-ML_INERTIA_MIN_VALUE: Final[float] = 0.5  # Minimum house inertia value
+ML_INERTIA_MAX_VALUE: Final[float] = 5.0
+ML_INERTIA_MIN_VALUE: Final[float] = 0.5
 
-# === ML TREND DETECTION ===
-ML_WARMING_TREND_THRESHOLD: Final[float] = 0.8  # 80% of hours must be warmer
-ML_MIN_FORECAST_HOURS: Final[int] = 2  # Minimum hours for meaningful analysis
+ML_WARMING_TREND_THRESHOLD: Final[float] = 0.8
+ML_MIN_FORECAST_HOURS: Final[int] = 2
 
-# === ML SESSION LIMITS ===
-ML_LEARN_PATIENCE_SESSIONS: Final[int] = 10  # Wait this many before major changes
-ML_RECENT_SESSIONS_WINDOW: Final[int] = 10  # Window for recent performance analysis
+ML_LEARN_PATIENCE_SESSIONS: Final[int] = 10
+ML_RECENT_SESSIONS_WINDOW: Final[int] = 10
 
-# === ML NOTIFICATION SETTINGS ===
 ML_NOTIFICATION_PREFIX: Final[str] = "🤖 PumpSteer ML"
 ML_AUTOTUNE_NOTIFICATION_ID: Final[str] = "pumpsteer_autotune"
 ML_RECOMMENDATION_NOTIFICATION_ID: Final[str] = "pumpsteer_recommendation"
 
-# === ML HOME ASSISTANT ENTITY IDs ===
 ML_AUTOTUNE_BOOLEAN_ENTITY: Final[str] = "input_boolean.autotune_inertia"
 ML_HOUSE_INERTIA_ENTITY: Final[str] = "input_number.pumpsteer_house_inertia"
 ML_INTEGRAL_GAIN_ENTITY: Final[str] = "input_number.pumpsteer_integral_gain"
 
-# === ML LOGGING ===
-ML_DEBUG_MODE: Final[bool] = False  # Enable detailed ML debug logging
-ML_LOG_SESSION_DETAILS: Final[bool] = True  # Log detailed session information
+ML_DEBUG_MODE: Final[bool] = False
+ML_LOG_SESSION_DETAILS: Final[bool] = True
 
 
 def validate_ml_settings() -> None:
@@ -178,12 +158,7 @@ def get_ml_settings_info() -> dict:
     }
 
 
-# Run validation on import
-try:
-    validate_ml_settings()
-    _LOGGER.debug(
-        "PumpSteer ML settings loaded successfully (version %s)", ML_MODULE_VERSION
-    )
-except Exception as e:
-    _LOGGER.error("Failed to load PumpSteer ML settings: %s", e)
-    raise
+validate_ml_settings()
+_LOGGER.debug(
+    "PumpSteer ML settings loaded successfully (version %s)", ML_MODULE_VERSION
+)

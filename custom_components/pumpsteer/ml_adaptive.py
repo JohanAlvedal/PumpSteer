@@ -87,7 +87,7 @@ class PumpSteerMLCollector:
 
     async def async_save_data(self) -> None:
         await self.hass.async_add_executor_job(self._save_data_sync)
-     
+
     def _save_data_sync(self) -> None:
         data = {
             "version": ML_DATA_VERSION,

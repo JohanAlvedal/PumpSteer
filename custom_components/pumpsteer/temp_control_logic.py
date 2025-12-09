@@ -73,8 +73,7 @@ def calculate_temperature_output(
     # The fake temperature is reduced to make the heat pump work harder.
     if diff < HEATING_THRESHOLD:
         fake_temp += diff * aggressiveness * HEATING_COMPENSATION_FACTOR
-        # Previously: fake_temp = max(min(fake_temp, 30.0), -15.0)
-        # Now: use global safety limits
+
         fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
         mode = "heating"
         _LOGGER.debug(
@@ -108,7 +107,6 @@ def calculate_temperature_output(
             mode,
         )
 
-    # EXTRA: log if safety limit is hit
     if fake_temp <= MIN_FAKE_TEMP or fake_temp >= MAX_FAKE_TEMP:
         _LOGGER.warning(
             "TempControl: Fake temp reached safety limit: %.1f °C (Mode: %s)",

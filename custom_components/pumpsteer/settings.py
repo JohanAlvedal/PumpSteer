@@ -3,24 +3,13 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-# === VERSION INFO ===
 PUMPSTEER_VERSION: Final[str] = "1.2.1"
+DEFAULT_HOUSE_INERTIA: Final[float] = 1.0
+HOLIDAY_TEMP: Final[float] = 16.0
+BRAKING_MODE_TEMP: Final[float] = 19.0
+AGGRESSIVENESS_SCALING_FACTOR: Final[float] = 0.5
 
-# === HOUSE CONTROL SETTINGS ===
-DEFAULT_HOUSE_INERTIA: Final[float] = 1.0  # Default house thermal inertia
 
-# === HOLIDAY MODE SETTINGS ===
-HOLIDAY_TEMP: Final[float] = 16.0  # °C - Target temperature when holiday mode is active
-
-# === TEMPERATURE CONTROL SETTINGS ===
-BRAKING_MODE_TEMP: Final[float] = (
-    25.0  # °C - Virtual outdoor temperature when braking due to high price
-)
-AGGRESSIVENESS_SCALING_FACTOR: Final[float] = (
-    0.5  # Factor for aggressiveness in normal mode
-)
-
-# === TEMPERATURE CONTROL LOGIC ===
 MIN_FAKE_TEMP: Final[float] = -25.0
 MAX_FAKE_TEMP: Final[float] = 25.0
 BRAKE_FAKE_TEMP: Final[float] = 25.0
@@ -60,36 +49,32 @@ DEFAULT_PERCENTILES: Final[List[int]] = [
     30,
     85,
     95,
-]  # Percentiles for 5-category classification
+]
 
-DEFAULT_EXTREME_MULTIPLIER: Final[float] = 1.5  # Multiplier for extreme price detection
-MIN_SAMPLES_FOR_CLASSIFICATION: Final[int] = 5  # Minimum number of price samples needed
+DEFAULT_EXTREME_MULTIPLIER: Final[float] = 1.5
+MIN_SAMPLES_FOR_CLASSIFICATION: Final[int] = 5
 
-# UPDATED: Added "extreme" category for prices over VERY_EXPENSIVE_MULTIPLIER
-PRICE_CATEGORIES: Final[List[str]] = [  # Price categories in ascending order
+PRICE_CATEGORIES: Final[List[str]] = [
     "very_cheap",
     "cheap",
     "normal",
     "expensive",
     "very_expensive",
-    "extreme",  # Added for crisis-level pricing
+    "extreme",
 ]
 
-ABSOLUTE_CHEAP_LIMIT: Final[float] = (
-    0.60  # SEK/kWh - Absolute threshold for cheap prices (hybrid classification)
-)
+ABSOLUTE_CHEAP_LIMIT: Final[float] = 0.60  # SEK/kWh
 DEFAULT_TRAILING_HOURS: Final[int] = 72  # Hours of historical data to consider
 MAX_PRICE_WARNING_THRESHOLD: Final[float] = (
     3.0  # SEK/kWh - Log warning for extremely high prices
 )
 
-# === HYBRID CLASSIFICATION THRESHOLDS ===
-# CORRECTED: Complete set of multipliers for all categories
-VERY_CHEAP_MULTIPLIER: Final[float] = 0.60  # 60% of average price
-CHEAP_MULTIPLIER: Final[float] = 0.90  # 90% of average price
-NORMAL_MULTIPLIER: Final[float] = 1.40  # 140% of average price
-EXPENSIVE_MULTIPLIER: Final[float] = 2.00  # 200% of average price
-VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00  # 300% of average price
+
+VERY_CHEAP_MULTIPLIER: Final[float] = 0.60
+CHEAP_MULTIPLIER: Final[float] = 0.90
+NORMAL_MULTIPLIER: Final[float] = 1.40
+EXPENSIVE_MULTIPLIER: Final[float] = 2.00
+VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00
 
 # === EXPLANATION OF DESIGN DECISIONS ===
 
@@ -111,18 +96,12 @@ VERY_EXPENSIVE_MULTIPLIER: Final[float] = 3.00  # 300% of average price
 #   just because the recent average was very low
 
 
-# === VALIDATION CONSTANTS ===
-MIN_REASONABLE_TEMP: Final[float] = -50.0  # °C - Minimum reasonable temperature
-MAX_REASONABLE_TEMP: Final[float] = 50.0  # °C - Maximum reasonable temperature
-MIN_REASONABLE_PRICE: Final[
-    float
-] = -2.0  # SEK/kWh - Minimum reasonable electricity price (negative prices occur)
-MAX_REASONABLE_PRICE: Final[float] = (
-    15.0  # SEK/kWh - Maximum reasonable electricity price
-)
+MIN_REASONABLE_TEMP: Final[float] = -50.0
+MAX_REASONABLE_TEMP: Final[float] = 50.0
+MIN_REASONABLE_PRICE: Final[float] = -2.0  # SEK/kWh
+MAX_REASONABLE_PRICE: Final[float] = 15.0  # SEK/kWh
 
 
-# UPDATED validation function to include new settings
 def validate_core_settings() -> None:
     """Validate core settings for consistency and logical values."""
     errors = []
@@ -137,37 +116,31 @@ def validate_core_settings() -> None:
     if DEFAULT_PERCENTILES != sorted(DEFAULT_PERCENTILES):
         errors.append("Percentiles must be in ascending order")
 
-    # UPDATED: Validate price categories (now 6 categories including "extreme")
     if len(PRICE_CATEGORIES) != 6:
         errors.append("Exactly 6 price categories required (including 'extreme')")
 
-    # Validate temperature range
     if MIN_FAKE_TEMP >= MAX_FAKE_TEMP:
         errors.append("Min fake temp must be less than max fake temp")
 
-    # UPDATED: Validate ALL multipliers are in logical order
     multipliers = [
         VERY_CHEAP_MULTIPLIER,
         CHEAP_MULTIPLIER,
         NORMAL_MULTIPLIER,
         EXPENSIVE_MULTIPLIER,
-        VERY_EXPENSIVE_MULTIPLIER,  # Added validation for this multiplier
+        VERY_EXPENSIVE_MULTIPLIER,
     ]
     if multipliers != sorted(multipliers):
         errors.append("Price multipliers must be in ascending order")
 
-    # Validate that VERY_EXPENSIVE_MULTIPLIER is reasonable (not too high)
     if VERY_EXPENSIVE_MULTIPLIER > 5.0:
         errors.append("VERY_EXPENSIVE_MULTIPLIER seems unreasonably high (>5.0)")
 
-    # Validate reasonable values
     if MIN_REASONABLE_TEMP >= MAX_REASONABLE_TEMP:
         errors.append("Min reasonable temp must be less than max reasonable temp")
 
     if MIN_REASONABLE_PRICE >= MAX_REASONABLE_PRICE:
         errors.append("Min reasonable price must be less than max reasonable price")
 
-    # ADDED: Validate ABSOLUTE_CHEAP_LIMIT is reasonable
     if ABSOLUTE_CHEAP_LIMIT <= 0:
         errors.append("ABSOLUTE_CHEAP_LIMIT must be positive")
 
@@ -180,7 +153,6 @@ def validate_core_settings() -> None:
         raise ValueError(error_msg)
 
 
-# Run validation on import
 try:
     validate_core_settings()
     _LOGGER.debug(

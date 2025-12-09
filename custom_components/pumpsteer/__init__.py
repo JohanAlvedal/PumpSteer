@@ -12,7 +12,6 @@ DOMAIN = "pumpsteer"
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the PumpSteer integration."""
-    # Set up the sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
 
     _LOGGER.info("PumpSteer integration setup completed")
@@ -21,7 +20,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload the PumpSteer integration."""
-    # Unload the sensor platform
     return await hass.config_entries.async_unload_platforms(entry, ["sensor"])
 
 

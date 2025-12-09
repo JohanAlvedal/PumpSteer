@@ -11,7 +11,6 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
-# Import existing modules
 from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
@@ -38,7 +37,7 @@ from ..utils import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Simple ML import
+
 try:
     from ..ml_adaptive import PumpSteerMLCollector
 
@@ -122,7 +121,7 @@ class PumpSteerSensor(Entity):
             sw_version=SW_VERSION,
         )
 
-        # Simple ML initialization
+
         self.ml_collector = None
         self._ml_session_started = False
         self._ml_session_start_mode = None

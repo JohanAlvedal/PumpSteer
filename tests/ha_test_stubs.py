@@ -8,7 +8,7 @@ sys.modules.setdefault("homeassistant", ha)
 config_entries = types.ModuleType("homeassistant.config_entries")
 
 
-class ConfigEntry:  # minimal stub
+class ConfigEntry: 
     pass
 
 
@@ -26,7 +26,7 @@ sys.modules["homeassistant.config_entries"] = config_entries
 core = types.ModuleType("homeassistant.core")
 
 
-class HomeAssistant:  # minimal stub
+class HomeAssistant: 
     pass
 
 

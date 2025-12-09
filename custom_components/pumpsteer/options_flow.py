@@ -27,7 +27,6 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options flow."""
         errors = {}
 
-        # self.config_entry är nu tillgängligt automatiskt från basklassen
         entry = self.config_entry
 
         if user_input is not None:

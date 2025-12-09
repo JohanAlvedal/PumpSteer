@@ -1,7 +1,3 @@
-###############################################################################
-# ml_sensor.py – Adaptive ML analysis sensor for PumpSteer (v2.0)
-###############################################################################
-
 import logging
 from typing import Dict, Any
 from homeassistant.core import HomeAssistant
@@ -54,9 +50,6 @@ class PumpSteerMLSensor(Entity):
         self.ml = PumpSteerMLCollector(hass)
         _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized successfully")
 
-    # ------------------------------------------------------------------
-    # Standard entity properties
-    # ------------------------------------------------------------------
     @property
     def name(self):
         return self._attr_name
@@ -90,9 +83,6 @@ class PumpSteerMLSensor(Entity):
             return "mdi:chart-line"
         return "mdi:brain"
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
     async def async_added_to_hass(self):
         """Load ML data on startup."""
         if self.ml and hasattr(self.ml, "async_load_data"):
@@ -107,9 +97,6 @@ class PumpSteerMLSensor(Entity):
         self.ml = None
         await super().async_will_remove_from_hass()
 
-    # ------------------------------------------------------------------
-    # Helper functions
-    # ------------------------------------------------------------------
     def _get_control_system_data(self) -> Dict[str, Any]:
         """Fetch core control parameters from HA entities."""
 
@@ -186,9 +173,6 @@ class PumpSteerMLSensor(Entity):
 
         return {k: v for k, v in attributes.items() if v is not None}
 
-    # ------------------------------------------------------------------
-    # Update loop
-    # ------------------------------------------------------------------
     async def async_update(self):
         """Refresh ML information and update sensor attributes."""
         if not self.ml:
@@ -200,7 +184,6 @@ class PumpSteerMLSensor(Entity):
             }
             return
 
-        # === Pull data from the new ML adaptive system ===
         insights = {}
 
         summary = self.ml.get_learning_summary()
@@ -219,9 +202,6 @@ class PumpSteerMLSensor(Entity):
             self._last_error = None
 
 
-# ----------------------------------------------------------------------
-# Home Assistant setup
-# ----------------------------------------------------------------------
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
