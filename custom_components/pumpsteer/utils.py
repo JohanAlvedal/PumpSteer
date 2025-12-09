@@ -20,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def get_version() -> str:
-    """Load integration version from manifest.json."""
+    """Load integration version from manifest.json"""
     manifest_path = Path(__file__).resolve().parent / "manifest.json"
     try:
         with open(manifest_path, encoding="utf-8") as manifest_file:
@@ -302,7 +302,7 @@ def should_precool(
     temp_forecast_csv: Optional[str],
     threshold_with_margin: float,
 ) -> bool:
-    """Check if forecast exceeds threshold including any margin within lookahead."""
+    """Check if forecast exceeds threshold including any margin within lookahead"""
     if not temp_forecast_csv:
         return False
 
@@ -601,7 +601,7 @@ def validate_config_completeness(config: dict) -> Tuple[bool, List[str]]:
 
 
 def detect_price_interval_minutes(prices: List[Any]) -> int:
-    """Detect the interval in minutes between price points."""
+    """Detect the interval in minutes between price points"""
     if not prices:
         return 60
 
@@ -632,7 +632,7 @@ def compute_price_slot_index(
     price_interval_minutes: int,
     total_slots: int,
 ) -> int:
-    """Compute the index of the current price slot."""
+    """Compute the index of the current price slot"""
     if total_slots <= 0:
         return 0
 
@@ -648,7 +648,7 @@ def get_price_window_for_hours(
     hours: int,
     price_interval_minutes: int,
 ) -> List[float]:
-    """Return a slice of prices covering the requested number of hours."""
+    """Return a slice of prices covering the requested number of hours"""
     if not prices or current_slot_index < 0:
         return []
 

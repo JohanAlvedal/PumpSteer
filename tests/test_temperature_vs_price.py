@@ -146,7 +146,7 @@ def test_heating_compensation_factor_applied():
 
 
 def test_fake_temp_constraint_applied():
-    """Test that fake_temp is constrained to not exceed BRAKE_FAKE_TEMP."""
+    """Test that fake_temp is constrained to not exceed BRAKE_FAKE_TEMP"""
     s = create_sensor()
     # Create a scenario that might produce high fake_temp values
     # Use very high indoor temperature and neutral target to trigger braking mode
@@ -166,7 +166,7 @@ def test_fake_temp_constraint_applied():
 
 
 def test_brake_temp_uses_offset_below_five_degrees():
-    """Ensure braking only adds offset to outdoor temp when it's below 5 °C."""
+    """Ensure braking only adds offset to outdoor temp when it's below 5 °C"""
     s = create_sensor()
     data = base_sensor_data(
         indoor_temp=23.0,
@@ -182,7 +182,7 @@ def test_brake_temp_uses_offset_below_five_degrees():
 
 
 def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
-    """Ensure braking uses the global cap when outdoor temp is 5 °C or warmer."""
+    """Ensure braking uses the global cap when outdoor temp is 5 °C or warmer"""
     s = create_sensor()
     data = base_sensor_data(
         indoor_temp=23.0,
@@ -198,7 +198,7 @@ def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
 
 
 def test_price_brake_consistent_across_temperatures():
-    """Test that braking_by_price always uses BRAKING_MODE_TEMP regardless of outdoor temperature."""
+    """Test that braking_by_price always uses BRAKING_MODE_TEMP regardless of outdoor temperature"""
     s = create_sensor()
 
     # Test various outdoor temperatures (all below summer threshold to avoid summer_mode)
@@ -217,7 +217,7 @@ def test_price_brake_consistent_across_temperatures():
 
 
 def test_price_brake_different_categories():
-    """Test that all expensive price categories trigger consistent braking behavior."""
+    """Test that all expensive price categories trigger consistent braking behavior"""
     s = create_sensor()
     data = base_sensor_data()
 

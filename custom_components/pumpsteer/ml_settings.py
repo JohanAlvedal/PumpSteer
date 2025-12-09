@@ -64,7 +64,7 @@ ML_LOG_SESSION_DETAILS: Final[bool] = True
 
 
 def validate_ml_settings() -> None:
-    """Validate ML-specific settings for consistency and logical values."""
+    """Validate ML-specific settings for consistency and logical values"""
     errors = []
 
     # Validate session thresholds
@@ -142,7 +142,7 @@ def validate_ml_settings() -> None:
 
 
 def get_ml_settings_info() -> dict:
-    """Get information about current ML settings."""
+    """Get information about current ML settings"""
     return {
         "version": ML_MODULE_VERSION,
         "data_file": ML_DATA_FILE_PATH,

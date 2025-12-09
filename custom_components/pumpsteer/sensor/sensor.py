@@ -72,7 +72,7 @@ DEFAULT_AGGRESSIVENESS = 3.0
 def safe_get_current_price_and_category(
     prices: List[float], categories: List[str], slot_index: int, mode: str = "unknown"
 ) -> Tuple[float, str]:
-    """Safely get current price and category for a given time slot."""
+    """Safely get current price and category for a given time slot"""
     if not prices or slot_index >= len(prices) or slot_index < 0:
         _LOGGER.warning(
             "Invalid price data access: slot=%s, prices_len=%s",
@@ -97,10 +97,10 @@ def safe_get_current_price_and_category(
 
 
 class PumpSteerSensor(Entity):
-    """PumpSteer sensor for heat pump control."""
+    """PumpSteer sensor for heat pump control"""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
-        """Initialize the PumpSteer sensor."""
+        """Initialize the PumpSteer sensor"""
         self.hass = hass
         self._config_entry = config_entry
         self._state = None
@@ -173,7 +173,7 @@ class PumpSteerSensor(Entity):
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Called when the entity is added to Home Assistant."""
+        """Called when the entity is added to Home Assistant"""
         if self.ml_collector and hasattr(self.ml_collector, "async_load_data"):
             await self.ml_collector.async_load_data()
             _LOGGER.debug("ML data loaded successfully")
@@ -181,19 +181,19 @@ class PumpSteerSensor(Entity):
         await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Handle entity removal from Home Assistant."""
+        """Handle entity removal from Home Assistant"""
         if self.ml_collector and hasattr(self.ml_collector, "async_shutdown"):
             await self.ml_collector.async_shutdown()
         self.ml_collector = None
         await super().async_will_remove_from_hass()
 
     async def async_options_update_listener(self, entry: ConfigEntry) -> None:
-        """Handle options update event."""
+        """Handle options update event"""
         self._config_entry = entry
         await self.async_update()
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Fetch sensor data from Home Assistant."""
+        """Fetch sensor data from Home Assistant"""
         return {
             "indoor_temp": safe_float(
                 get_state(self.hass, config.get("indoor_temp_entity"))
@@ -243,7 +243,7 @@ class PumpSteerSensor(Entity):
         price_category: str,
         current_slot_index: int,
     ) -> Tuple[float, str]:
-        """Calculate output temperature based on current conditions."""
+        """Calculate output temperature based on current conditions"""
         indoor_temp = sensor_data["indoor_temp"]
         outdoor_temp = sensor_data["outdoor_temp"]
         target_temp = sensor_data["target_temp"]
@@ -335,7 +335,7 @@ class PumpSteerSensor(Entity):
     def _collect_ml_data(
         self, sensor_data: Dict[str, Any], mode: str, fake_temp: float
     ) -> None:
-        """Collect data for machine learning."""
+        """Collect data for machine learning"""
         if not self.ml_collector:
             return
 
@@ -368,7 +368,7 @@ class PumpSteerSensor(Entity):
     async def _get_price_data(
         self, config: Dict[str, Any], current_time: datetime
     ) -> Tuple[List[float], float, str, List[str], int, int]:
-        """Fetch price data and classify prices."""
+        """Fetch price data and classify prices"""
         entity_id = config.get("electricity_price_entity")
 
         if not entity_id:
@@ -444,7 +444,7 @@ class PumpSteerSensor(Entity):
         price_interval_minutes: int,
         current_slot_index: int,
     ) -> Dict[str, Any]:
-        """Build attribute dictionary for the sensor."""
+        """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
         min_price = min(prices) if prices else 0.0
 
@@ -523,7 +523,7 @@ class PumpSteerSensor(Entity):
         return attributes
 
     async def async_update(self) -> None:
-        """Update sensor data."""
+        """Update sensor data"""
 
         update_time = dt_util.now()
         now_hour = update_time.hour
@@ -591,6 +591,6 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the PumpSteer sensor entity."""
+    """Set up the PumpSteer sensor entity"""
     sensor = PumpSteerSensor(hass, config_entry)
     async_add_entities([sensor], update_before_add=True)

@@ -21,10 +21,10 @@ HARDCODED_ENTITIES = {
 
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for pumpsteer."""
+    """Handle options flow for pumpsteer"""
 
     async def async_step_init(self, user_input=None):
-        """Manage the options flow."""
+        """Manage the options flow"""
         errors = {}
 
         entry = self.config_entry
@@ -69,7 +69,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         )
 
     async def _validate_entities(self, user_input):
-        """Validate that entities exist and are available."""
+        """Validate that entities exist and are available"""
         errors = {}
 
         user_configurable_entities = {
@@ -118,11 +118,11 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         return errors
 
     async def _entity_exists(self, entity_id: str) -> bool:
-        """Check if entity exists."""
+        """Check if entity exists"""
         return self.hass.states.get(entity_id) is not None
 
     async def _entity_available(self, entity_id: str) -> bool:
-        """Check if entity is available."""
+        """Check if entity is available"""
         entity = self.hass.states.get(entity_id)
         if not entity:
             return False

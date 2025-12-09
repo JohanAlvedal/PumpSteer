@@ -103,7 +103,7 @@ MAX_REASONABLE_PRICE: Final[float] = 15.0  # SEK/kWh
 
 
 def validate_core_settings() -> None:
-    """Validate core settings for consistency and logical values."""
+    """Validate core settings for consistency and logical values"""
     errors = []
 
     # Validate percentiles
