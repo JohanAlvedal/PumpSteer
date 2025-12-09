@@ -37,7 +37,9 @@ def is_holiday_mode_active(
         # If the entity doesn't exist or its state is not 'on', holiday mode is not active.
         if not boolean_state or boolean_state.state != STATE_ON:
             _LOGGER.debug(
-                f"[PumpSteer - Holiday] Holiday mode boolean ({holiday_mode_boolean_entity_id}) is not ON. State: {boolean_state.state if boolean_state else 'N/A'}"
+                "[PumpSteer - Holiday] Holiday mode boolean (%s) is not ON. State: %s",
+                holiday_mode_boolean_entity_id,
+                boolean_state.state if boolean_state else "N/A",
             )
             return False  # Not active if the boolean is not ON
     else:
@@ -64,9 +66,13 @@ def is_holiday_mode_active(
     # Check if the datetime entities actually exist and have states in Home Assistant.
     if not holiday_start_state or not holiday_end_state:
         _LOGGER.debug(
-            f"[PumpSteer - Holiday] Holiday datetime entities not available: "
-            f"Start: {holiday_start_datetime_entity_id} ({holiday_start_state}), "
-            f"End: {holiday_end_datetime_entity_id} ({holiday_end_state})"
+            "[PumpSteer - Holiday] Holiday datetime entities not available: "
+            "Start: %s (%s), "
+            "End: %s (%s)",
+            holiday_start_datetime_entity_id,
+            holiday_start_state,
+            holiday_end_datetime_entity_id,
+            holiday_end_state,
         )
         return False
 
@@ -83,29 +89,41 @@ def is_holiday_mode_active(
         # If parsing failed (e.g., invalid date format in the entity state), log a warning and return False.
         if holiday_start_time is None or holiday_end_time is None:
             _LOGGER.warning(
-                f"[PumpSteer - Holiday] Could not parse holiday datetime states. "
-                f"Start state: '{holiday_start_state.state}', End state: '{holiday_end_state.state}'"
+                "[PumpSteer - Holiday] Could not parse holiday datetime states. "
+                "Start state: '%s', End state: '%s'",
+                holiday_start_state.state,
+                holiday_end_state.state,
             )
             return False
 
         # Determine if the current time falls exactly within the defined start and end times.
         if holiday_start_time <= current_time <= holiday_end_time:
             _LOGGER.debug(
-                f"[PumpSteer - Holiday] Holiday mode active (date range). Current: {current_time}, "
-                f"Start: {holiday_start_time}, End: {holiday_end_time}. Using target temperature {HOLIDAY_TEMP}°C"
+                "[PumpSteer - Holiday] Holiday mode active (date range). Current: %s, "
+                "Start: %s, End: %s. Using target temperature %s°C",
+                current_time,
+                holiday_start_time,
+                holiday_end_time,
+                HOLIDAY_TEMP,
             )
             return True
         else:
             _LOGGER.debug(
-                f"[PumpSteer - Holiday] Holiday mode inactive (date range). Current: {current_time}, "
-                f"Start: {holiday_start_time}, End: {holiday_end_time}"
+                "[PumpSteer - Holiday] Holiday mode inactive (date range). Current: %s, "
+                "Start: %s, End: %s",
+                current_time,
+                holiday_start_time,
+                holiday_end_time,
             )
             return False
 
     except Exception as e:
         # Catch any unexpected errors during datetime parsing or comparison.
         _LOGGER.warning(
-            f"[PumpSteer - Holiday] Error checking holiday mode date range: {e}. "
-            f"Start state: '{holiday_start_state.state}', End state: '{holiday_end_state.state}'"
+            "[PumpSteer - Holiday] Error checking holiday mode date range: %s. "
+            "Start state: '%s', End state: '%s'",
+            e,
+            holiday_start_state.state,
+            holiday_end_state.state,
         )
         return False

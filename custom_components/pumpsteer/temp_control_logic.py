@@ -58,7 +58,9 @@ def calculate_temperature_output(
         fake_temp = real_outdoor_temp
         mode = "passthrough"
         _LOGGER.debug(
-            f"TempControl: Passthrough (fake temp: {fake_temp:.1f} °C) - Mode: {mode}"
+            "TempControl: Passthrough (fake temp: %.1f °C) - Mode: %s",
+            fake_temp,
+            mode,
         )
         return fake_temp, mode
 
@@ -76,7 +78,11 @@ def calculate_temperature_output(
         fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
         mode = "heating"
         _LOGGER.debug(
-            f"TempControl: Heating (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}"
+            "TempControl: Heating (fake temp: %.1f °C, diff: %.2f, agg: %.1f) - Mode: %s",
+            fake_temp,
+            diff,
+            aggressiveness,
+            mode,
         )
 
     # BRAKING mode (too warm indoors)
@@ -88,18 +94,26 @@ def calculate_temperature_output(
         fake_temp = brake_cap
         mode = "braking_by_temp"
         _LOGGER.debug(
-            f"TempControl: Braking (fake temp: {fake_temp:.1f} °C, diff: {diff:.2f}, agg: {aggressiveness}) - Mode: {mode}"
+            "TempControl: Braking (fake temp: %.1f °C, diff: %.2f, agg: %.1f) - Mode: %s",
+            fake_temp,
+            diff,
+            aggressiveness,
+            mode,
         )
 
     else:
         _LOGGER.debug(
-            f"TempControl: Within comfort zone (diff: {diff:.2f}) - Mode: {mode}"
+            "TempControl: Within comfort zone (diff: %.2f) - Mode: %s",
+            diff,
+            mode,
         )
 
     # EXTRA: log if safety limit is hit
     if fake_temp <= MIN_FAKE_TEMP or fake_temp >= MAX_FAKE_TEMP:
         _LOGGER.warning(
-            f"TempControl: Fake temp reached safety limit: {fake_temp:.1f} °C (Mode: {mode})"
+            "TempControl: Fake temp reached safety limit: %.1f °C (Mode: %s)",
+            fake_temp,
+            mode,
         )
 
     return fake_temp, mode

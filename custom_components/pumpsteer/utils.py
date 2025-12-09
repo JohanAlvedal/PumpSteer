@@ -62,17 +62,17 @@ def safe_float(
 
         # Check bounds if provided
         if min_val is not None and float_val < min_val:
-            _LOGGER.warning(f"Value {float_val} below minimum {min_val}")
+            _LOGGER.warning("Value %s below minimum %s", float_val, min_val)
             return None
 
         if max_val is not None and float_val > max_val:
-            _LOGGER.warning(f"Value {float_val} above maximum {max_val}")
+            _LOGGER.warning("Value %s above maximum %s", float_val, max_val)
             return None
 
         return float_val
 
     except (TypeError, ValueError) as e:
-        _LOGGER.debug(f"Failed to convert '{val}' to float: {e}")
+        _LOGGER.debug("Failed to convert '%s' to float: %s", val, e)
         return None
 
 

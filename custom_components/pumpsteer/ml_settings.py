@@ -164,7 +164,7 @@ def get_ml_settings_info() -> dict:
 # Run validation on import
 try:
     validate_ml_settings()
-    _LOGGER.debug(f"PumpSteer ML settings loaded successfully (version {ML_MODULE_VERSION})")
+    _LOGGER.debug("PumpSteer ML settings loaded successfully (version %s)", ML_MODULE_VERSION)
 except Exception as e:
-    _LOGGER.error(f"Failed to load PumpSteer ML settings: {e}")
+    _LOGGER.error("Failed to load PumpSteer ML settings: %s", e)
     raise

@@ -55,7 +55,7 @@ class PumpSteerMLSensor(Entity):
             self.ml = PumpSteerMLCollector(hass)
             _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized successfully")
         except Exception as e:
-            _LOGGER.error(f"ML sensor: Failed to initialize ML collector: {e}")
+            _LOGGER.error("ML sensor: Failed to initialize ML collector: %s", e)
             self.ml = None
             self._last_error = f"Initialization failed: {e}"
 
@@ -105,7 +105,7 @@ class PumpSteerMLSensor(Entity):
                 await self.ml.async_load_data()
                 _LOGGER.debug("ML sensor: Data loaded successfully")
             except Exception as e:
-                _LOGGER.error(f"ML sensor: Failed to load data: {e}")
+                _LOGGER.error("ML sensor: Failed to load data: %s", e)
                 self._last_error = f"Data loading failed: {e}"
 
     async def async_will_remove_from_hass(self):
@@ -114,7 +114,7 @@ class PumpSteerMLSensor(Entity):
             try:
                 await self.ml.async_shutdown()
             except Exception as e:
-                _LOGGER.error(f"ML sensor: Error during shutdown: {e}")
+                _LOGGER.error("ML sensor: Error during shutdown: %s", e)
         self.ml = None
         await super().async_will_remove_from_hass()
 
@@ -124,13 +124,25 @@ class PumpSteerMLSensor(Entity):
     def _get_control_system_data(self) -> Dict[str, Any]:
         """Fetch core control parameters from HA entities."""
         try:
-            autotune_state = self.hass.states.get(ML_RELATED_ENTITIES["autotune_boolean"])
+            autotune_state = self.hass.states.get(
+                ML_RELATED_ENTITIES["autotune_boolean"]
+            )
             autotune_on = autotune_state and autotune_state.state == "on"
 
-            integral_error = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_error"])) or 0.0
-            integral_gain = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_gain"])) or 0.0
-            house_inertia = safe_float(get_state(self.hass, ML_RELATED_ENTITIES["house_inertia"]))
-            last_adjustment = get_state(self.hass, ML_RELATED_ENTITIES["last_gain_adjustment"])
+            integral_error = (
+                safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_error"]))
+                or 0.0
+            )
+            integral_gain = (
+                safe_float(get_state(self.hass, ML_RELATED_ENTITIES["integral_gain"]))
+                or 0.0
+            )
+            house_inertia = safe_float(
+                get_state(self.hass, ML_RELATED_ENTITIES["house_inertia"])
+            )
+            last_adjustment = get_state(
+                self.hass, ML_RELATED_ENTITIES["last_gain_adjustment"]
+            )
 
             return {
                 "autotune_active": autotune_on,
@@ -140,7 +152,7 @@ class PumpSteerMLSensor(Entity):
                 "last_gain_adjustment": last_adjustment,
             }
         except Exception as e:
-            _LOGGER.warning(f"ML sensor: Error getting control system data: {e}")
+            _LOGGER.warning("ML sensor: Error getting control system data: %s", e)
             return {
                 "autotune_active": False,
                 "integral_error": 0.0,
@@ -166,7 +178,9 @@ class PumpSteerMLSensor(Entity):
         # Model trained and coefficients exist → ready
         return "ready"
 
-    def _build_attributes(self, insights: Dict[str, Any], control_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_attributes(
+        self, insights: Dict[str, Any], control_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Build a clear and concise attribute dictionary."""
         summary = insights.get("summary", {})
         recs = insights.get("recommendations", [])
@@ -217,7 +231,7 @@ class PumpSteerMLSensor(Entity):
                 insights["summary"] = summary or {}
                 insights["recommendations"] = recs or []
             except Exception as err:
-                _LOGGER.warning(f"ML sensor: could not read learning summary: {err}")
+                _LOGGER.warning("ML sensor: could not read learning summary: %s", err)
                 insights = {"summary": {}, "recommendations": [f"Error: {err}"]}
 
             control_data = self._get_control_system_data()
@@ -231,7 +245,7 @@ class PumpSteerMLSensor(Entity):
                 self._last_error = None
 
         except Exception as e:
-            _LOGGER.error(f"ML sensor update failed: {e}", exc_info=True)
+            _LOGGER.error("ML sensor update failed: %s", e, exc_info=True)
             self._state = "error"
             self._last_error = str(e)
             self._attributes = {
