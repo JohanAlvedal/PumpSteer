@@ -90,7 +90,12 @@ def calculate_temperature_output(
     elif diff > 0.5:
         fake_temp += diff * aggressiveness * BRAKING_COMPENSATION_FACTOR
         brake_cap = max(min(brake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
-        fake_temp = brake_cap
+        if aggressiveness >= 4:
+            fake_temp = brake_cap
+        else:
+            ramp_ratio = aggressiveness / 3
+            dynamic_cap = real_outdoor_temp + (brake_cap - real_outdoor_temp) * ramp_ratio
+            fake_temp = min(fake_temp, dynamic_cap)
         mode = "braking_by_temp"
         _LOGGER.debug(
             "TempControl: Braking (fake temp: %.1f °C, diff: %.2f, agg: %.1f) - Mode: %s",

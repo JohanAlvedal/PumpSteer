@@ -5,6 +5,7 @@ from custom_components.pumpsteer.sensor import sensor
 from custom_components.pumpsteer.temp_control_logic import calculate_temperature_output
 from custom_components.pumpsteer.settings import (
     BRAKE_FAKE_TEMP,
+    BRAKING_COMPENSATION_FACTOR,
     HEATING_COMPENSATION_FACTOR,
     WINTER_BRAKE_TEMP_OFFSET,
     WINTER_BRAKE_THRESHOLD,
@@ -172,7 +173,7 @@ def test_brake_temp_uses_offset_below_five_degrees():
         indoor_temp=23.0,
         target_temp=21.0,
         outdoor_temp=WINTER_BRAKE_THRESHOLD - 1.0,
-        aggressiveness=1.0,
+        aggressiveness=4.0,
     )
 
     fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
@@ -188,13 +189,54 @@ def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
         indoor_temp=23.0,
         target_temp=21.0,
         outdoor_temp=WINTER_BRAKE_THRESHOLD + 1.0,
-        aggressiveness=1.0,
+        aggressiveness=4.0,
     )
 
     fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
 
     assert mode == "braking_by_temp"
     assert fake_temp == BRAKE_FAKE_TEMP
+
+
+def test_brake_temp_dynamic_at_medium_aggressiveness():
+    """Ensure braking scales dynamically at medium aggressiveness levels."""
+    s = create_sensor()
+    data = base_sensor_data(
+        indoor_temp=23.0,
+        target_temp=21.0,
+        outdoor_temp=WINTER_BRAKE_THRESHOLD + 1.0,
+        aggressiveness=3.0,
+    )
+
+    fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
+
+    expected = data["outdoor_temp"] + (23.0 - 21.0) * 3.0 * BRAKING_COMPENSATION_FACTOR
+    assert mode == "braking_by_temp"
+    assert round(fake_temp, 6) == round(expected, 6)
+    assert fake_temp < BRAKE_FAKE_TEMP
+
+
+def test_brake_temp_scales_with_aggressiveness_levels():
+    """Ensure braking increases progressively for aggressiveness 1-3."""
+    s = create_sensor()
+    base_data = base_sensor_data(
+        indoor_temp=24.0,
+        target_temp=20.0,
+        outdoor_temp=10.0,
+    )
+
+    fake_temp_1, _ = s._calculate_output_temperature(
+        {**base_data, "aggressiveness": 1.0}, "normal", 0
+    )
+    fake_temp_2, _ = s._calculate_output_temperature(
+        {**base_data, "aggressiveness": 2.0}, "normal", 0
+    )
+    fake_temp_3, _ = s._calculate_output_temperature(
+        {**base_data, "aggressiveness": 3.0}, "normal", 0
+    )
+
+    assert fake_temp_1 < fake_temp_2 < fake_temp_3
+    assert fake_temp_3 <= BRAKE_FAKE_TEMP
 
 
 def test_price_brake_consistent_across_temperatures():
