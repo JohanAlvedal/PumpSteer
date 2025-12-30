@@ -6,7 +6,9 @@
         "data": {
           "indoor_temp_entity": "config.step.user.data.indoor_temp_entity",
           "real_outdoor_entity": "config.step.user.data.real_outdoor_entity",
-          "electricity_price_entity": "config.step.user.data.electricity_price_entity"
+          "electricity_price_entity": "config.step.user.data.electricity_price_entity",
+          "supply_temp_entity": "config.step.user.data.supply_temp_entity",
+          "monitor_only": "config.step.user.data.monitor_only"
         }
       }
     },
@@ -23,7 +25,9 @@
         "data": {
           "indoor_temp_entity": "options.step.init.data.indoor_temp_entity",
           "real_outdoor_entity": "options.step.init.data.real_outdoor_entity",
-          "electricity_price_entity": "options.step.init.data.electricity_price_entity"
+          "electricity_price_entity": "options.step.init.data.electricity_price_entity",
+          "supply_temp_entity": "options.step.init.data.supply_temp_entity",
+          "monitor_only": "options.step.init.data.monitor_only"
         }
       }
     },
