@@ -200,12 +200,8 @@ class PumpSteerSensor(Entity):
             supply_temp = safe_float(get_state(self.hass, supply_temp_entity))
 
         return {
-            "indoor_temp": safe_float(
-                get_state(self.hass, config.get("indoor_temp_entity"))
-            ),
-            "outdoor_temp": safe_float(
-                get_state(self.hass, config.get("real_outdoor_entity"))
-            ),
+            "indoor_temp": indoor_temp,
+            "outdoor_temp": outdoor_temp,
             "target_temp": safe_float(
                 get_state(self.hass, HARDCODED_ENTITIES["target_temp_entity"])
             ),
