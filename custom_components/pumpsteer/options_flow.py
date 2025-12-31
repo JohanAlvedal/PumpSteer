@@ -5,6 +5,14 @@ from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
+from .settings import (
+    DEFAULT_CONTROL_MODE,
+    MPC_HORIZON_STEPS,
+    MPC_PRICE_WEIGHT,
+    MPC_COMFORT_WEIGHT,
+    MPC_SMOOTH_WEIGHT,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
@@ -70,6 +78,36 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         {"entity": {"domain": "sensor", "device_class": "temperature"}}
                     ),
                     vol.Optional(
+                        "return_temp_entity",
+                        default=current_data.get("return_temp_entity"),
+                    ): selector(
+                        {"entity": {"domain": "sensor", "device_class": "temperature"}}
+                    ),
+                    vol.Optional(
+                        "control_mode",
+                        default=current_data.get("control_mode", DEFAULT_CONTROL_MODE),
+                    ): selector(
+                        {"select": {"options": ["rule_based", "mpc"]}}
+                    ),
+                    vol.Optional(
+                        "mpc_horizon_steps",
+                        default=current_data.get("mpc_horizon_steps", MPC_HORIZON_STEPS),
+                    ): selector({"number": {"min": 1, "max": 8, "step": 1}}),
+                    vol.Optional(
+                        "mpc_price_weight",
+                        default=current_data.get("mpc_price_weight", MPC_PRICE_WEIGHT),
+                    ): selector({"number": {"min": 0, "max": 2, "step": 0.1}}),
+                    vol.Optional(
+                        "mpc_comfort_weight",
+                        default=current_data.get(
+                            "mpc_comfort_weight", MPC_COMFORT_WEIGHT
+                        ),
+                    ): selector({"number": {"min": 0.5, "max": 3, "step": 0.1}}),
+                    vol.Optional(
+                        "mpc_smooth_weight",
+                        default=current_data.get("mpc_smooth_weight", MPC_SMOOTH_WEIGHT),
+                    ): selector({"number": {"min": 0, "max": 1, "step": 0.05}}),
+                    vol.Optional(
                         "monitor_only",
                         default=current_data.get("monitor_only", False),
                     ): selector({"boolean": {}}),
@@ -89,6 +127,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         }
         optional_entities = {
             "supply_temp_entity": "Supply temperature sensor",
+            "return_temp_entity": "Return temperature sensor",
         }
 
         hardcoded_entities = {

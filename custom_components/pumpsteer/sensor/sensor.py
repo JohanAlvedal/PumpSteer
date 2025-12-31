@@ -12,7 +12,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
 from ..holiday import is_holiday_mode_active
-from ..temp_control_logic import calculate_temperature_output
+from ..temp_control_logic import (
+    calculate_temperature_output,
+    calculate_mpc_temperature_output,
+)
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
 from ..settings import (
     DEFAULT_HOUSE_INERTIA,
@@ -23,6 +26,11 @@ from ..settings import (
     WINTER_BRAKE_THRESHOLD,
     CHEAP_PRICE_OVERSHOOT,
     PRECOOL_MARGIN,
+    DEFAULT_CONTROL_MODE,
+    MPC_HORIZON_STEPS,
+    MPC_PRICE_WEIGHT,
+    MPC_COMFORT_WEIGHT,
+    MPC_SMOOTH_WEIGHT,
 )
 from ..utils import (
     safe_float,
@@ -125,6 +133,7 @@ class PumpSteerSensor(Entity):
         self._ml_session_started = False
         self._ml_session_start_mode = None
         self._last_price_category = "unknown"
+        self._last_fake_temp = None
 
         if ML_AVAILABLE:
             self.ml_collector = PumpSteerMLCollector(hass)
@@ -199,6 +208,11 @@ class PumpSteerSensor(Entity):
         if supply_temp_entity:
             supply_temp = safe_float(get_state(self.hass, supply_temp_entity))
 
+        return_temp_entity = config.get("return_temp_entity")
+        return_temp = None
+        if return_temp_entity:
+            return_temp = safe_float(get_state(self.hass, return_temp_entity))
+
         return {
             "indoor_temp": indoor_temp,
             "outdoor_temp": outdoor_temp,
@@ -222,7 +236,26 @@ class PumpSteerSensor(Entity):
             ],
             "supply_temp": supply_temp,
             "supply_temp_entity": supply_temp_entity,
+            "return_temp": return_temp,
+            "return_temp_entity": return_temp_entity,
+            "control_mode": config.get("control_mode", DEFAULT_CONTROL_MODE),
+            "mpc_horizon_steps": config.get("mpc_horizon_steps", MPC_HORIZON_STEPS),
+            "mpc_price_weight": config.get("mpc_price_weight", MPC_PRICE_WEIGHT),
+            "mpc_comfort_weight": config.get("mpc_comfort_weight", MPC_COMFORT_WEIGHT),
+            "mpc_smooth_weight": config.get("mpc_smooth_weight", MPC_SMOOTH_WEIGHT),
         }
+
+    def _calculate_price_factor(self, prices: List[float], current_price: float) -> float:
+        max_price = max(prices) if prices else 1.0
+        min_price = min(prices) if prices else 0.0
+
+        price_range = max_price - min_price
+        if price_range > 0:
+            price_factor = (current_price - min_price) / price_range
+        else:
+            price_factor = 0.0
+
+        return max(0.0, min(price_factor, 1.0))
 
     def _validate_required_data(
         self, sensor_data: Dict[str, Any], prices: List[float]
@@ -245,6 +278,8 @@ class PumpSteerSensor(Entity):
         sensor_data: Dict[str, Any],
         price_category: str,
         current_slot_index: int,
+        prices: List[float],
+        current_price: float,
     ) -> Tuple[float, str]:
         """Calculate output temperature based on current conditions"""
         indoor_temp = sensor_data["indoor_temp"]
@@ -253,6 +288,10 @@ class PumpSteerSensor(Entity):
         summer_threshold = sensor_data["summer_threshold"]
         aggressiveness = sensor_data["aggressiveness"]
         outdoor_temp_forecast_entity = sensor_data["outdoor_temp_forecast_entity"]
+        control_mode = sensor_data.get("control_mode", DEFAULT_CONTROL_MODE)
+
+        price_factor = self._calculate_price_factor(prices, current_price)
+        sensor_data["price_factor"] = price_factor
 
         temp_forecast_csv = None
 
@@ -294,22 +333,48 @@ class PumpSteerSensor(Entity):
             fake_temp = outdoor_temp
             mode = "neutral"
         else:
-            fake_temp, mode = calculate_temperature_output(
-                indoor_temp,
-                target_temp_for_logic,
-                outdoor_temp,
-                aggressiveness,
-                brake_temp,
-            )
+            if control_mode == "mpc":
+                previous_fake_temp = (
+                    self._last_fake_temp
+                    if self._last_fake_temp is not None
+                    else outdoor_temp
+                )
+                fake_temp, mode = calculate_mpc_temperature_output(
+                    indoor_temp,
+                    target_temp_for_logic,
+                    outdoor_temp,
+                    aggressiveness,
+                    brake_temp,
+                    price_factor,
+                    sensor_data["inertia"],
+                    previous_fake_temp,
+                    horizon_steps=sensor_data.get("mpc_horizon_steps", MPC_HORIZON_STEPS),
+                    price_weight=sensor_data.get("mpc_price_weight", MPC_PRICE_WEIGHT),
+                    comfort_weight=sensor_data.get(
+                        "mpc_comfort_weight", MPC_COMFORT_WEIGHT
+                    ),
+                    smooth_weight=sensor_data.get(
+                        "mpc_smooth_weight", MPC_SMOOTH_WEIGHT
+                    ),
+                )
+            else:
+                fake_temp, mode = calculate_temperature_output(
+                    indoor_temp,
+                    target_temp_for_logic,
+                    outdoor_temp,
+                    aggressiveness,
+                    brake_temp,
+                )
 
             temp_deficit = target_temp_for_logic - indoor_temp
             normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
             price_brake_window = (
                 NEUTRAL_TEMP_THRESHOLD + 0.05 + (0.45 * normalized_aggressiveness)
             )
+            heating_modes = {"heating", "mpc_heating"}
 
             if (
-                mode == "heating"
+                mode in heating_modes
                 and price_is_high
                 and temp_deficit <= price_brake_window
             ):
@@ -322,7 +387,8 @@ class PumpSteerSensor(Entity):
                 # Use dynamically computed brake_temp here instead of fixed BRAKING_MODE_TEMP
                 return brake_temp, "braking_by_price"
 
-        if mode not in ["braking_by_temp", "heating"] and price_is_high:
+        blocking_modes = {"braking_by_temp", "heating", "mpc_braking", "mpc_heating"}
+        if mode not in blocking_modes and price_is_high:
             price_brake_temp = brake_temp
             _LOGGER.info(
                 "Blocking heating at slot %s due to %s price (setting fake temp to %s °C)",
@@ -351,7 +417,11 @@ class PumpSteerSensor(Entity):
             "inertia": sensor_data.get("inertia"),
             "mode": mode,
             "fake_temp": fake_temp,
+            "fake_outdoor_temp": fake_temp,
             "price_category": self._last_price_category,
+            "price_factor": sensor_data.get("price_factor"),
+            "control_mode": sensor_data.get("control_mode"),
+            "return_temp": sensor_data.get("return_temp"),
             "timestamp": dt_util.now().isoformat(),
         }
 
@@ -450,15 +520,7 @@ class PumpSteerSensor(Entity):
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
-        min_price = min(prices) if prices else 0.0
-
-        price_range = max_price - min_price
-        if price_range > 0:
-            price_factor = (current_price - min_price) / price_range
-        else:
-            price_factor = 0.0
-
-        price_factor = max(0.0, min(price_factor, 1.0))
+        price_factor = self._calculate_price_factor(prices, current_price)
         braking_threshold_ratio = (
             1.0 - (sensor_data["aggressiveness"] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
         )
@@ -472,6 +534,9 @@ class PumpSteerSensor(Entity):
             "neutral": "neutral",
             "precool": "pre-cool (warm forecast)",
             "monitor_only": "monitor-only",
+            "mpc_heating": "mpc",
+            "mpc_braking": "mpc",
+            "mpc_neutral": "mpc",
             "error": "error in calculation",
         }
         # If heating is enabled while prices are very cheap, the trigger should reflect that
@@ -502,9 +567,11 @@ class PumpSteerSensor(Entity):
             "indoor_temperature": sensor_data["indoor_temp"],
             "outdoor_temperature": sensor_data["outdoor_temp"],
             "supply_temperature": sensor_data.get("supply_temp"),
+            "return_temperature": sensor_data.get("return_temp"),
             "summer_threshold": sensor_data["summer_threshold"],
             "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
             "price_factor_percent": round(price_factor * 100, 1),
+            "control_mode": sensor_data.get("control_mode"),
             "holiday_mode": holiday,
             "last_updated": dt_util.now().isoformat(),
             "temp_error_c": round(
@@ -525,6 +592,7 @@ class PumpSteerSensor(Entity):
                 "categories_count": len(categories),
                 "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
                 "supply_temp_available": sensor_data.get("supply_temp") is not None,
+                "return_temp_available": sensor_data.get("return_temp") is not None,
             },
         }
 
@@ -577,8 +645,11 @@ class PumpSteerSensor(Entity):
                 sensor_data,
                 price_category,
                 current_slot_index,
+                prices,
+                current_price,
             )
         self._state = round(fake_temp, 1)
+        self._last_fake_temp = fake_temp
 
         self._attributes = self._build_attributes(
             sensor_data,
