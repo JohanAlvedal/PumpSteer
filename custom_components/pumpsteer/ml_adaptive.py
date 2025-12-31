@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
 import json
 import logging
@@ -42,6 +42,9 @@ class PumpSteerMLCollector:
         self.current_session: Optional[Dict[str, Any]] = None
         self.learning_summary: Dict[str, Any] = {}
         self.model_coefficients: Optional[List[float]] = None
+        self.rls_state: Dict[str, Any] = {}
+        self._rls_model = PumpSteerRLSModel()
+        self._rls_last_indoor_temp: Optional[float] = None
 
         if ML_DEBUG_MODE:
             _LOGGER.setLevel(logging.DEBUG)
@@ -72,6 +75,7 @@ class PumpSteerMLCollector:
         self.learning_sessions = data.get("sessions", [])
         self.learning_summary = data.get("learning_summary", {})
         self.model_coefficients = data.get("model_coefficients", None)
+        self._load_rls_state(data.get("rls_state"))
 
         file_version = data.get("version", "unknown")
         if file_version != ML_DATA_VERSION:
@@ -93,6 +97,7 @@ class PumpSteerMLCollector:
             "session_count": len(self.learning_sessions),
             "learning_summary": self.learning_summary,
             "model_coefficients": self.model_coefficients,
+            "rls_state": self._serialize_rls_state(),
         }
 
         Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
@@ -119,6 +124,10 @@ class PumpSteerMLCollector:
         if self.current_session is None:
             return
 
+        fake_outdoor_temp = update_data.get("fake_outdoor_temp")
+        if fake_outdoor_temp is None:
+            fake_outdoor_temp = update_data.get("fake_temp")
+
         extended_data = {
             "timestamp": dt_util.now().isoformat(),
             "data": {
@@ -130,9 +139,11 @@ class PumpSteerMLCollector:
                 "heating_active": update_data.get("heating_active", False),
                 "aggressiveness": update_data.get("aggressiveness", 0),
                 "inertia": update_data.get("inertia", 1.0),
-                "fake_outdoor_temp": update_data.get("fake_outdoor_temp"),
+                "fake_outdoor_temp": fake_outdoor_temp,
                 "heat_demand": update_data.get("heat_demand"),
                 "house_inertia": update_data.get("house_inertia"),
+                "price_factor": update_data.get("price_factor"),
+                "supply_temp": update_data.get("supply_temp"),
             },
         }
 
@@ -142,6 +153,60 @@ class PumpSteerMLCollector:
             self.current_session["updates"] = self.current_session["updates"][
                 -ML_TRIMMED_UPDATES:
             ]
+
+        self.update_rls(update_data)
+
+    def update_rls(self, update_data: Dict[str, Any]) -> None:
+        """Update RLS model using the latest measurement."""
+        indoor_temp = update_data.get("indoor_temp")
+        outdoor_temp = update_data.get("outdoor_temp")
+        fake_temp = update_data.get("fake_outdoor_temp", update_data.get("fake_temp"))
+        aggressiveness = update_data.get("aggressiveness")
+        inertia = update_data.get("inertia")
+
+        if indoor_temp is None or outdoor_temp is None or fake_temp is None:
+            return
+
+        if self._rls_last_indoor_temp is None:
+            self._rls_last_indoor_temp = indoor_temp
+            return
+
+        delta_temp = indoor_temp - self._rls_last_indoor_temp
+        self._rls_last_indoor_temp = indoor_temp
+
+        aggr = (aggressiveness or 0.0) / 5.0
+        inertia_norm = 1.0 / max(0.5, inertia or 1.0)
+        heating_drive = max(0.0, outdoor_temp - fake_temp)
+
+        x = [1.0, heating_drive, aggr, inertia_norm]
+        error = self._rls_model.update(x, delta_temp)
+        self.rls_state = self._serialize_rls_state()
+
+        _LOGGER.debug("ML: RLS update error %.4f, coeff %s", error, self.rls_state)
+
+    def _serialize_rls_state(self) -> Dict[str, Any]:
+        return {
+            "theta": self._rls_model.theta.tolist(),
+            "covariance": self._rls_model.covariance.tolist(),
+            "lambda_factor": self._rls_model.lambda_factor,
+        }
+
+    def _load_rls_state(self, rls_state: Optional[Dict[str, Any]]) -> None:
+        if not rls_state:
+            return
+
+        theta = rls_state.get("theta")
+        covariance = rls_state.get("covariance")
+        lambda_factor = rls_state.get("lambda_factor")
+        if theta is None or covariance is None:
+            return
+
+        self._rls_model = PumpSteerRLSModel(
+            initial_theta=theta,
+            initial_covariance=covariance,
+            lambda_factor=lambda_factor,
+        )
+        self.rls_state = self._serialize_rls_state()
 
     def end_session(
         self, reason: str = "normal", final_data: Optional[Dict[str, Any]] = None
@@ -346,6 +411,7 @@ class PumpSteerMLCollector:
         return {
             "summary": self.learning_summary,
             "coefficients": self.model_coefficients,
+            "rls_coefficients": self.rls_state.get("theta") if self.rls_state else None,
             "total_sessions": len(self.learning_sessions),
             "last_updated": dt_util.now().isoformat(),
         }
@@ -356,3 +422,37 @@ class PumpSteerMLCollector:
             self.end_session("shutdown")
         await self.async_save_data()
         _LOGGER.info("ML: Collector shutdown complete.")
+
+
+class PumpSteerRLSModel:
+    """Recursive least squares model for indoor temperature dynamics."""
+
+    def __init__(
+        self,
+        initial_theta: Optional[List[float]] = None,
+        initial_covariance: Optional[List[List[float]]] = None,
+        lambda_factor: Optional[float] = None,
+    ) -> None:
+        self.theta = (
+            np.array(initial_theta, dtype=float)
+            if initial_theta is not None
+            else np.zeros(4)
+        )
+        self.covariance = (
+            np.array(initial_covariance, dtype=float)
+            if initial_covariance is not None
+            else np.eye(4) * 1000.0
+        )
+        self.lambda_factor = lambda_factor if lambda_factor is not None else 0.98
+
+    def update(self, x: List[float], y: float) -> float:
+        """Update model coefficients with one observation."""
+        x_vec = np.array(x, dtype=float)
+        p_x = self.covariance @ x_vec
+        gain = p_x / (self.lambda_factor + x_vec.T @ p_x)
+        error = y - self.theta.T @ x_vec
+        self.theta = self.theta + gain * error
+        self.covariance = (
+            self.covariance - np.outer(gain, p_x)
+        ) / self.lambda_factor
+        return float(error)

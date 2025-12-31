@@ -3,13 +3,13 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-ML_MODULE_VERSION: Final[str] = "1.0.0"
+ML_MODULE_VERSION: Final[str] = "1.1.0"
 
 ML_DATA_FILE_PATH: Final[str] = "/config/pumpsteer_ml_data.json"
 ML_MAX_SAVED_SESSIONS: Final[int] = 100
 ML_MAX_SESSION_UPDATES: Final[int] = 100
 ML_TRIMMED_UPDATES: Final[int] = 50
-ML_DATA_VERSION: Final[str] = "1.0"
+ML_DATA_VERSION: Final[str] = "1.1"
 
 ML_MIN_SESSIONS_FOR_ANALYSIS: Final[int] = 3
 ML_MIN_SESSIONS_FOR_RECOMMENDATIONS: Final[int] = 5
