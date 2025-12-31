@@ -54,6 +54,12 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required("electricity_price_entity"): selector(
                         {"entity": {"domain": "sensor"}}
                     ),
+                    vol.Optional("supply_temp_entity"): selector(
+                        {"entity": {"domain": "sensor", "device_class": "temperature"}}
+                    ),
+                    vol.Optional("monitor_only", default=False): selector(
+                        {"boolean": {}}
+                    ),
                 }
             ),
             errors=errors,
@@ -69,6 +75,7 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "real_outdoor_entity",
             "electricity_price_entity",
         ]
+        optional_entities = ["supply_temp_entity"]
 
         # Hardcoded entities that should always exist
         hardcoded_entities = {
@@ -92,6 +99,16 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[field] = "required"
             elif not await self._entity_available(entity_id):
                 errors[field] = "entity_unavailable"
+
+        # Check optional entities (warn only, do not block)
+        for field in optional_entities:
+            entity_id = user_input.get(field)
+            if not entity_id:
+                continue
+            if not await self._entity_exists(entity_id):
+                _LOGGER.warning("Optional entity not found: %s", entity_id)
+            elif not await self._entity_available(entity_id):
+                _LOGGER.warning("Optional entity unavailable: %s", entity_id)
 
         # Check hardcoded entities (warn only, do not block)
         for field, description in hardcoded_entities.items():

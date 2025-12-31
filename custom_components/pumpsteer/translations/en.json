@@ -6,7 +6,9 @@
         "data": {
           "indoor_temp_entity": "Indoor temperature sensor",
           "real_outdoor_entity": "Outdoor temperature sensor",
-          "electricity_price_entity": "Electricity price sensor"
+          "electricity_price_entity": "Electricity price sensor",
+          "supply_temp_entity": "Supply temperature sensor (optional)",
+          "monitor_only": "Monitor only (no control)"
         }
       }
     },
@@ -23,7 +25,9 @@
         "data": {
           "indoor_temp_entity": "Indoor temperature sensor",
           "real_outdoor_entity": "Outdoor temperature sensor",
-          "electricity_price_entity": "Electricity price sensor"
+          "electricity_price_entity": "Electricity price sensor",
+          "supply_temp_entity": "Supply temperature sensor (optional)",
+          "monitor_only": "Monitor only (no control)"
         }
       }
     },

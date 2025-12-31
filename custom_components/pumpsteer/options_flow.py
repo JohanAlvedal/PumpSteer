@@ -63,6 +63,16 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "electricity_price_entity",
                         default=current_data.get("electricity_price_entity"),
                     ): selector({"entity": {"domain": "sensor"}}),
+                    vol.Optional(
+                        "supply_temp_entity",
+                        default=current_data.get("supply_temp_entity"),
+                    ): selector(
+                        {"entity": {"domain": "sensor", "device_class": "temperature"}}
+                    ),
+                    vol.Optional(
+                        "monitor_only",
+                        default=current_data.get("monitor_only", False),
+                    ): selector({"boolean": {}}),
                 }
             ),
             errors=errors,
@@ -76,6 +86,9 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             "indoor_temp_entity": "Indoor temperature sensor",
             "real_outdoor_entity": "Outdoor temperature sensor",
             "electricity_price_entity": "Electricity price sensor",
+        }
+        optional_entities = {
+            "supply_temp_entity": "Supply temperature sensor",
         }
 
         hardcoded_entities = {
@@ -98,6 +111,15 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                 errors[field] = f"Entity not found: {entity_id}"
             elif not await self._entity_available(entity_id):
                 errors[field] = f"Entity unavailable: {entity_id}"
+
+        for field in optional_entities:
+            entity_id = user_input.get(field)
+            if not entity_id:
+                continue
+            if not await self._entity_exists(entity_id):
+                _LOGGER.warning("Optional entity not found: %s", entity_id)
+            elif not await self._entity_available(entity_id):
+                _LOGGER.warning("Optional entity unavailable: %s", entity_id)
 
         for field, description in hardcoded_entities.items():
             entity_id = user_input.get(field)
