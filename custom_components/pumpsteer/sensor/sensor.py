@@ -194,13 +194,23 @@ class PumpSteerSensor(Entity):
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch sensor data from Home Assistant"""
+        supply_temp_entity = config.get("supply_temp_entity")
+        supply_temp = None
+        if supply_temp_entity:
+            supply_temp = safe_float(get_state(self.hass, supply_temp_entity))
+
+        indoor_temp = safe_float(get_state(self.hass, config.get("indoor_temp_entity")))
+        outdoor_temp = safe_float(get_state(self.hass, config.get("real_outdoor_entity")))
+        heating_active = None
+        supply_temp_delta = None
+        if supply_temp is not None and indoor_temp is not None:
+            supply_temp_delta = supply_temp - indoor_temp
+            # Consider the pump active when supply temperature is noticeably above indoor temperature.
+            heating_active = supply_temp_delta >= 2.0
+
         return {
-            "indoor_temp": safe_float(
-                get_state(self.hass, config.get("indoor_temp_entity"))
-            ),
-            "outdoor_temp": safe_float(
-                get_state(self.hass, config.get("real_outdoor_entity"))
-            ),
+            "indoor_temp": indoor_temp,
+            "outdoor_temp": outdoor_temp,
             "target_temp": safe_float(
                 get_state(self.hass, HARDCODED_ENTITIES["target_temp_entity"])
             ),
@@ -219,6 +229,10 @@ class PumpSteerSensor(Entity):
             "outdoor_temp_forecast_entity": HARDCODED_ENTITIES[
                 "hourly_forecast_temperatures_entity"
             ],
+            "supply_temp": supply_temp,
+            "supply_temp_entity": supply_temp_entity,
+            "supply_temp_delta": supply_temp_delta,
+            "heating_active": heating_active,
         }
 
     def _validate_required_data(
@@ -342,6 +356,9 @@ class PumpSteerSensor(Entity):
         ml_data = {
             "indoor_temp": sensor_data.get("indoor_temp"),
             "outdoor_temp": sensor_data.get("outdoor_temp"),
+            "supply_temp": sensor_data.get("supply_temp"),
+            "supply_temp_delta": sensor_data.get("supply_temp_delta"),
+            "heating_active": sensor_data.get("heating_active"),
             "target_temp": sensor_data.get("target_temp"),
             "aggressiveness": sensor_data.get("aggressiveness", 0),
             "inertia": sensor_data.get("inertia"),
@@ -467,6 +484,7 @@ class PumpSteerSensor(Entity):
             "summer_mode": "summer",
             "neutral": "neutral",
             "precool": "pre-cool (warm forecast)",
+            "monitor_only": "monitor-only",
             "error": "error in calculation",
         }
         # If heating is enabled while prices are very cheap, the trigger should reflect that
@@ -486,6 +504,7 @@ class PumpSteerSensor(Entity):
         attributes = {
             "mode": mode,
             "fake_outdoor_temperature": self._state,
+            "monitor_only": sensor_data.get("monitor_only", False),
             "price_category": price_category,
             "status": "ok",
             "current_price": round(current_price, 3),
@@ -495,6 +514,9 @@ class PumpSteerSensor(Entity):
             "target_temperature": sensor_data["target_temp"],
             "indoor_temperature": sensor_data["indoor_temp"],
             "outdoor_temperature": sensor_data["outdoor_temp"],
+            "supply_temperature": sensor_data.get("supply_temp"),
+            "supply_temp_delta": sensor_data.get("supply_temp_delta"),
+            "heating_active": sensor_data.get("heating_active"),
             "summer_threshold": sensor_data["summer_threshold"],
             "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
             "price_factor_percent": round(price_factor * 100, 1),
@@ -517,6 +539,7 @@ class PumpSteerSensor(Entity):
                 "prices_count": len(prices),
                 "categories_count": len(categories),
                 "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
+                "supply_temp_available": sensor_data.get("supply_temp") is not None,
             },
         }
 
@@ -530,6 +553,7 @@ class PumpSteerSensor(Entity):
 
         config = {**self._config_entry.data, **self._config_entry.options}
         sensor_data = self._get_sensor_data(config)
+        sensor_data["monitor_only"] = bool(config.get("monitor_only", False))
         (
             prices,
             current_price,
@@ -560,11 +584,15 @@ class PumpSteerSensor(Entity):
         if holiday:
             sensor_data["target_temp"] = HOLIDAY_TEMP
 
-        fake_temp, mode = self._calculate_output_temperature(
-            sensor_data,
-            price_category,
-            current_slot_index,
-        )
+        if sensor_data["monitor_only"]:
+            fake_temp = sensor_data["outdoor_temp"]
+            mode = "monitor_only"
+        else:
+            fake_temp, mode = self._calculate_output_temperature(
+                sensor_data,
+                price_category,
+                current_slot_index,
+            )
         self._state = round(fake_temp, 1)
 
         self._attributes = self._build_attributes(
