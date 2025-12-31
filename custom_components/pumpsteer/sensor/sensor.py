@@ -199,15 +199,6 @@ class PumpSteerSensor(Entity):
         if supply_temp_entity:
             supply_temp = safe_float(get_state(self.hass, supply_temp_entity))
 
-        indoor_temp = safe_float(get_state(self.hass, config.get("indoor_temp_entity")))
-        outdoor_temp = safe_float(get_state(self.hass, config.get("real_outdoor_entity")))
-        heating_active = None
-        supply_temp_delta = None
-        if supply_temp is not None and indoor_temp is not None:
-            supply_temp_delta = supply_temp - indoor_temp
-            # Consider the pump active when supply temperature is noticeably above indoor temperature.
-            heating_active = supply_temp_delta >= 2.0
-
         return {
             "indoor_temp": indoor_temp,
             "outdoor_temp": outdoor_temp,
@@ -231,8 +222,6 @@ class PumpSteerSensor(Entity):
             ],
             "supply_temp": supply_temp,
             "supply_temp_entity": supply_temp_entity,
-            "supply_temp_delta": supply_temp_delta,
-            "heating_active": heating_active,
         }
 
     def _validate_required_data(
@@ -357,8 +346,6 @@ class PumpSteerSensor(Entity):
             "indoor_temp": sensor_data.get("indoor_temp"),
             "outdoor_temp": sensor_data.get("outdoor_temp"),
             "supply_temp": sensor_data.get("supply_temp"),
-            "supply_temp_delta": sensor_data.get("supply_temp_delta"),
-            "heating_active": sensor_data.get("heating_active"),
             "target_temp": sensor_data.get("target_temp"),
             "aggressiveness": sensor_data.get("aggressiveness", 0),
             "inertia": sensor_data.get("inertia"),
@@ -515,8 +502,6 @@ class PumpSteerSensor(Entity):
             "indoor_temperature": sensor_data["indoor_temp"],
             "outdoor_temperature": sensor_data["outdoor_temp"],
             "supply_temperature": sensor_data.get("supply_temp"),
-            "supply_temp_delta": sensor_data.get("supply_temp_delta"),
-            "heating_active": sensor_data.get("heating_active"),
             "summer_threshold": sensor_data["summer_threshold"],
             "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
             "price_factor_percent": round(price_factor * 100, 1),
