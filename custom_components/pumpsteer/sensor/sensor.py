@@ -243,6 +243,9 @@ class PumpSteerSensor(Entity):
             "mpc_price_weight": config.get("mpc_price_weight", MPC_PRICE_WEIGHT),
             "mpc_comfort_weight": config.get("mpc_comfort_weight", MPC_COMFORT_WEIGHT),
             "mpc_smooth_weight": config.get("mpc_smooth_weight", MPC_SMOOTH_WEIGHT),
+            "price_baseline_window_hours": config.get(
+                "price_baseline_window_hours", 72
+            ),
         }
 
     def _calculate_price_factor(self, prices: List[float], current_price: float) -> float:
@@ -321,6 +324,8 @@ class PumpSteerSensor(Entity):
             if outdoor_temp < WINTER_BRAKE_THRESHOLD
             else BRAKE_FAKE_TEMP
         )
+        # Blend brake temperature based on price factor to avoid abrupt changes.
+        price_brake_temp = outdoor_temp + (brake_temp - outdoor_temp) * price_factor
 
         temp_diff = indoor_temp - target_temp_for_logic
         price_is_high = (
@@ -384,12 +389,11 @@ class PumpSteerSensor(Entity):
                     price_brake_window,
                     aggressiveness,
                 )
-                # Use dynamically computed brake_temp here instead of fixed BRAKING_MODE_TEMP
-                return brake_temp, "braking_by_price"
+                # Use a price-weighted brake temperature to avoid abrupt steps.
+                return price_brake_temp, "braking_by_price"
 
         blocking_modes = {"braking_by_temp", "heating", "mpc_braking", "mpc_heating"}
         if mode not in blocking_modes and price_is_high:
-            price_brake_temp = brake_temp
             _LOGGER.info(
                 "Blocking heating at slot %s due to %s price (setting fake temp to %s °C)",
                 current_slot_index,
@@ -485,11 +489,12 @@ class PumpSteerSensor(Entity):
         if mode == "percentiles":
             categories = classify_prices(prices)
         else:
+            baseline_window_hours = config.get("price_baseline_window_hours", 72)
             categories = await async_hybrid_classify_with_history(
                 self.hass,
                 price_list=prices,
                 price_entity_id=entity_id,
-                trailing_hours=72,
+                trailing_hours=baseline_window_hours,
             )
 
         current_price, price_category = safe_get_current_price_and_category(
@@ -558,6 +563,9 @@ class PumpSteerSensor(Entity):
             "fake_outdoor_temperature": self._state,
             "monitor_only": sensor_data.get("monitor_only", False),
             "price_category": price_category,
+            "price_baseline_window_hours": sensor_data.get(
+                "price_baseline_window_hours", 72
+            ),
             "status": "ok",
             "current_price": round(current_price, 3),
             "max_price": round(max_price, 3),
