@@ -11,6 +11,7 @@ from .settings import (
     MPC_PRICE_WEIGHT,
     MPC_COMFORT_WEIGHT,
     MPC_SMOOTH_WEIGHT,
+    DEFAULT_TRAILING_HOURS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -111,6 +112,12 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "monitor_only",
                         default=current_data.get("monitor_only", False),
                     ): selector({"boolean": {}}),
+                    vol.Optional(
+                        "price_baseline_window_hours",
+                        default=current_data.get(
+                            "price_baseline_window_hours", DEFAULT_TRAILING_HOURS
+                        ),
+                    ): selector({"number": {"min": 24, "max": 96, "step": 24}}),
                 }
             ),
             errors=errors,

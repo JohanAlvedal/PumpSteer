@@ -27,7 +27,8 @@
           "real_outdoor_entity": "Outdoor temperature sensor",
           "electricity_price_entity": "Electricity price sensor",
           "supply_temp_entity": "Supply temperature sensor (optional)",
-          "monitor_only": "Monitor only (no control)"
+          "monitor_only": "Monitor only (no control)",
+          "price_baseline_window_hours": "Price baseline window (hours)"
         }
       }
     },

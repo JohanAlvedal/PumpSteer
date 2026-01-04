@@ -27,7 +27,8 @@
           "real_outdoor_entity": "options.step.init.data.real_outdoor_entity",
           "electricity_price_entity": "options.step.init.data.electricity_price_entity",
           "supply_temp_entity": "options.step.init.data.supply_temp_entity",
-          "monitor_only": "options.step.init.data.monitor_only"
+          "monitor_only": "options.step.init.data.monitor_only",
+          "price_baseline_window_hours": "options.step.init.data.price_baseline_window_hours"
         }
       }
     },
