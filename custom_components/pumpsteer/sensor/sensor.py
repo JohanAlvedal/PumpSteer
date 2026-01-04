@@ -294,7 +294,7 @@ class PumpSteerSensor(Entity):
         control_mode = sensor_data.get("control_mode", DEFAULT_CONTROL_MODE)
 
         price_factor = self._calculate_price_factor(prices, current_price)
-        sensor_data["price_factor"] = price_factor
+        price_range = (max(prices) - min(prices)) if prices else 0.0
 
         temp_forecast_csv = None
 
@@ -324,8 +324,6 @@ class PumpSteerSensor(Entity):
             if outdoor_temp < WINTER_BRAKE_THRESHOLD
             else BRAKE_FAKE_TEMP
         )
-        # Blend brake temperature based on price factor to avoid abrupt changes.
-        price_brake_temp = outdoor_temp + (brake_temp - outdoor_temp) * price_factor
 
         temp_diff = indoor_temp - target_temp_for_logic
         price_is_high = (
@@ -333,6 +331,13 @@ class PumpSteerSensor(Entity):
             or "very_expensive" in price_category
             or "extreme" in price_category
         )
+        if price_is_high and price_range == 0:
+            # When prices are flat, keep braking effective during high-price periods.
+            price_factor = 1.0
+        sensor_data["price_factor"] = price_factor
+
+        # Blend brake temperature based on price factor to avoid abrupt changes.
+        price_brake_temp = outdoor_temp + (brake_temp - outdoor_temp) * price_factor
 
         if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
             fake_temp = outdoor_temp
