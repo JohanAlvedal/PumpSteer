@@ -61,6 +61,8 @@ HARDCODED_ENTITIES = {
     "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
     "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
     "house_inertia_entity": "input_number.house_inertia",
+    "integral_error_entity": "input_number.integral_temp_error",
+    "integral_gain_entity": "input_number.pumpsteer_integral_gain",
     "price_model_entity": "input_select.pumpsteer_price_model",
 }
 
@@ -194,6 +196,16 @@ class PumpSteerSensor(Entity):
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch sensor data from Home Assistant"""
+        aggressiveness = safe_float(
+            get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])
+        )
+        integral_error = safe_float(
+            get_state(self.hass, HARDCODED_ENTITIES["integral_error_entity"])
+        )
+        integral_gain = safe_float(
+            get_state(self.hass, HARDCODED_ENTITIES["integral_gain_entity"])
+        )
+
         return {
             "indoor_temp": safe_float(
                 get_state(self.hass, config.get("indoor_temp_entity"))
@@ -208,10 +220,11 @@ class PumpSteerSensor(Entity):
                 get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])
             )
             or DEFAULT_SUMMER_THRESHOLD,
-            "aggressiveness": safe_float(
-                get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])
-            )
-            or DEFAULT_AGGRESSIVENESS,
+            "aggressiveness": (
+                aggressiveness if aggressiveness is not None else DEFAULT_AGGRESSIVENESS
+            ),
+            "integral_error": integral_error or 0.0,
+            "integral_gain": integral_gain or 0.0,
             "inertia": safe_float(
                 get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])
             )
@@ -249,6 +262,8 @@ class PumpSteerSensor(Entity):
         target_temp = sensor_data["target_temp"]
         summer_threshold = sensor_data["summer_threshold"]
         aggressiveness = sensor_data["aggressiveness"]
+        integral_error = sensor_data["integral_error"]
+        integral_gain = sensor_data["integral_gain"]
         outdoor_temp_forecast_entity = sensor_data["outdoor_temp_forecast_entity"]
 
         temp_forecast_csv = None
@@ -296,6 +311,8 @@ class PumpSteerSensor(Entity):
                 target_temp_for_logic,
                 outdoor_temp,
                 aggressiveness,
+                integral_error,
+                integral_gain,
                 brake_temp,
             )
 

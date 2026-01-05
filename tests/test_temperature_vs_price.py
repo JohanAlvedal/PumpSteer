@@ -54,6 +54,8 @@ def base_sensor_data(**kwargs):
         "outdoor_temp": 5.0,
         "summer_threshold": 18.0,
         "aggressiveness": 3.0,
+        "integral_error": 0.0,
+        "integral_gain": 0.0,
         "inertia": 1.0,
         "outdoor_temp_forecast_entity": None,
     }
@@ -138,9 +140,11 @@ def test_heating_compensation_factor_applied():
         actual_target_temp_for_logic=21.0,
         real_outdoor_temp=5.0,
         aggressiveness=3.0,
+        integral_error=0.0,
+        integral_gain=0.0,
         brake_temp=BRAKE_FAKE_TEMP,
     )
-    expected = 5.0 + (19.0 - 21.0) * 3.0 * HEATING_COMPENSATION_FACTOR
+    expected = 5.0 + (19.0 - 21.0) * HEATING_COMPENSATION_FACTOR
     assert mode == "heating"
     assert round(fake_temp, 6) == round(expected, 6)
 

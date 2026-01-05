@@ -16,6 +16,8 @@ def calculate_temperature_output(
     actual_target_temp_for_logic: float,
     real_outdoor_temp: float,
     aggressiveness: float,
+    integral_error: float,
+    integral_gain: float,
     brake_temp: float,
 ) -> tuple[float, str]:
     """
@@ -27,7 +29,9 @@ def calculate_temperature_output(
         actual_target_temp_for_logic (float): The target temperature for the logic.
         real_outdoor_temp (float): The actual outdoor temperature.
         aggressiveness (float): A value between 0 and 5 indicating how aggressively
-                                the system should react to temperature differences.
+                                the system should brake based on temperature surplus.
+        integral_error (float): Accumulated temperature error for PI-style heating.
+        integral_gain (float): Gain applied to the accumulated error for heating.
 
     Returns:
         tuple[float, str]: A tuple containing the calculated fake outdoor temperature
@@ -42,6 +46,8 @@ def calculate_temperature_output(
             actual_target_temp_for_logic,
             real_outdoor_temp,
             aggressiveness,
+            integral_error,
+            integral_gain,
         ]
     ):
         _LOGGER.error("Invalid input types for temperature calculation")
@@ -72,15 +78,19 @@ def calculate_temperature_output(
     # If indoor temperature is significantly below target, activate heating.
     # The fake temperature is reduced to make the heat pump work harder.
     if diff < HEATING_THRESHOLD:
-        fake_temp += diff * aggressiveness * HEATING_COMPENSATION_FACTOR
+        pi_adjustment = (diff * HEATING_COMPENSATION_FACTOR) + (
+            integral_error * integral_gain
+        )
+        fake_temp += pi_adjustment
 
         fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
         mode = "heating"
         _LOGGER.debug(
-            "TempControl: Heating (fake temp: %.1f °C, diff: %.2f, agg: %.1f) - Mode: %s",
+            "TempControl: Heating (fake temp: %.1f °C, diff: %.2f, integral: %.2f, gain: %.2f) - Mode: %s",
             fake_temp,
             diff,
-            aggressiveness,
+            integral_error,
+            integral_gain,
             mode,
         )
 
