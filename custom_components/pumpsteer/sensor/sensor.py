@@ -203,6 +203,10 @@ class PumpSteerSensor(Entity):
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch sensor data from Home Assistant"""
+        indoor_temp = safe_float(get_state(self.hass, config.get("indoor_temp_entity")))
+        outdoor_temp = safe_float(
+            get_state(self.hass, config.get("real_outdoor_entity"))
+        )
         supply_temp_entity = config.get("supply_temp_entity")
         supply_temp = None
         if supply_temp_entity:
