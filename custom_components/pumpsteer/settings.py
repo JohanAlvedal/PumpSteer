@@ -43,15 +43,6 @@ BRAKING_COMPENSATION_FACTOR: Final[float] = (
 
 HEATING_THRESHOLD: Final[float] = -1.5  # °C
 
-# === MPC SETTINGS ===
-DEFAULT_CONTROL_MODE: Final[str] = "rule_based"
-MPC_HORIZON_STEPS: Final[int] = 4
-MPC_PRICE_WEIGHT: Final[float] = 0.5
-MPC_COMFORT_WEIGHT: Final[float] = 1.0
-MPC_SMOOTH_WEIGHT: Final[float] = 0.2
-MPC_HEATING_GAIN: Final[float] = 0.15
-MPC_MAX_STEP_DELTA: Final[float] = 2.0
-
 # === ELECTRICITY PRICE CLASSIFICATION ===
 DEFAULT_PERCENTILES: Final[List[int]] = [
     10,
