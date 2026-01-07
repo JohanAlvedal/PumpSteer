@@ -30,6 +30,9 @@ HEATING_COMPENSATION_FACTOR: Final[float] = (
 BRAKING_COMPENSATION_FACTOR: Final[float] = (
     0.4  # Factor for raising fake temp per °C surplus and aggressiveness unit
 )
+BRAKING_MIN_DIFF: Final[float] = (
+    0.1  # Minimal surplus used to start braking at target temperature
+)
 
 # === COMFORT CONTROL SETTINGS ===
 # Defines when the system considers the indoor temperature "too cold"
