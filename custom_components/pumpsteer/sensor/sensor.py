@@ -302,7 +302,7 @@ class PumpSteerSensor(Entity):
             or "extreme" in price_category
         )
 
-        if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
+        if temp_diff < 0 and abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
             fake_temp = outdoor_temp
             mode = "neutral"
         else:
