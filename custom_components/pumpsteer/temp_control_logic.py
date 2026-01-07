@@ -98,13 +98,12 @@ def calculate_temperature_output(
     # If indoor temperature is at or above target, activate braking.
     # The fake temperature is increased gradually to make the heat pump work less (or cool).
     elif diff >= 0:
-        effective_diff = max(diff, BRAKING_MIN_DIFF)
-        fake_temp += effective_diff * aggressiveness * BRAKING_COMPENSATION_FACTOR
+        fake_temp += diff * aggressiveness * BRAKING_COMPENSATION_FACTOR
         brake_cap = max(min(brake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
         fake_temp = max(min(fake_temp, brake_cap), MIN_FAKE_TEMP)
         mode = "braking_by_temp"
         _LOGGER.debug(
-            "TempControl: Braking (fake temp: %.1f °C, diff: %.2f, eff: %.2f, agg: %.1f, cap: %.1f) - Mode: %s",
+            "TempControl: Braking (fake temp: %.1f °C, diff: %.2f, agg: %.1f, cap: %.1f) - Mode: %s",
             fake_temp,
             diff,
             effective_diff,
