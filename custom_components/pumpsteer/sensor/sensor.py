@@ -30,7 +30,7 @@ from ..utils import (
     get_state,
     get_attr,
     get_version,
-    should_precool,
+    safe_parse_temperature_forecast,
     detect_price_interval_minutes,
     compute_price_slot_index,
     get_price_window_for_hours,
@@ -238,8 +238,8 @@ class PumpSteerSensor(Entity):
         aggressiveness = sensor_data["aggressiveness"]
         temp_forecast_csv = sensor_data.get("outdoor_temp_forecast_csv")
 
-        if temp_forecast_csv and should_precool(
-            temp_forecast_csv, summer_threshold + PRECOOL_MARGIN
+        if forecast_temps and any(
+            temp >= summer_threshold + PRECOOL_MARGIN for temp in forecast_temps
         ):
             _LOGGER.info(
                 "Activating summer precool mode due to forecasted high temperatures"
