@@ -183,7 +183,6 @@ class PumpSteerSensor(Entity):
         forecast_csv = get_state(
             self.hass, HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"]
         )
-        forecast_temps = safe_parse_temperature_forecast(forecast_csv)
         return {
             "indoor_temp": safe_float(
                 get_state(self.hass, config.get("indoor_temp_entity"))
@@ -207,7 +206,6 @@ class PumpSteerSensor(Entity):
             )
             or DEFAULT_HOUSE_INERTIA,
             "outdoor_temp_forecast_csv": forecast_csv,
-            "outdoor_temp_forecast_temps": forecast_temps,
         }
 
     def _validate_required_data(
@@ -238,7 +236,7 @@ class PumpSteerSensor(Entity):
         target_temp = sensor_data["target_temp"]
         summer_threshold = sensor_data["summer_threshold"]
         aggressiveness = sensor_data["aggressiveness"]
-        forecast_temps = sensor_data.get("outdoor_temp_forecast_temps")
+        temp_forecast_csv = sensor_data.get("outdoor_temp_forecast_csv")
 
         if forecast_temps and any(
             temp >= summer_threshold + PRECOOL_MARGIN for temp in forecast_temps
@@ -512,9 +510,7 @@ class PumpSteerSensor(Entity):
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
-                "forecast_available": bool(
-                    sensor_data.get("outdoor_temp_forecast_temps")
-                ),
+                "forecast_available": bool(sensor_data.get("outdoor_temp_forecast_csv")),
             },
         }
 
