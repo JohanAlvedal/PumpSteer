@@ -6,22 +6,10 @@ from homeassistant.core import callback
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
+from .const import DOMAIN, HARDCODED_ENTITIES
 from .options_flow import PumpSteerOptionsFlowHandler
 
 _LOGGER = logging.getLogger(__name__)
-
-DOMAIN = "pumpsteer"
-
-# Hardcoded entities that are always present in the package file
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-}
 
 
 class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -79,6 +67,9 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "holiday_start_datetime_entity": "Holiday start datetime",
             "holiday_end_datetime_entity": "Holiday end datetime",
             "auto_tune_inertia_entity": "Autotune inertia boolean",
+            "aggressiveness_entity": "Aggressiveness input_number",
+            "house_inertia_entity": "House inertia input_number",
+            "price_model_entity": "Price model input_select",
         }
 
         # Check user-selected entities (block if missing)
@@ -130,7 +121,7 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def is_matching(self, other_flow: vol.Self) -> bool:
         """Return True if other_flow is matching this flow"""
-        raise NotImplementedError
+        return False
 
     @staticmethod
     @callback

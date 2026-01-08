@@ -129,7 +129,8 @@ class PumpSteerMLSensor(Entity):
     def _determine_state(self, insights: Dict[str, Any]) -> str:
         """Decide what the main state string should be"""
         summary = insights.get("summary", {}) or {}
-        total = summary.get("total_sessions", 0) or 0
+        summary_data = summary.get("summary", {}) or {}
+        total = summary_data.get("total_sessions", 0) or 0
         coeffs = summary.get("coefficients")
 
         # Too few sessions collected → still collecting data
@@ -148,17 +149,18 @@ class PumpSteerMLSensor(Entity):
     ) -> Dict[str, Any]:
         """Build a clear and concise attribute dictionary"""
         summary = insights.get("summary", {})
+        summary_data = summary.get("summary", {})
         recs = insights.get("recommendations", [])
 
         attributes = {
-            "total_sessions": summary.get("total_sessions"),
-            "avg_duration": summary.get("avg_duration"),
-            "avg_drift": summary.get("avg_drift"),
-            "avg_inertia": summary.get("avg_inertia"),
-            "avg_aggressiveness": summary.get("avg_aggressiveness"),
+            "total_sessions": summary_data.get("total_sessions"),
+            "avg_duration": summary_data.get("avg_duration"),
+            "avg_drift": summary_data.get("avg_drift"),
+            "avg_inertia": summary_data.get("avg_inertia"),
+            "avg_aggressiveness": summary_data.get("avg_aggressiveness"),
             "coefficients": summary.get("coefficients"),
             "recommendations": recs or ["Collecting data…"],
-            "last_learning_update": summary.get("updated"),
+            "last_learning_update": summary_data.get("updated"),
             # control system info
             "auto_tune_active": control_data.get("autotune_active"),
             "inertia": control_data.get("inertia"),
