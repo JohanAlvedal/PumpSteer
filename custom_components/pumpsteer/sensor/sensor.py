@@ -333,7 +333,11 @@ class PumpSteerSensor(Entity):
         return fake_temp, mode
 
     def _collect_ml_data(
-        self, sensor_data: Dict[str, Any], mode: str, fake_temp: float
+        self,
+        sensor_data: Dict[str, Any],
+        mode: str,
+        fake_temp: float,
+        current_price: float,
     ) -> None:
         """Collect data for machine learning"""
         if not self.ml_collector:
@@ -345,8 +349,10 @@ class PumpSteerSensor(Entity):
             "target_temp": sensor_data.get("target_temp"),
             "aggressiveness": sensor_data.get("aggressiveness", 0),
             "inertia": sensor_data.get("inertia"),
+            "house_inertia": sensor_data.get("inertia"),
             "mode": mode,
-            "fake_temp": fake_temp,
+            "fake_outdoor_temp": fake_temp,
+            "price_now": current_price,
             "price_category": self._last_price_category,
             "timestamp": dt_util.now().isoformat(),
         }
@@ -581,7 +587,7 @@ class PumpSteerSensor(Entity):
         )
 
         if self.ml_collector:
-            self._collect_ml_data(sensor_data, mode, fake_temp)
+            self._collect_ml_data(sensor_data, mode, fake_temp, current_price)
 
         self._last_update_time = update_time
 
