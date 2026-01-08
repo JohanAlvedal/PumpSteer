@@ -5,19 +5,9 @@ from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
+from .const import DOMAIN, HARDCODED_ENTITIES
+
 _LOGGER = logging.getLogger(__name__)
-
-DOMAIN = "pumpsteer"
-
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-}
 
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
@@ -86,6 +76,9 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             "holiday_start_datetime_entity": "Holiday start datetime",
             "holiday_end_datetime_entity": "Holiday end datetime",
             "auto_tune_inertia_entity": "Autotune inertia boolean",
+            "aggressiveness_entity": "Aggressiveness input_number",
+            "house_inertia_entity": "House inertia input_number",
+            "price_model_entity": "Price model input_select",
         }
 
         for field, description in user_configurable_entities.items():

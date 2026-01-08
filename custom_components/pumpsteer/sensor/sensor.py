@@ -11,6 +11,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
+from ..const import DOMAIN, HARDCODED_ENTITIES
 from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
@@ -47,22 +48,7 @@ except ImportError as e:
     ML_AVAILABLE = False
     _LOGGER.warning("ML features disabled: %s", e)
 
-DOMAIN = "pumpsteer"
-
 SW_VERSION = get_version()
-
-# Hardcoded entities
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-    "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
-    "house_inertia_entity": "input_number.house_inertia",
-    "price_model_entity": "input_select.pumpsteer_price_model",
-}
 
 NEUTRAL_TEMP_THRESHOLD = 0.5
 DEFAULT_SUMMER_THRESHOLD = 18.0
@@ -194,6 +180,9 @@ class PumpSteerSensor(Entity):
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch sensor data from Home Assistant"""
+        forecast_csv = get_state(
+            self.hass, HARDCODED_ENTITIES["hourly_forecast_temperatures_entity"]
+        )
         return {
             "indoor_temp": safe_float(
                 get_state(self.hass, config.get("indoor_temp_entity"))
@@ -216,9 +205,7 @@ class PumpSteerSensor(Entity):
                 get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])
             )
             or DEFAULT_HOUSE_INERTIA,
-            "outdoor_temp_forecast_entity": HARDCODED_ENTITIES[
-                "hourly_forecast_temperatures_entity"
-            ],
+            "outdoor_temp_forecast_csv": forecast_csv,
         }
 
     def _validate_required_data(
@@ -249,13 +236,7 @@ class PumpSteerSensor(Entity):
         target_temp = sensor_data["target_temp"]
         summer_threshold = sensor_data["summer_threshold"]
         aggressiveness = sensor_data["aggressiveness"]
-        outdoor_temp_forecast_entity = sensor_data["outdoor_temp_forecast_entity"]
-
-        temp_forecast_csv = None
-
-        # Fetch forecast if entity provided
-        if outdoor_temp_forecast_entity:
-            temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
+        temp_forecast_csv = sensor_data.get("outdoor_temp_forecast_csv")
 
         if temp_forecast_csv and should_precool(
             temp_forecast_csv, summer_threshold + PRECOOL_MARGIN
@@ -333,7 +314,11 @@ class PumpSteerSensor(Entity):
         return fake_temp, mode
 
     def _collect_ml_data(
-        self, sensor_data: Dict[str, Any], mode: str, fake_temp: float
+        self,
+        sensor_data: Dict[str, Any],
+        mode: str,
+        fake_temp: float,
+        current_price: float,
     ) -> None:
         """Collect data for machine learning"""
         if not self.ml_collector:
@@ -345,8 +330,10 @@ class PumpSteerSensor(Entity):
             "target_temp": sensor_data.get("target_temp"),
             "aggressiveness": sensor_data.get("aggressiveness", 0),
             "inertia": sensor_data.get("inertia"),
+            "house_inertia": sensor_data.get("inertia"),
             "mode": mode,
-            "fake_temp": fake_temp,
+            "fake_outdoor_temp": fake_temp,
+            "price_now": current_price,
             "price_category": self._last_price_category,
             "timestamp": dt_util.now().isoformat(),
         }
@@ -383,11 +370,18 @@ class PumpSteerSensor(Entity):
             return [], 0.0, "unknown", [], 60, 0
 
         try:
-            prices = [
-                float(p)
-                for p in prices_raw
-                if isinstance(p, (float, int)) and p is not None
-            ]
+            prices = []
+            for price in prices_raw:
+                if isinstance(price, (float, int)) and price is not None:
+                    prices.append(float(price))
+                    continue
+
+                if isinstance(price, dict):
+                    value = price.get("value") if "value" in price else price.get("price")
+                    if isinstance(value, (float, int)) and value is not None:
+                        prices.append(float(value))
+            if not prices:
+                raise ValueError("No numeric prices parsed from list")
         except (ValueError, TypeError) as e:
             _LOGGER.error("Error converting prices to float: %s", e)
             return [], 0.0, "unknown", [], 60, 0
@@ -516,7 +510,7 @@ class PumpSteerSensor(Entity):
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
-                "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
+                "forecast_available": bool(sensor_data.get("outdoor_temp_forecast_csv")),
             },
         }
 
@@ -581,7 +575,7 @@ class PumpSteerSensor(Entity):
         )
 
         if self.ml_collector:
-            self._collect_ml_data(sensor_data, mode, fake_temp)
+            self._collect_ml_data(sensor_data, mode, fake_temp, current_price)
 
         self._last_update_time = update_time
 
