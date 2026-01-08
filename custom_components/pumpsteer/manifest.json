@@ -9,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/JohanAlvedal/pumpsteer/issues",
   "requirements": [],
-  "version": "1.6.5"
+  "version": "1.6.6"
 }
