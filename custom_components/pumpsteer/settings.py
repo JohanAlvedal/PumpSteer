@@ -30,6 +30,14 @@ HEATING_COMPENSATION_FACTOR: Final[float] = (
 BRAKING_COMPENSATION_FACTOR: Final[float] = (
     0.4  # Factor for raising fake temp per °C surplus and aggressiveness unit
 )
+RAMP_STEP_BASE: Final[float] = 0.5  # Minimum °C step per update for fake temp
+RAMP_STEP_PER_AGGRESSIVENESS: Final[float] = (
+    0.3  # Additional °C step per aggressiveness unit
+)
+RAMP_MAX_STEP: Final[float] = 3.0  # Hard cap on °C step per update
+BRAKE_RAMP_MULTIPLIER: Final[float] = (
+    1.25  # Allow slightly faster ramp when braking modes are active
+)
 
 # === COMFORT CONTROL SETTINGS ===
 # Defines when the system considers the indoor temperature "too cold"
