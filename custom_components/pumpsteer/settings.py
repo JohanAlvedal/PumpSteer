@@ -15,6 +15,7 @@ MAX_FAKE_TEMP: Final[float] = 25.0
 BRAKE_FAKE_TEMP: Final[float] = 25.0
 PRECOOL_LOOKAHEAD: Final[int] = 24  # Hours ahead to look for precooling
 PRECOOL_MARGIN: Final[float] = 3.0  # °C margin added to summer threshold for precooling
+MPC_HORIZON_STEPS: Final[int] = 24  # Default horizon steps for optional MPC logic
 WINTER_BRAKE_TEMP_OFFSET: Final[float] = (
     10.0  # °C offset above outdoor temp when braking in winter
 )
@@ -29,6 +30,14 @@ HEATING_COMPENSATION_FACTOR: Final[float] = (
 )
 BRAKING_COMPENSATION_FACTOR: Final[float] = (
     0.4  # Factor for raising fake temp per °C surplus and aggressiveness unit
+)
+RAMP_STEP_BASE: Final[float] = 0.5  # Minimum °C step per update for fake temp
+RAMP_STEP_PER_AGGRESSIVENESS: Final[float] = (
+    0.3  # Additional °C step per aggressiveness unit
+)
+RAMP_MAX_STEP: Final[float] = 3.0  # Hard cap on °C step per update
+BRAKE_RAMP_MULTIPLIER: Final[float] = (
+    1.25  # Allow slightly faster ramp when braking modes are active
 )
 
 # === COMFORT CONTROL SETTINGS ===
