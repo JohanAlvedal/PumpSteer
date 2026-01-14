@@ -15,6 +15,7 @@ MAX_FAKE_TEMP: Final[float] = 25.0
 BRAKE_FAKE_TEMP: Final[float] = 25.0
 PRECOOL_LOOKAHEAD: Final[int] = 24  # Hours ahead to look for precooling
 PRECOOL_MARGIN: Final[float] = 3.0  # °C margin added to summer threshold for precooling
+MPC_HORIZON_STEPS: Final[int] = 24  # Default horizon steps for optional MPC logic
 WINTER_BRAKE_TEMP_OFFSET: Final[float] = (
     10.0  # °C offset above outdoor temp when braking in winter
 )
