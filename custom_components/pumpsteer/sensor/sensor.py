@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple, List
 
@@ -19,6 +20,13 @@ from ..settings import (
     HOLIDAY_TEMP,
     BRAKE_FAKE_TEMP,
     AGGRESSIVENESS_SCALING_FACTOR,
+    BRAKE_RAMP_MULTIPLIER,
+    RAMP_MAX_STEP,
+    RAMP_STEP_BASE,
+    RAMP_STEP_PER_MINUTE,
+    RAMP_STEP_PER_AGGRESSIVENESS,
+    SMOOTHING_MAX_ALPHA,
+    SMOOTHING_MIN_ALPHA,
     WINTER_BRAKE_TEMP_OFFSET,
     WINTER_BRAKE_THRESHOLD,
     CHEAP_PRICE_OVERSHOOT,
@@ -107,6 +115,7 @@ class PumpSteerSensor(Entity):
         self._attributes = {}
         self._name = "PumpSteer"
         self._last_update_time = None
+        self._last_fake_temp = None
 
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
@@ -332,6 +341,48 @@ class PumpSteerSensor(Entity):
         fake_temp = min(fake_temp, BRAKE_FAKE_TEMP)
         return fake_temp, mode
 
+    def _apply_temperature_ramp(
+        self,
+        target_fake_temp: float,
+        aggressiveness: float,
+        mode: str,
+        update_time: datetime,
+    ) -> float:
+        """Smooth temperature changes by limiting the step per update."""
+        if self._last_fake_temp is None:
+            self._last_fake_temp = target_fake_temp
+            return target_fake_temp
+
+        minutes_since_update = 1.0
+        if self._last_update_time:
+            minutes_since_update = max(
+                1.0, (update_time - self._last_update_time).total_seconds() / 60.0
+            )
+
+        ramp_step = (
+            RAMP_STEP_BASE
+            + (aggressiveness * RAMP_STEP_PER_AGGRESSIVENESS)
+            + (minutes_since_update * RAMP_STEP_PER_MINUTE)
+        )
+        ramp_step = min(ramp_step, RAMP_MAX_STEP * minutes_since_update)
+
+        if mode in {"braking_by_price", "braking_by_temp", "precool"}:
+            ramp_step *= BRAKE_RAMP_MULTIPLIER
+
+        delta = target_fake_temp - self._last_fake_temp
+        alpha = SMOOTHING_MIN_ALPHA + (
+            (SMOOTHING_MAX_ALPHA - SMOOTHING_MIN_ALPHA) * (aggressiveness / 5.0)
+        )
+        alpha = max(SMOOTHING_MIN_ALPHA, min(SMOOTHING_MAX_ALPHA, alpha))
+        target_fake_temp = self._last_fake_temp + (delta * alpha)
+
+        delta = target_fake_temp - self._last_fake_temp
+        if abs(delta) > ramp_step:
+            target_fake_temp = self._last_fake_temp + math.copysign(ramp_step, delta)
+
+        self._last_fake_temp = target_fake_temp
+        return target_fake_temp
+
     def _collect_ml_data(
         self, sensor_data: Dict[str, Any], mode: str, fake_temp: float
     ) -> None:
@@ -543,6 +594,7 @@ class PumpSteerSensor(Entity):
         missing = self._validate_required_data(sensor_data, prices)
         if missing:
             self._state = STATE_UNAVAILABLE
+            self._last_fake_temp = None
             self._attributes = {
                 "Status": f"Missing: {', '.join(missing)}",
                 "Last Updated": update_time.isoformat(),
@@ -564,6 +616,12 @@ class PumpSteerSensor(Entity):
             sensor_data,
             price_category,
             current_slot_index,
+        )
+        fake_temp = self._apply_temperature_ramp(
+            fake_temp,
+            sensor_data["aggressiveness"],
+            mode,
+            update_time,
         )
         self._state = round(fake_temp, 1)
 
