@@ -15,9 +15,14 @@ MAX_FAKE_TEMP: Final[float] = 25.0
 BRAKE_FAKE_TEMP: Final[float] = 25.0
 PRECOOL_LOOKAHEAD: Final[int] = 24  # Hours ahead to look for precooling
 PRECOOL_MARGIN: Final[float] = 3.0  # °C margin added to summer threshold for precooling
-MPC_HORIZON_STEPS: Final[int] = 24  # Default horizon steps for optional MPC logic
-MPC_PRICE_WEIGHT: Final[float] = 1.0  # Default price weight for optional MPC logic
-MPC_COMFORT_WEIGHT: Final[float] = 1.0  # Default comfort weight for optional MPC logic
+# === MPC SETTINGS (optional) ===
+MPC_HORIZON_STEPS: Final[int] = 24
+MPC_PRICE_WEIGHT: Final[float] = 1.0
+MPC_COMFORT_WEIGHT: Final[float] = 1.0
+MPC_SMOOTH_WEIGHT: Final[float] = 1.0  # penalize rapid changes / jitter
+MPC_HEATING_GAIN: Final[float] = 0.05   # startvärde, justera vid behov
+MPC_MAX_STEP_DELTA: Final[float] = 3.0  # matchar dina candidates ±3.0
+
 WINTER_BRAKE_TEMP_OFFSET: Final[float] = (
     10.0  # °C offset above outdoor temp when braking in winter
 )
@@ -41,11 +46,6 @@ RAMP_MAX_STEP: Final[float] = 3.0  # Hard cap on °C step per update
 BRAKE_RAMP_MULTIPLIER: Final[float] = (
     1.25  # Allow slightly faster ramp when braking modes are active
 )
-RAMP_STEP_PER_MINUTE: Final[float] = (
-    0.4  # Additional °C step per minute since last update
-)
-SMOOTHING_MIN_ALPHA: Final[float] = 0.1  # Lower bound for smoothing factor
-SMOOTHING_MAX_ALPHA: Final[float] = 0.6  # Upper bound for smoothing factor
 
 # === COMFORT CONTROL SETTINGS ===
 # Defines when the system considers the indoor temperature "too cold"

@@ -23,10 +23,7 @@ from ..settings import (
     BRAKE_RAMP_MULTIPLIER,
     RAMP_MAX_STEP,
     RAMP_STEP_BASE,
-    RAMP_STEP_PER_MINUTE,
     RAMP_STEP_PER_AGGRESSIVENESS,
-    SMOOTHING_MAX_ALPHA,
-    SMOOTHING_MIN_ALPHA,
     WINTER_BRAKE_TEMP_OFFSET,
     WINTER_BRAKE_THRESHOLD,
     CHEAP_PRICE_OVERSHOOT,
@@ -346,35 +343,17 @@ class PumpSteerSensor(Entity):
         target_fake_temp: float,
         aggressiveness: float,
         mode: str,
-        update_time: datetime,
     ) -> float:
         """Smooth temperature changes by limiting the step per update."""
         if self._last_fake_temp is None:
             self._last_fake_temp = target_fake_temp
             return target_fake_temp
 
-        minutes_since_update = 1.0
-        if self._last_update_time:
-            minutes_since_update = max(
-                1.0, (update_time - self._last_update_time).total_seconds() / 60.0
-            )
-
-        ramp_step = (
-            RAMP_STEP_BASE
-            + (aggressiveness * RAMP_STEP_PER_AGGRESSIVENESS)
-            + (minutes_since_update * RAMP_STEP_PER_MINUTE)
-        )
-        ramp_step = min(ramp_step, RAMP_MAX_STEP * minutes_since_update)
+        ramp_step = RAMP_STEP_BASE + (aggressiveness * RAMP_STEP_PER_AGGRESSIVENESS)
+        ramp_step = min(ramp_step, RAMP_MAX_STEP)
 
         if mode in {"braking_by_price", "braking_by_temp", "precool"}:
             ramp_step *= BRAKE_RAMP_MULTIPLIER
-
-        delta = target_fake_temp - self._last_fake_temp
-        alpha = SMOOTHING_MIN_ALPHA + (
-            (SMOOTHING_MAX_ALPHA - SMOOTHING_MIN_ALPHA) * (aggressiveness / 5.0)
-        )
-        alpha = max(SMOOTHING_MIN_ALPHA, min(SMOOTHING_MAX_ALPHA, alpha))
-        target_fake_temp = self._last_fake_temp + (delta * alpha)
 
         delta = target_fake_temp - self._last_fake_temp
         if abs(delta) > ramp_step:
@@ -621,7 +600,6 @@ class PumpSteerSensor(Entity):
             fake_temp,
             sensor_data["aggressiveness"],
             mode,
-            update_time,
         )
         self._state = round(fake_temp, 1)
 
