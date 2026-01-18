@@ -214,10 +214,9 @@ class PumpSteerSensor(Entity):
                 get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])
             )
             or DEFAULT_SUMMER_THRESHOLD,
-            "aggressiveness": safe_float(
+            "aggressiveness": self._resolve_aggressiveness(
                 get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])
-            )
-            or DEFAULT_AGGRESSIVENESS,
+            ),
             "inertia": safe_float(
                 get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])
             )
@@ -226,6 +225,14 @@ class PumpSteerSensor(Entity):
                 "hourly_forecast_temperatures_entity"
             ],
         }
+
+    @staticmethod
+    def _resolve_aggressiveness(raw_value: Optional[StateType]) -> float:
+        """Resolve aggressiveness while allowing zero for passthrough mode."""
+        value = safe_float(raw_value)
+        if value is None:
+            return DEFAULT_AGGRESSIVENESS
+        return max(0.0, min(5.0, value))
 
     def _validate_required_data(
         self, sensor_data: Dict[str, Any], prices: List[float]
