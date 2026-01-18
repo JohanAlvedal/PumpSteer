@@ -234,6 +234,16 @@ class PumpSteerSensor(Entity):
             return DEFAULT_AGGRESSIVENESS
         return max(0.0, min(5.0, value))
 
+    @staticmethod
+    def _calculate_price_brake_temp(
+        outdoor_temp: float,
+        brake_temp: float,
+        aggressiveness: float,
+    ) -> float:
+        """Scale price braking temperature based on aggressiveness."""
+        normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
+        return outdoor_temp + (brake_temp - outdoor_temp) * normalized_aggressiveness
+
     def _validate_required_data(
         self, sensor_data: Dict[str, Any], prices: List[float]
     ) -> Optional[List[str]]:
@@ -323,6 +333,11 @@ class PumpSteerSensor(Entity):
                 and price_is_high
                 and temp_deficit <= price_brake_window
             ):
+                price_brake_temp = self._calculate_price_brake_temp(
+                    outdoor_temp,
+                    brake_temp,
+                    aggressiveness,
+                )
                 _LOGGER.info(
                     "Price braking active during heating: deficit %.2f °C within %.2f °C window (agg %.2f)",
                     temp_deficit,
@@ -330,10 +345,14 @@ class PumpSteerSensor(Entity):
                     aggressiveness,
                 )
                 # Use dynamically computed brake_temp here instead of fixed BRAKING_MODE_TEMP
-                return brake_temp, "braking_by_price"
+                return price_brake_temp, "braking_by_price"
 
         if mode not in ["braking_by_temp", "heating"] and price_is_high:
-            price_brake_temp = brake_temp
+            price_brake_temp = self._calculate_price_brake_temp(
+                outdoor_temp,
+                brake_temp,
+                aggressiveness,
+            )
             _LOGGER.info(
                 "Blocking heating at slot %s due to %s price (setting fake temp to %s °C)",
                 current_slot_index,
