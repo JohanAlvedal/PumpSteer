@@ -36,14 +36,9 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             errors = await self._validate_entities(combined_data)
 
             if not errors:
-                updated_data = entry.data.copy()
-                updated_data.update(combined_data)
+                return self.async_create_entry(title="", data=user_input)
 
-                self.hass.config_entries.async_update_entry(entry, data=updated_data)
-
-                return self.async_create_entry(title="", data={})
-
-        current_data = entry.data
+        current_data = {**entry.data, **entry.options}
 
         return self.async_show_form(
             step_id="init",
