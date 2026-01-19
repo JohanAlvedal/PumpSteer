@@ -106,6 +106,13 @@ def now():
 
 
 dt.now = now
+
+
+def parse_datetime(value):
+    return value
+
+
+dt.parse_datetime = parse_datetime
 util.dt = dt
 sys.modules["homeassistant.util"] = util
 sys.modules["homeassistant.util.dt"] = dt

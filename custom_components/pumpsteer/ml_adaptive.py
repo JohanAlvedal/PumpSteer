@@ -27,6 +27,7 @@ from .ml_settings import (
     ML_DATA_VERSION,
     ML_NOTIFICATION_PREFIX,
     ML_DEBUG_MODE,
+    ML_MIN_HEATING_SESSIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -185,7 +186,7 @@ class PumpSteerMLCollector:
         temp_rise = last_temp - first_temp
         avg_price = statistics.mean(prices) if prices else 0
         avg_outdoor = statistics.mean(outdoor_temps) if outdoor_temps else None
-        comfort_drift = abs(targets[-1] - last_temp) if targets else 0
+        comfort_drift = abs(targets[-1] - last_temp) if targets else None
 
         start_time = datetime.fromisoformat(self.current_session["start_time"])
         end_time = datetime.fromisoformat(self.current_session["end_time"])
@@ -203,30 +204,43 @@ class PumpSteerMLCollector:
             "avg_outdoor_temp": round(avg_outdoor, 1)
             if avg_outdoor is not None
             else None,
-            "comfort_drift": round(comfort_drift, 2),
+            "comfort_drift": round(comfort_drift, 2)
+            if comfort_drift is not None
+            else None,
             "aggressiveness": aggressiveness,
             "inertia": inertia,
             "mode": mode,
             "update_count": len(updates),
-            "success": comfort_drift < ML_SUCCESS_TEMP_DIFF_THRESHOLD,
+            "success": comfort_drift is not None
+            and comfort_drift < ML_SUCCESS_TEMP_DIFF_THRESHOLD,
+            "heating_active": any(
+                u["data"].get("heating_active") for u in updates if u.get("data")
+            ),
         }
 
         self.current_session["summary"] = summary
         self.learning_sessions.append(self.current_session)
         self.current_session = None
 
+        drift_display = (
+            f"{comfort_drift:.2f}" if comfort_drift is not None else "n/a"
+        )
         _LOGGER.info(
-            "ML: Session summary: ΔT=%.2f°C, drift=%.2f°C, dur=%.1fmin, aggr=%s, inertia=%s",
+            "ML: Session summary: ΔT=%.2f°C, drift=%s°C, dur=%.1fmin, aggr=%s, inertia=%s",
             temp_rise,
-            comfort_drift,
+            drift_display,
             duration_minutes,
             aggressiveness,
             inertia,
         )
 
         # Trigger learning update
-        self._update_learning_model()
+        self.hass.async_create_task(self.async_update_learning_model())
         self.hass.async_create_task(self.async_save_data())
+
+    async def async_update_learning_model(self) -> None:
+        """Run the learning update off the event loop."""
+        await self.hass.async_add_executor_job(self._update_learning_model)
 
     def _update_learning_model(self) -> None:
         """Perform a simple regression analysis on collected sessions"""
@@ -234,6 +248,7 @@ class PumpSteerMLCollector:
             s
             for s in self.learning_sessions
             if s.get("summary", {}).get("mode") == "heating"
+            or s.get("summary", {}).get("heating_active")
         ]
 
         valid_summaries: List[Dict[str, Any]] = []
@@ -268,7 +283,7 @@ class PumpSteerMLCollector:
                 skipped_sessions,
             )
 
-        if len(valid_summaries) < 5:
+        if len(valid_summaries) < ML_MIN_HEATING_SESSIONS:
             _LOGGER.debug("ML: Not enough sessions for regression learning.")
             return
 

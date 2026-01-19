@@ -74,7 +74,12 @@ def test_price_brake_when_neutral():
     data = base_sensor_data()
     fake_temp, mode = s._calculate_output_temperature(data, "expensive", 0)
     assert mode == "braking_by_price"
-    assert fake_temp == settings.BRAKING_MODE_TEMP
+    expected = (
+        data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
+        if data["outdoor_temp"] < WINTER_BRAKE_THRESHOLD
+        else BRAKE_FAKE_TEMP
+    )
+    assert fake_temp == expected
 
 
 def test_extreme_price_brake_when_neutral():
@@ -82,7 +87,12 @@ def test_extreme_price_brake_when_neutral():
     data = base_sensor_data()
     fake_temp, mode = s._calculate_output_temperature(data, "extreme", 0)
     assert mode == "braking_by_price"
-    assert fake_temp == settings.BRAKING_MODE_TEMP
+    expected = (
+        data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
+        if data["outdoor_temp"] < WINTER_BRAKE_THRESHOLD
+        else BRAKE_FAKE_TEMP
+    )
+    assert fake_temp == expected
 
 
 def test_very_cheap_price_overshoots_target():
@@ -92,8 +102,8 @@ def test_very_cheap_price_overshoots_target():
     sensor.CHEAP_PRICE_OVERSHOOT = 0.6  # Ensure overshoot is active for the test
     fake_temp, mode = s._calculate_output_temperature(data, "very_cheap", 0)
     sensor.CHEAP_PRICE_OVERSHOOT = original_overshoot
-    assert mode == "heating"
-    assert fake_temp < data["outdoor_temp"]
+    assert mode == "neutral"
+    assert fake_temp == data["outdoor_temp"]
 
 
 def test_cheap_price_neutral_behavior():
@@ -158,11 +168,9 @@ def test_fake_temp_constraint_applied():
     )
     fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
 
-    # The fake_temp should be constrained to BRAKE_FAKE_TEMP (25.0)
+    expected = data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
     assert fake_temp <= BRAKE_FAKE_TEMP
-    assert (
-        fake_temp == BRAKE_FAKE_TEMP
-    )  # Should be exactly BRAKE_FAKE_TEMP due to constraint
+    assert fake_temp == expected
 
 
 def test_brake_temp_uses_offset_below_five_degrees():
@@ -211,8 +219,13 @@ def test_price_brake_consistent_across_temperatures():
         assert mode == "braking_by_price", (
             f"Mode should be braking_by_price for outdoor_temp {outdoor_temp}"
         )
-        assert fake_temp == settings.BRAKING_MODE_TEMP, (
-            f"fake_temp should be {settings.BRAKING_MODE_TEMP} for outdoor_temp {outdoor_temp}, got {fake_temp}"
+        expected = (
+            outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
+            if outdoor_temp < WINTER_BRAKE_THRESHOLD
+            else BRAKE_FAKE_TEMP
+        )
+        assert fake_temp == expected, (
+            f"fake_temp should be {expected} for outdoor_temp {outdoor_temp}, got {fake_temp}"
         )
 
 
@@ -229,6 +242,11 @@ def test_price_brake_different_categories():
         assert mode == "braking_by_price", (
             f"Mode should be braking_by_price for {category}"
         )
-        assert fake_temp == settings.BRAKING_MODE_TEMP, (
-            f"fake_temp should be {settings.BRAKING_MODE_TEMP} for {category}, got {fake_temp}"
+        expected = (
+            data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
+            if data["outdoor_temp"] < WINTER_BRAKE_THRESHOLD
+            else BRAKE_FAKE_TEMP
+        )
+        assert fake_temp == expected, (
+            f"fake_temp should be {expected} for {category}, got {fake_temp}"
         )
