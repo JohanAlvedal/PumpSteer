@@ -742,7 +742,7 @@ class PumpSteerSensor(Entity):
         adjusted_temp, final_adjust = self._apply_control_bias(
             fake_temp, sensor_data, pi_data
         )
-        self._state = round(adjusted_temp, 1)
+        self._state = round(fake_temp, 1)
 
         self._attributes = self._build_attributes(
             sensor_data,
