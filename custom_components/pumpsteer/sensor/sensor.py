@@ -14,7 +14,7 @@ import homeassistant.util.dt as dt_util
 from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
-from ..settings import (
+from ..const import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
     BRAKE_FAKE_TEMP,

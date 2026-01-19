@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.typing import StateType
 
-from .settings import (
+from .const import (
     MIN_REASONABLE_TEMP,
     MAX_REASONABLE_TEMP,
     MIN_REASONABLE_PRICE,

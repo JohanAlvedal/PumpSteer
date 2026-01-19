@@ -1,6 +1,6 @@
 import logging
 
-from .settings import (
+from .const import (
     MIN_FAKE_TEMP,
     MAX_FAKE_TEMP,
     HEATING_COMPENSATION_FACTOR,

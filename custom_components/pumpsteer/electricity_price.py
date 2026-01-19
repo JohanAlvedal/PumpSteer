@@ -8,7 +8,7 @@ from homeassistant.components.recorder.history import get_significant_states
 from homeassistant.core import HomeAssistant
 from homeassistant.util.dt import now as dt_now
 
-from .settings import (
+from .const import (
     ABSOLUTE_CHEAP_LIMIT,
     CHEAP_MULTIPLIER,
     DEFAULT_EXTREME_MULTIPLIER,
