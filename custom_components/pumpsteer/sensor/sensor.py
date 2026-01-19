@@ -158,7 +158,6 @@ class PumpSteerSensor(SensorEntity):
         else:
             _LOGGER.info("PumpSteer: Running without ML features")
 
-        config_entry.add_update_listener(self.async_options_update_listener)
         _LOGGER.debug("PumpSteerSensor: Initialization complete")
 
     @property
@@ -183,11 +182,6 @@ class PumpSteerSensor(SensorEntity):
             await self.ml_collector.async_shutdown()
         self.ml_collector = None
         await super().async_will_remove_from_hass()
-
-    async def async_options_update_listener(self, entry: ConfigEntry) -> None:
-        """Handle options update event"""
-        self._config_entry = entry
-        await self.async_update()
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch sensor data from Home Assistant"""
