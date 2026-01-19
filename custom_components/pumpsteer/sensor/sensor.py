@@ -17,6 +17,8 @@ from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
 from ..const import (
+    DATA_VERSION,
+    DOMAIN,
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
     BRAKE_FAKE_TEMP,
@@ -51,7 +53,6 @@ from ..utils import (
     safe_float,
     get_state,
     get_attr,
-    get_version,
     should_precool,
     detect_price_interval_minutes,
     compute_price_slot_index,
@@ -69,10 +70,6 @@ try:
 except ImportError as e:
     ML_AVAILABLE = False
     _LOGGER.warning("ML features disabled: %s", e)
-
-DOMAIN = "pumpsteer"
-
-SW_VERSION = get_version()
 
 # Hardcoded entities
 HARDCODED_ENTITIES = {
@@ -137,12 +134,13 @@ class PumpSteerSensor(SensorEntity):
         self._attr_icon = "mdi:thermostat-box"
         self._attr_available = True
 
+        sw_version = hass.data.get(DOMAIN, {}).get(DATA_VERSION, "unknown")
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             name="PumpSteer",
             manufacturer="Custom",
             model="Heat Pump Controller",
-            sw_version=SW_VERSION,
+            sw_version=sw_version,
         )
 
         self.ml_collector = None

@@ -8,13 +8,12 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
+from ..const import DATA_VERSION, DOMAIN
 from ..ml_adaptive import PumpSteerMLCollector
-from ..utils import safe_float, get_state, get_version
+from ..utils import safe_float, get_state
 from ..ml_settings import ML_MIN_SESSIONS_FOR_ANALYSIS
 
 _LOGGER = logging.getLogger(__name__)
-
-SW_VERSION = get_version()
 
 # Related Home Assistant entities used for cross-reference
 ML_RELATED_ENTITIES = {
@@ -40,12 +39,13 @@ class PumpSteerMLSensor(SensorEntity):
         self._last_error: str | None = None
         self._attr_available = True
 
+        sw_version = hass.data.get(DOMAIN, {}).get(DATA_VERSION, "unknown")
         self._attr_device_info = DeviceInfo(
             identifiers={("pumpsteer", config_entry.entry_id)},
             name="PumpSteer",
             manufacturer="Custom",
             model="PumpSteer ML",
-            sw_version=SW_VERSION,
+            sw_version=sw_version,
         )
 
         self.ml = PumpSteerMLCollector(hass)

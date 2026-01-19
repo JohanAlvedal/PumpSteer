@@ -1,8 +1,6 @@
-import json
 import logging
 import math
 from datetime import datetime
-from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -17,27 +15,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def get_version() -> str:
-    """Load integration version from manifest.json"""
-    manifest_path = Path(__file__).resolve().parent / "manifest.json"
-    try:
-        with open(manifest_path, encoding="utf-8") as manifest_file:
-            data = json.load(manifest_file)
-    except FileNotFoundError:
-        _LOGGER.error("manifest.json not found at %s", manifest_path)
-        return "unknown"
-    except json.JSONDecodeError as err:
-        _LOGGER.error("Error decoding manifest.json: %s", err)
-        return "unknown"
-
-    version = data.get("version")
-    if not version:
-        _LOGGER.error("Version not set in manifest.json")
-        return "unknown"
-
-    return version
 
 
 def safe_float(

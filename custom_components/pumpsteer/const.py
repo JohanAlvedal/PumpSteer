@@ -3,6 +3,7 @@
 from typing import Final, List, Optional
 
 DOMAIN: Final[str] = "pumpsteer"
+DATA_VERSION: Final[str] = "version"
 
 PUMPSTEER_VERSION: Final[str] = "1.2.1"
 DEFAULT_HOUSE_INERTIA: Final[float] = 1.0
