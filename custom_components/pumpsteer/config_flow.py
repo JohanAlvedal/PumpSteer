@@ -11,6 +11,7 @@ from .options_flow import PumpSteerOptionsFlowHandler
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
+UNIQUE_ID = "pumpsteer"
 
 # Hardcoded entities that are always present in the package file
 HARDCODED_ENTITIES = {
@@ -32,6 +33,9 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """Handle the initial step of the config flow"""
         errors = {}
+
+        await self.async_set_unique_id(UNIQUE_ID)
+        self._abort_if_unique_id_configured()
 
         if user_input is not None:
             combined_data = {**user_input, **HARDCODED_ENTITIES}
