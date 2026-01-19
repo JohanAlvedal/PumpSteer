@@ -66,12 +66,17 @@ class PumpSteerMLCollector:
             _LOGGER.debug("ML: No previous data found.")
             return
 
-        with open(self.data_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        self.learning_sessions = data.get("sessions", [])
-        self.learning_summary = data.get("learning_summary", {})
-        self.model_coefficients = data.get("model_coefficients", None)
+        try:
+            with open(self.data_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            _LOGGER.warning(
+                "ML: Failed to read data file %s (%s). Resetting to defaults.",
+                self.data_file,
+                exc,
+            )
+            self._backup_and_reset_data(raw_error=True)
+            return
 
         file_version = data.get("version", "unknown")
         if file_version != ML_DATA_VERSION:
@@ -80,6 +85,97 @@ class PumpSteerMLCollector:
                 file_version,
                 ML_DATA_VERSION,
             )
+            data = self._handle_version_mismatch(data)
+
+        self.learning_sessions = data.get("sessions", [])
+        self.learning_summary = data.get("learning_summary", {})
+        self.model_coefficients = data.get("model_coefficients", None)
+
+    def _handle_version_mismatch(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Try to migrate mismatched data; otherwise reset with backup."""
+        migrated = self._migrate_data(data)
+        if migrated is None:
+            _LOGGER.warning("ML: Unable to migrate data; backing up and resetting.")
+            self._backup_and_reset_data()
+            return self._default_payload()
+
+        if migrated.get("version") != ML_DATA_VERSION:
+            migrated["version"] = ML_DATA_VERSION
+        migrated.setdefault("ml_module_version", ML_MODULE_VERSION)
+        migrated.setdefault("created", dt_util.now().isoformat())
+        migrated.setdefault("session_count", len(migrated.get("sessions", [])))
+        self._write_data_file(migrated)
+        return migrated
+
+    def _migrate_data(self, data: Any) -> Optional[Dict[str, Any]]:
+        """Attempt a simple migration by adding missing fields with defaults."""
+        if not isinstance(data, dict):
+            return None
+
+        migrated = dict(data)
+        sessions = migrated.get("sessions")
+        if sessions is None:
+            migrated["sessions"] = []
+        elif not isinstance(sessions, list):
+            return None
+
+        if "learning_summary" not in migrated or not isinstance(
+            migrated.get("learning_summary"), dict
+        ):
+            migrated["learning_summary"] = {}
+
+        if "model_coefficients" not in migrated:
+            migrated["model_coefficients"] = None
+
+        normalized_sessions: List[Dict[str, Any]] = []
+        for session in migrated.get("sessions", []):
+            if not isinstance(session, dict):
+                continue
+            normalized = dict(session)
+            normalized.setdefault("updates", [])
+            normalized.setdefault("initial", {})
+            normalized.setdefault("summary", {})
+            normalized_sessions.append(normalized)
+
+        migrated["sessions"] = normalized_sessions
+        return migrated
+
+    def _backup_and_reset_data(self, raw_error: bool = False) -> None:
+        """Back up the existing data file and reinitialize defaults."""
+        data_path = Path(self.data_file)
+        if data_path.exists():
+            timestamp = dt_util.now().strftime("%Y%m%d%H%M%S")
+            suffix = "corrupt" if raw_error else "backup"
+            backup_path = data_path.with_suffix(
+                f"{data_path.suffix}.{suffix}-{timestamp}"
+            )
+            try:
+                data_path.replace(backup_path)
+                _LOGGER.warning("ML: Backed up data to %s", backup_path)
+            except OSError as exc:
+                _LOGGER.warning("ML: Failed to back up data file (%s)", exc)
+
+        defaults = self._default_payload()
+        self._write_data_file(defaults)
+        self.learning_sessions = defaults["sessions"]
+        self.learning_summary = defaults["learning_summary"]
+        self.model_coefficients = defaults["model_coefficients"]
+
+    def _default_payload(self) -> Dict[str, Any]:
+        return {
+            "version": ML_DATA_VERSION,
+            "ml_module_version": ML_MODULE_VERSION,
+            "created": dt_util.now().isoformat(),
+            "sessions": [],
+            "session_count": 0,
+            "learning_summary": {},
+            "model_coefficients": None,
+        }
+
+    def _write_data_file(self, data: Dict[str, Any]) -> None:
+        Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(self.data_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
 
     async def async_save_data(self) -> None:
         await self.hass.async_add_executor_job(self._save_data_sync)
@@ -95,9 +191,7 @@ class PumpSteerMLCollector:
             "model_coefficients": self.model_coefficients,
         }
 
-        Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(self.data_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        self._write_data_file(data)
 
     def start_session(self, initial_data: Dict[str, Any]) -> None:
         """Start a new learning session"""
