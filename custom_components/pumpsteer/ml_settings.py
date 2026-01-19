@@ -5,7 +5,9 @@ _LOGGER = logging.getLogger(__name__)
 
 ML_MODULE_VERSION: Final[str] = "1.0.0"
 
-ML_DATA_FILE_PATH: Final[str] = "/config/pumpsteer_ml_data.json"
+ML_STORAGE_KEY: Final[str] = "pumpsteer_ml_data"
+ML_STORAGE_VERSION: Final[int] = 1
+ML_LEGACY_DATA_FILENAME: Final[str] = "pumpsteer_ml_data.json"
 ML_MAX_SAVED_SESSIONS: Final[int] = 100
 ML_MAX_SESSION_UPDATES: Final[int] = 100
 ML_TRIMMED_UPDATES: Final[int] = 50
@@ -145,7 +147,8 @@ def get_ml_settings_info() -> dict:
     """Get information about current ML settings"""
     return {
         "version": ML_MODULE_VERSION,
-        "data_file": ML_DATA_FILE_PATH,
+        "storage_key": ML_STORAGE_KEY,
+        "storage_version": ML_STORAGE_VERSION,
         "min_sessions_for_analysis": ML_MIN_SESSIONS_FOR_ANALYSIS,
         "min_sessions_for_recommendations": ML_MIN_SESSIONS_FOR_RECOMMENDATIONS,
         "min_sessions_for_autotune": ML_MIN_SESSIONS_FOR_AUTOTUNE,
