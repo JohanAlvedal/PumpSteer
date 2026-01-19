@@ -1,11 +1,11 @@
 import logging
-from typing import Dict, Any
-from homeassistant.core import HomeAssistant
+from typing import Any, Dict
+
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
 from ..ml_adaptive import PumpSteerMLCollector
@@ -26,7 +26,7 @@ ML_RELATED_ENTITIES = {
 }
 
 
-class PumpSteerMLSensor(Entity):
+class PumpSteerMLSensor(SensorEntity):
     """Sensor that displays insights and learning results from PumpSteer ML"""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
@@ -34,10 +34,11 @@ class PumpSteerMLSensor(Entity):
         self.hass = hass
         self._attr_name = "PumpSteer ML Analysis"
         self._attr_unique_id = f"{config_entry.entry_id}_ml_analysis"
-        self._state = "initializing"
+        self._attr_native_value = "initializing"
         self._attributes: Dict[str, Any] = {}
         self.ml: PumpSteerMLCollector | None = None
         self._last_error: str | None = None
+        self._attr_available = True
 
         self._attr_device_info = DeviceInfo(
             identifiers={("pumpsteer", config_entry.entry_id)},
@@ -51,35 +52,19 @@ class PumpSteerMLSensor(Entity):
         _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized successfully")
 
     @property
-    def name(self):
-        return self._attr_name
-
-    @property
-    def unique_id(self):
-        return self._attr_unique_id
-
-    @property
-    def state(self):
-        return self._state
-
-    @property
     def extra_state_attributes(self):
         return self._attributes
 
     @property
-    def available(self) -> bool:
-        return self.ml is not None and self._state != STATE_UNAVAILABLE
-
-    @property
     def icon(self) -> str:
         """Dynamic icon"""
-        if self._state == "error":
+        if self._attr_native_value == "error":
             return "mdi:alert-circle"
-        if self._state == "collecting":
+        if self._attr_native_value == "collecting":
             return "mdi:database-search"
-        if self._state == "learning":
+        if self._attr_native_value == "learning":
             return "mdi:brain"
-        if self._state == "ready":
+        if self._attr_native_value == "ready":
             return "mdi:chart-line"
         return "mdi:brain"
 
@@ -176,13 +161,15 @@ class PumpSteerMLSensor(Entity):
     async def async_update(self):
         """Refresh ML information and update sensor attributes"""
         if not self.ml:
-            self._state = STATE_UNAVAILABLE
+            self._attr_native_value = None
+            self._attr_available = False
             self._attributes = {
                 "error": "ML collector not available",
                 "last_error": self._last_error,
                 "last_updated": dt_util.now().isoformat(),
             }
             return
+        self._attr_available = True
 
         insights = {}
 
@@ -194,7 +181,7 @@ class PumpSteerMLSensor(Entity):
         control_data = self._get_control_system_data()
 
         # determine overall state
-        self._state = self._determine_state(insights)
+        self._attr_native_value = self._determine_state(insights)
         self._attributes = self._build_attributes(insights, control_data)
 
         if self._last_error:

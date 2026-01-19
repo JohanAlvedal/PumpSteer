@@ -1,12 +1,14 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import Entity
-from homeassistant.const import STATE_UNAVAILABLE
-from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
@@ -117,22 +119,23 @@ def safe_get_current_price_and_category(
     return current_price, price_category
 
 
-class PumpSteerSensor(Entity):
+class PumpSteerSensor(SensorEntity):
     """PumpSteer sensor for heat pump control"""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         """Initialize the PumpSteer sensor"""
         self.hass = hass
         self._config_entry = config_entry
-        self._state = None
         self._attributes = {}
-        self._name = "PumpSteer"
         self._last_update_time = None
 
-        self._attr_unit_of_measurement = "°C"
-        self._attr_device_class = "temperature"
-        self._attr_state_class = "measurement"
+        self._attr_name = "PumpSteer"
+        self._attr_native_unit_of_measurement = "°C"
+        self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_unique_id = config_entry.entry_id
+        self._attr_icon = "mdi:thermostat-box"
+        self._attr_available = True
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
@@ -161,36 +164,8 @@ class PumpSteerSensor(Entity):
         _LOGGER.debug("PumpSteerSensor: Initialization complete")
 
     @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def unique_id(self) -> str:
-        return self._attr_unique_id
-
-    @property
-    def state(self) -> StateType:
-        return self._state
-
-    @property
     def extra_state_attributes(self) -> dict:
         return {**self._attributes}
-
-    @property
-    def unit_of_measurement(self) -> str:
-        return self._attr_unit_of_measurement
-
-    @property
-    def device_class(self) -> str:
-        return self._attr_device_class
-
-    @property
-    def icon(self) -> str:
-        return "mdi:thermostat-box"
-
-    @property
-    def available(self) -> bool:
-        return self._state != STATE_UNAVAILABLE
 
     @property
     def should_poll(self) -> bool:
@@ -628,7 +603,7 @@ class PumpSteerSensor(Entity):
 
         attributes = {
             "mode": mode,
-            "fake_outdoor_temperature": self._state,
+            "fake_outdoor_temperature": self._attr_native_value,
             "price_category": price_category,
             "status": "ok",
             "current_price": round(current_price, 3),
@@ -703,13 +678,15 @@ class PumpSteerSensor(Entity):
 
         missing = self._validate_required_data(sensor_data, prices)
         if missing:
-            self._state = STATE_UNAVAILABLE
+            self._attr_native_value = None
+            self._attr_available = False
             self._attributes = {
                 "Status": f"Missing: {', '.join(missing)}",
                 "Last Updated": update_time.isoformat(),
                 "Current Hour": now_hour,
             }
             return
+        self._attr_available = True
 
         holiday = is_holiday_mode_active(
             self.hass,
@@ -740,7 +717,7 @@ class PumpSteerSensor(Entity):
         adjusted_temp, final_adjust = self._apply_control_bias(
             fake_temp, sensor_data, pi_data
         )
-        self._state = round(fake_temp, 1)
+        self._attr_native_value = round(fake_temp, 1)
 
         self._attributes = self._build_attributes(
             sensor_data,
