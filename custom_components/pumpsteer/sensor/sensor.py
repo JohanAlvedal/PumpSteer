@@ -174,7 +174,7 @@ class PumpSteerSensor(Entity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {**self._attributes, "friendly_name": "PumpSteer"}
+        return {**self._attributes}
 
     @property
     def unit_of_measurement(self) -> str:
@@ -657,7 +657,6 @@ class PumpSteerSensor(Entity):
             "current_price_slot_index": current_slot_index,
             "price_interval_minutes": price_interval_minutes,
             "price_brake_level": round(pi_data["price_brake_level"], 3),
-            "brake_level": round(pi_data["price_brake_level"], 3),
             "baseline": round(pi_data["price_baseline"], 3),
             "threshold": round(pi_data["price_threshold"], 3),
             "area": round(pi_data["price_area"], 3),
@@ -673,7 +672,6 @@ class PumpSteerSensor(Entity):
             "comfort_pi_ki": COMFORT_PI_KI,
             "comfort_I": round(pi_data["comfort_I"], 4),
             "final_adjust": round(final_adjust, 3),
-            "dt_minutes": pi_data["dt_minutes"],
             "price_rate_limited": pi_data["price_rate_limited"],
             "rate_limited": pi_data["price_rate_limited"],
             "data_quality": {
