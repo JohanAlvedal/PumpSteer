@@ -11,8 +11,6 @@ from custom_components.pumpsteer.settings import (
     PRECOOL_MARGIN,
 )
 
-from custom_components.pumpsteer import settings
-
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 sys.path.append(str(Path(__file__).resolve().parent))
 
@@ -73,16 +71,16 @@ def test_price_brake_when_neutral():
     s = create_sensor()
     data = base_sensor_data()
     fake_temp, mode = s._calculate_output_temperature(data, "expensive", 0)
-    assert mode == "braking_by_price"
-    assert fake_temp == settings.BRAKING_MODE_TEMP
+    assert mode == "neutral"
+    assert fake_temp == data["outdoor_temp"]
 
 
 def test_extreme_price_brake_when_neutral():
     s = create_sensor()
     data = base_sensor_data()
     fake_temp, mode = s._calculate_output_temperature(data, "extreme", 0)
-    assert mode == "braking_by_price"
-    assert fake_temp == settings.BRAKING_MODE_TEMP
+    assert mode == "neutral"
+    assert fake_temp == data["outdoor_temp"]
 
 
 def test_very_cheap_price_overshoots_target():
@@ -197,27 +195,22 @@ def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
     assert fake_temp == BRAKE_FAKE_TEMP
 
 
-def test_price_brake_consistent_across_temperatures():
-    """Test that braking_by_price always uses BRAKING_MODE_TEMP regardless of outdoor temperature"""
+def test_price_category_does_not_change_neutral_mode():
+    """Ensure price category alone does not change neutral behavior."""
     s = create_sensor()
 
-    # Test various outdoor temperatures (all below summer threshold to avoid summer_mode)
     outdoor_temps = [-10.0, 0.0, 5.0, 10.0, 15.0, 17.0]
 
     for outdoor_temp in outdoor_temps:
         data = base_sensor_data(outdoor_temp=outdoor_temp)
         fake_temp, mode = s._calculate_output_temperature(data, "expensive", 0)
 
-        assert mode == "braking_by_price", (
-            f"Mode should be braking_by_price for outdoor_temp {outdoor_temp}"
-        )
-        assert fake_temp == settings.BRAKING_MODE_TEMP, (
-            f"fake_temp should be {settings.BRAKING_MODE_TEMP} for outdoor_temp {outdoor_temp}, got {fake_temp}"
-        )
+        assert mode == "neutral"
+        assert fake_temp == outdoor_temp
 
 
-def test_price_brake_different_categories():
-    """Test that all expensive price categories trigger consistent braking behavior"""
+def test_price_categories_do_not_force_braking():
+    """Ensure price categories do not force braking in neutral state."""
     s = create_sensor()
     data = base_sensor_data()
 
@@ -226,9 +219,5 @@ def test_price_brake_different_categories():
     for category in expensive_categories:
         fake_temp, mode = s._calculate_output_temperature(data, category, 0)
 
-        assert mode == "braking_by_price", (
-            f"Mode should be braking_by_price for {category}"
-        )
-        assert fake_temp == settings.BRAKING_MODE_TEMP, (
-            f"fake_temp should be {settings.BRAKING_MODE_TEMP} for {category}, got {fake_temp}"
-        )
+        assert mode == "neutral"
+        assert fake_temp == data["outdoor_temp"]
