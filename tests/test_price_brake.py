@@ -2,6 +2,8 @@ from custom_components.pumpsteer.price_brake import (
     compute_block_area,
     compute_brake_level,
     compute_price_brake,
+    detect_expensive_blocks,
+    select_price_block,
 )
 
 
@@ -67,3 +69,16 @@ def test_area_drives_amplitude():
 
     assert long_block.area > short_block.area
     assert long_amplitude > short_amplitude
+
+
+def test_selects_largest_area_block():
+    forward_prices = [1.0, 2.0, 1.0, 4.0, 4.0, 1.0]
+    threshold = 1.5
+
+    blocks = detect_expensive_blocks(
+        forward_prices, threshold, dt_minutes=60, min_block_duration_min=60
+    )
+    selected = select_price_block(blocks)
+
+    assert selected is not None
+    assert selected.start_index == 3
