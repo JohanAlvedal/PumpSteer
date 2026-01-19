@@ -40,6 +40,19 @@ def test_build_attributes_basic():
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
 
+    pi_data = {
+        "price_brake_level": 0.0,
+        "price_pressure": 0.0,
+        "price_baseline": 0.0,
+        "price_horizon": 6,
+        "price_I": 0.0,
+        "price_rate_limited": False,
+        "comfort_push": 0.0,
+        "comfort_I": 0.0,
+        "temp_error": 0.0,
+        "dt_minutes": 60,
+    }
+
     attrs = s._build_attributes(
         sensor_data,
         prices,
@@ -51,6 +64,8 @@ def test_build_attributes_basic():
         now_hour,
         price_interval_minutes=60,
         current_slot_index=0,
+        pi_data=pi_data,
+        final_adjust=0.0,
     )
     assert attrs["mode"] == "heating"
     assert attrs["current_price"] == 1.2
@@ -79,6 +94,19 @@ def test_decision_reason_very_cheap_heating():
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
 
+    pi_data = {
+        "price_brake_level": 0.0,
+        "price_pressure": 0.0,
+        "price_baseline": 0.0,
+        "price_horizon": 6,
+        "price_I": 0.0,
+        "price_rate_limited": False,
+        "comfort_push": 0.0,
+        "comfort_I": 0.0,
+        "temp_error": 0.0,
+        "dt_minutes": 60,
+    }
+
     attrs = s._build_attributes(
         sensor_data,
         prices,
@@ -90,6 +118,8 @@ def test_decision_reason_very_cheap_heating():
         now_hour,
         price_interval_minutes=60,
         current_slot_index=0,
+        pi_data=pi_data,
+        final_adjust=0.0,
     )
     assert attrs["decision_reason"] == "heating - Triggered by very cheap price"
 
@@ -115,6 +145,19 @@ def test_decision_reason_precool():
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
 
+    pi_data = {
+        "price_brake_level": 0.0,
+        "price_pressure": 0.0,
+        "price_baseline": 0.0,
+        "price_horizon": 6,
+        "price_I": 0.0,
+        "price_rate_limited": False,
+        "comfort_push": 0.0,
+        "comfort_I": 0.0,
+        "temp_error": 0.0,
+        "dt_minutes": 60,
+    }
+
     attrs = s._build_attributes(
         sensor_data,
         prices,
@@ -126,5 +169,7 @@ def test_decision_reason_precool():
         now_hour,
         price_interval_minutes=60,
         current_slot_index=0,
+        pi_data=pi_data,
+        final_adjust=0.0,
     )
     assert attrs["decision_reason"] == "precool - Triggered by pre-cool (warm forecast)"

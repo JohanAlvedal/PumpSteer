@@ -23,6 +23,27 @@ from ..settings import (
     WINTER_BRAKE_THRESHOLD,
     CHEAP_PRICE_OVERSHOOT,
     PRECOOL_MARGIN,
+    MIN_FAKE_TEMP,
+    MAX_FAKE_TEMP,
+    PRICE_PI_KP,
+    PRICE_PI_KI,
+    PRICE_HORIZON_STEPS_15M,
+    PRICE_HORIZON_STEPS_HOURLY,
+    PRICE_MAX_DELTA_PER_STEP,
+    COMFORT_PI_KP,
+    COMFORT_PI_KI,
+    COMFORT_DEADBAND,
+    BRAKE_WEIGHT,
+    GAS_WEIGHT,
+    COMFORT_BACKOFF_WEIGHT,
+    CONTROL_BIAS_TEMP_SCALE,
+)
+from ..pi_controller import (
+    apply_rate_limit,
+    compute_price_baseline,
+    compute_price_pressure,
+    select_price_horizon,
+    update_pi_output,
 )
 from ..utils import (
     safe_float,
@@ -125,6 +146,10 @@ class PumpSteerSensor(Entity):
         self._ml_session_started = False
         self._ml_session_start_mode = None
         self._last_price_category = "unknown"
+        self._price_integral = 0.0
+        self._comfort_integral = 0.0
+        self._last_price_brake_level = None
+        self._last_debug_log = None
 
         if ML_AVAILABLE:
             self.ml_collector = PumpSteerMLCollector(hass)
@@ -237,6 +262,132 @@ class PumpSteerSensor(Entity):
 
         return missing if missing else None
 
+    def _get_combined_prices(self, entity_id: str) -> List[float]:
+        """Return combined today+tomorrow prices when available."""
+        prices_today = get_attr(self.hass, entity_id, "today") or get_attr(
+            self.hass, entity_id, "raw_today"
+        )
+        prices_tomorrow = get_attr(self.hass, entity_id, "tomorrow") or get_attr(
+            self.hass, entity_id, "raw_tomorrow"
+        )
+        combined_raw = (prices_today or []) + (prices_tomorrow or [])
+        combined = [
+            float(p)
+            for p in combined_raw
+            if isinstance(p, (float, int)) and p is not None
+        ]
+        return combined
+
+    def _compute_pi_controls(
+        self,
+        sensor_data: Dict[str, Any],
+        combined_prices: List[float],
+        current_slot_index: int,
+        price_interval_minutes: int,
+    ) -> Dict[str, Any]:
+        """Compute price brake and comfort push using PI controllers."""
+        dt_minutes = price_interval_minutes if price_interval_minutes > 0 else 60
+        dt_hours = dt_minutes / 60.0
+
+        horizon_steps = select_price_horizon(
+            dt_minutes, PRICE_HORIZON_STEPS_15M, PRICE_HORIZON_STEPS_HOURLY
+        )
+        baseline_steps = max(1, int(round(24 * 60 / dt_minutes)))
+        baseline = compute_price_baseline(
+            combined_prices, current_slot_index, baseline_steps
+        )
+        pressure = compute_price_pressure(
+            combined_prices, current_slot_index, horizon_steps, baseline
+        )
+        price_output, self._price_integral, saturated_high, saturated_low = (
+            update_pi_output(
+                pressure,
+                self._price_integral,
+                PRICE_PI_KP,
+                PRICE_PI_KI,
+                dt_hours,
+                0.0,
+                1.0,
+            )
+        )
+        price_output, rate_limited = apply_rate_limit(
+            price_output, self._last_price_brake_level, PRICE_MAX_DELTA_PER_STEP
+        )
+        self._last_price_brake_level = price_output
+
+        temp_error = sensor_data["target_temp"] - sensor_data["indoor_temp"]
+        if abs(temp_error) < COMFORT_DEADBAND:
+            temp_error = 0.0
+
+        comfort_output, self._comfort_integral, comfort_high, comfort_low = (
+            update_pi_output(
+                temp_error,
+                self._comfort_integral,
+                COMFORT_PI_KP,
+                COMFORT_PI_KI,
+                dt_hours,
+                -1.0,
+                1.0,
+            )
+        )
+
+        return {
+            "price_pressure": pressure,
+            "price_baseline": baseline,
+            "price_brake_level": price_output,
+            "price_horizon": horizon_steps,
+            "price_I": self._price_integral,
+            "price_saturated_high": saturated_high,
+            "price_saturated_low": saturated_low,
+            "price_rate_limited": rate_limited,
+            "comfort_push": comfort_output,
+            "comfort_I": self._comfort_integral,
+            "comfort_saturated_high": comfort_high,
+            "comfort_saturated_low": comfort_low,
+            "temp_error": temp_error,
+            "dt_minutes": dt_minutes,
+        }
+
+    def _apply_control_bias(
+        self, fake_temp: float, sensor_data: Dict[str, Any], pi_data: Dict[str, Any]
+    ) -> Tuple[float, float]:
+        """Apply PI-based control bias to the fake temperature."""
+        aggressiveness_factor = min(1.0, max(0.0, sensor_data["aggressiveness"] / 5.0))
+        gas_component = max(pi_data["comfort_push"], 0.0)
+        backoff_component = max(-pi_data["comfort_push"], 0.0)
+        brake_component = pi_data["price_brake_level"]
+
+        final_adjust = (
+            GAS_WEIGHT * gas_component
+            - BRAKE_WEIGHT * brake_component
+            - COMFORT_BACKOFF_WEIGHT * backoff_component
+        )
+        final_adjust = max(-1.0, min(1.0, final_adjust))
+        temp_bias = -final_adjust * CONTROL_BIAS_TEMP_SCALE * aggressiveness_factor
+
+        adjusted = fake_temp + temp_bias
+        adjusted = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, adjusted))
+        return adjusted, final_adjust
+
+    def _log_pi_debug(self, pi_data: Dict[str, Any], final_adjust: float) -> None:
+        """Log PI controller status at a controlled rate."""
+        now = dt_util.now()
+        if self._last_debug_log and (now - self._last_debug_log).total_seconds() < 600:
+            return
+        self._last_debug_log = now
+        _LOGGER.debug(
+            "PI control: pressure=%.3f baseline=%.3f brake=%.3f comfort=%.3f "
+            "temp_error=%.2f adjust=%.3f dt=%s min rate_limited=%s",
+            pi_data["price_pressure"],
+            pi_data["price_baseline"],
+            pi_data["price_brake_level"],
+            pi_data["comfort_push"],
+            pi_data["temp_error"],
+            final_adjust,
+            pi_data["dt_minutes"],
+            pi_data["price_rate_limited"],
+        )
+
     def _calculate_output_temperature(
         self,
         sensor_data: Dict[str, Any],
@@ -281,11 +432,6 @@ class PumpSteerSensor(Entity):
         )
 
         temp_diff = indoor_temp - target_temp_for_logic
-        price_is_high = (
-            "expensive" in price_category
-            or "very_expensive" in price_category
-            or "extreme" in price_category
-        )
 
         if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
             fake_temp = outdoor_temp
@@ -298,36 +444,6 @@ class PumpSteerSensor(Entity):
                 aggressiveness,
                 brake_temp,
             )
-
-            temp_deficit = target_temp_for_logic - indoor_temp
-            normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
-            price_brake_window = (
-                NEUTRAL_TEMP_THRESHOLD + 0.05 + (0.45 * normalized_aggressiveness)
-            )
-
-            if (
-                mode == "heating"
-                and price_is_high
-                and temp_deficit <= price_brake_window
-            ):
-                _LOGGER.info(
-                    "Price braking active during heating: deficit %.2f °C within %.2f °C window (agg %.2f)",
-                    temp_deficit,
-                    price_brake_window,
-                    aggressiveness,
-                )
-                # Use dynamically computed brake_temp here instead of fixed BRAKING_MODE_TEMP
-                return brake_temp, "braking_by_price"
-
-        if mode not in ["braking_by_temp", "heating"] and price_is_high:
-            price_brake_temp = brake_temp
-            _LOGGER.info(
-                "Blocking heating at slot %s due to %s price (setting fake temp to %s °C)",
-                current_slot_index,
-                price_category,
-                price_brake_temp,
-            )
-            return price_brake_temp, "braking_by_price"
 
         fake_temp = min(fake_temp, BRAKE_FAKE_TEMP)
         return fake_temp, mode
@@ -443,6 +559,8 @@ class PumpSteerSensor(Entity):
         now_hour: int,
         price_interval_minutes: int,
         current_slot_index: int,
+        pi_data: Dict[str, Any],
+        final_adjust: float,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
@@ -513,6 +631,21 @@ class PumpSteerSensor(Entity):
             "current_hour": now_hour,
             "current_price_slot_index": current_slot_index,
             "price_interval_minutes": price_interval_minutes,
+            "price_brake_level": round(pi_data["price_brake_level"], 3),
+            "price_pressure": round(pi_data["price_pressure"], 3),
+            "price_baseline": round(pi_data["price_baseline"], 3),
+            "price_horizon": pi_data["price_horizon"],
+            "price_pi_kp": PRICE_PI_KP,
+            "price_pi_ki": PRICE_PI_KI,
+            "price_I": round(pi_data["price_I"], 4),
+            "comfort_push": round(pi_data["comfort_push"], 3),
+            "temp_error": round(pi_data["temp_error"], 3),
+            "comfort_pi_kp": COMFORT_PI_KP,
+            "comfort_pi_ki": COMFORT_PI_KI,
+            "comfort_I": round(pi_data["comfort_I"], 4),
+            "final_adjust": round(final_adjust, 3),
+            "dt_minutes": pi_data["dt_minutes"],
+            "price_rate_limited": pi_data["price_rate_limited"],
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
@@ -560,12 +693,25 @@ class PumpSteerSensor(Entity):
         if holiday:
             sensor_data["target_temp"] = HOLIDAY_TEMP
 
+        combined_prices = self._get_combined_prices(
+            config.get("electricity_price_entity", "")
+        )
+        pi_data = self._compute_pi_controls(
+            sensor_data,
+            combined_prices,
+            current_slot_index,
+            price_interval_minutes,
+        )
+
         fake_temp, mode = self._calculate_output_temperature(
             sensor_data,
             price_category,
             current_slot_index,
         )
-        self._state = round(fake_temp, 1)
+        adjusted_temp, final_adjust = self._apply_control_bias(
+            fake_temp, sensor_data, pi_data
+        )
+        self._state = round(adjusted_temp, 1)
 
         self._attributes = self._build_attributes(
             sensor_data,
@@ -578,10 +724,14 @@ class PumpSteerSensor(Entity):
             now_hour,
             price_interval_minutes,
             current_slot_index,
+            pi_data,
+            final_adjust,
         )
 
+        self._log_pi_debug(pi_data, final_adjust)
+
         if self.ml_collector:
-            self._collect_ml_data(sensor_data, mode, fake_temp)
+            self._collect_ml_data(sensor_data, mode, adjusted_temp)
 
         self._last_update_time = update_time
 

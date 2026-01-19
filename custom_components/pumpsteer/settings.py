@@ -31,6 +31,22 @@ BRAKING_COMPENSATION_FACTOR: Final[float] = (
     0.4  # Factor for raising fake temp per °C surplus and aggressiveness unit
 )
 
+# === PI CONTROL SETTINGS ===
+PRICE_PI_KP: Final[float] = 0.12
+PRICE_PI_KI: Final[float] = 0.04
+PRICE_HORIZON_STEPS_15M: Final[int] = 8
+PRICE_HORIZON_STEPS_HOURLY: Final[int] = 6
+PRICE_MAX_DELTA_PER_STEP: Final[float] = 0.08
+
+COMFORT_PI_KP: Final[float] = 0.6
+COMFORT_PI_KI: Final[float] = 0.1
+COMFORT_DEADBAND: Final[float] = 0.1
+
+BRAKE_WEIGHT: Final[float] = 1.0
+GAS_WEIGHT: Final[float] = 0.8
+COMFORT_BACKOFF_WEIGHT: Final[float] = 0.5
+CONTROL_BIAS_TEMP_SCALE: Final[float] = 1.5
+
 # === COMFORT CONTROL SETTINGS ===
 # Defines when the system considers the indoor temperature "too cold"
 # to allow price braking. Previously hardcoded as -0.5 °C inside the logic.
