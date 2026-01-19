@@ -102,6 +102,8 @@ class PumpSteerSensor(Entity):
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         """Initialize the PumpSteer sensor"""
         self.hass = hass
+        if not hasattr(self.hass, "data"):
+            self.hass.data = {}
         self._config_entry = config_entry
         self._state = None
         self._attributes = {}
@@ -125,9 +127,19 @@ class PumpSteerSensor(Entity):
         self._ml_session_started = False
         self._ml_session_start_mode = None
         self._last_price_category = "unknown"
+        self._last_current_price = None
+        self._owns_ml_collector = False
 
         if ML_AVAILABLE:
-            self.ml_collector = PumpSteerMLCollector(hass)
+            domain_data = hass.data.setdefault(DOMAIN, {})
+            collectors = domain_data.setdefault("ml_collectors", {})
+            self.ml_collector = collectors.get(config_entry.entry_id)
+            if self.ml_collector is None:
+                self.ml_collector = PumpSteerMLCollector(hass)
+                collectors[config_entry.entry_id] = self.ml_collector
+                self._owns_ml_collector = True
+            else:
+                self._owns_ml_collector = False
             _LOGGER.info("PumpSteer: ML system enabled")
 
         else:
@@ -182,8 +194,14 @@ class PumpSteerSensor(Entity):
 
     async def async_will_remove_from_hass(self) -> None:
         """Handle entity removal from Home Assistant"""
-        if self.ml_collector and hasattr(self.ml_collector, "async_shutdown"):
+        if (
+            self._owns_ml_collector
+            and self.ml_collector
+            and hasattr(self.ml_collector, "async_shutdown")
+        ):
             await self.ml_collector.async_shutdown()
+            collectors = self.hass.data.get(DOMAIN, {}).get("ml_collectors", {})
+            collectors.pop(self._config_entry.entry_id, None)
         self.ml_collector = None
         await super().async_will_remove_from_hass()
 
@@ -343,10 +361,14 @@ class PumpSteerSensor(Entity):
             "indoor_temp": sensor_data.get("indoor_temp"),
             "outdoor_temp": sensor_data.get("outdoor_temp"),
             "target_temp": sensor_data.get("target_temp"),
+            "price_now": self._last_current_price,
             "aggressiveness": sensor_data.get("aggressiveness", 0),
             "inertia": sensor_data.get("inertia"),
             "mode": mode,
-            "fake_temp": fake_temp,
+            "fake_outdoor_temp": fake_temp,
+            "heating_active": mode == "heating",
+            "heat_demand": None,
+            "house_inertia": sensor_data.get("inertia"),
             "price_category": self._last_price_category,
             "timestamp": dt_util.now().isoformat(),
         }
@@ -538,6 +560,7 @@ class PumpSteerSensor(Entity):
             price_interval_minutes,
             current_slot_index,
         ) = await self._get_price_data(config, update_time)
+        self._last_current_price = current_price
         self._last_price_category = price_category
 
         missing = self._validate_required_data(sensor_data, prices)

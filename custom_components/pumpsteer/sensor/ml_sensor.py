@@ -15,6 +15,7 @@ from ..ml_settings import ML_MIN_SESSIONS_FOR_ANALYSIS
 _LOGGER = logging.getLogger(__name__)
 
 SW_VERSION = get_version()
+DOMAIN = "pumpsteer"
 
 # Related Home Assistant entities used for cross-reference
 ML_RELATED_ENTITIES = {
@@ -32,12 +33,16 @@ class PumpSteerMLSensor(Entity):
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         """Initialize ML sensor"""
         self.hass = hass
+        if not hasattr(self.hass, "data"):
+            self.hass.data = {}
         self._attr_name = "PumpSteer ML Analysis"
         self._attr_unique_id = f"{config_entry.entry_id}_ml_analysis"
+        self._entry_id = config_entry.entry_id
         self._state = "initializing"
         self._attributes: Dict[str, Any] = {}
         self.ml: PumpSteerMLCollector | None = None
         self._last_error: str | None = None
+        self._owns_ml_collector = False
 
         self._attr_device_info = DeviceInfo(
             identifiers={("pumpsteer", config_entry.entry_id)},
@@ -47,7 +52,13 @@ class PumpSteerMLSensor(Entity):
             sw_version=SW_VERSION,
         )
 
-        self.ml = PumpSteerMLCollector(hass)
+        domain_data = hass.data.setdefault(DOMAIN, {})
+        collectors = domain_data.setdefault("ml_collectors", {})
+        self.ml = collectors.get(config_entry.entry_id)
+        if self.ml is None:
+            self.ml = PumpSteerMLCollector(hass)
+            collectors[config_entry.entry_id] = self.ml
+            self._owns_ml_collector = True
         _LOGGER.debug("ML sensor: PumpSteerMLCollector initialized successfully")
 
     @property
@@ -91,8 +102,14 @@ class PumpSteerMLSensor(Entity):
 
     async def async_will_remove_from_hass(self):
         """Clean up when entity is removed"""
-        if self.ml and hasattr(self.ml, "async_shutdown"):
+        if (
+            self._owns_ml_collector
+            and self.ml
+            and hasattr(self.ml, "async_shutdown")
+        ):
             await self.ml.async_shutdown()
+            collectors = self.hass.data.get(DOMAIN, {}).get("ml_collectors", {})
+            collectors.pop(self._entry_id, None)
 
         self.ml = None
         await super().async_will_remove_from_hass()
