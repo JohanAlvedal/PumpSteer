@@ -172,12 +172,7 @@ def validate_core_settings() -> None:
         raise ValueError(error_msg)
 
 
-try:
-    validate_core_settings()
-    _LOGGER.debug(
-        "PumpSteer core settings loaded successfully (version %s)",
-        PUMPSTEER_VERSION,
-    )
-except Exception as e:
-    _LOGGER.error("Failed to load PumpSteer settings: %s", e)
-    raise
+_LOGGER.debug(
+    "PumpSteer core settings module loaded (version %s)",
+    PUMPSTEER_VERSION,
+)
