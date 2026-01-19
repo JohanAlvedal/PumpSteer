@@ -5,7 +5,7 @@ from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
-from .settings import PRICE_BLOCK_THRESHOLD_DELTA
+from .const import PRICE_BLOCK_THRESHOLD_DELTA
 
 _LOGGER = logging.getLogger(__name__)
 
