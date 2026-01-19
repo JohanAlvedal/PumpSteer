@@ -148,11 +148,24 @@ def detect_expensive_blocks(
     return blocks
 
 
+def rank_price_blocks(blocks: List[PriceBlock]) -> List[PriceBlock]:
+    """Rank blocks by area (desc), then by earliest start."""
+    return sorted(blocks, key=lambda block: (-block.area, block.start_index))
+
+
 def select_price_block(blocks: List[PriceBlock]) -> Optional[PriceBlock]:
     """Select the most relevant block by area, then by earliest start."""
-    if not blocks:
-        return None
-    return max(blocks, key=lambda block: (block.area, -block.start_index))
+    ranked = rank_price_blocks(blocks)
+    return ranked[0] if ranked else None
+
+
+def filter_upcoming_blocks(
+    blocks: List[PriceBlock], now_offset_minutes: float
+) -> List[PriceBlock]:
+    """Filter blocks that are still upcoming or in progress."""
+    if now_offset_minutes <= 0:
+        return blocks
+    return [block for block in blocks if block.end_offset_minutes > now_offset_minutes]
 
 
 def compute_brake_level(
@@ -214,7 +227,8 @@ def compute_price_brake(
     blocks = detect_expensive_blocks(
         forward_prices, threshold, dt_minutes, min_block_duration_min
     )
-    block = select_price_block(blocks)
+    upcoming_blocks = filter_upcoming_blocks(blocks, now_offset_minutes)
+    block = select_price_block(upcoming_blocks)
     area = block.area if block else 0.0
     safe_area_scale = area_scale if area_scale > 0 else 1.0
     amplitude = clamp(area / safe_area_scale, 0.0, 1.0) if block else 0.0
