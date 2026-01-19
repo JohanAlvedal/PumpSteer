@@ -23,7 +23,9 @@
         "data": {
           "indoor_temp_entity": "Indoor temperature sensor",
           "real_outdoor_entity": "Outdoor temperature sensor",
-          "electricity_price_entity": "Electricity price sensor"
+          "electricity_price_entity": "Electricity price sensor",
+          "price_brake_threshold_delta": "Price block threshold delta (SEK/kWh)",
+          "price_brake_threshold_percentile": "Price block percentile threshold (0=disabled)"
         }
       }
     },
