@@ -14,7 +14,7 @@ import homeassistant.util.dt as dt_util
 from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
-from ..settings import (
+from ..const import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
     BRAKE_FAKE_TEMP,
@@ -39,6 +39,7 @@ from ..settings import (
     PRICE_BRAKE_PRE_MINUTES,
     PRICE_BRAKE_POST_MINUTES,
     PRICE_BLOCK_AREA_SCALE,
+    HARDCODED_ENTITIES,
 )
 from ..pi_controller import (
     apply_rate_limit,
@@ -71,19 +72,6 @@ except ImportError as e:
 DOMAIN = "pumpsteer"
 
 SW_VERSION = get_version()
-
-# Hardcoded entities
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-    "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
-    "house_inertia_entity": "input_number.house_inertia",
-    "price_model_entity": "input_select.pumpsteer_price_model",
-}
 
 NEUTRAL_TEMP_THRESHOLD = 0.5
 DEFAULT_SUMMER_THRESHOLD = 18.0

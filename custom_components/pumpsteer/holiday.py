@@ -3,7 +3,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.util.dt import parse_datetime
 from homeassistant.const import STATE_ON
-from .settings import HOLIDAY_TEMP
+from .const import HOLIDAY_TEMP
 
 _LOGGER = logging.getLogger(__name__)
 

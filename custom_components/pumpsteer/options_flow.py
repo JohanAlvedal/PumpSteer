@@ -5,21 +5,11 @@ from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
-from .settings import PRICE_BLOCK_THRESHOLD_DELTA
+from .const import HARDCODED_ENTITIES, PRICE_BLOCK_THRESHOLD_DELTA
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
-
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-}
 
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
