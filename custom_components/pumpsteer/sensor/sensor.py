@@ -14,7 +14,12 @@ import homeassistant.util.dt as dt_util
 
 from ..holiday import is_holiday_mode_active
 from ..temp_control_logic import calculate_temperature_output
-from ..electricity_price import async_hybrid_classify_with_history, classify_prices
+from ..electricity_price import (
+    async_get_forecast_prices,
+    async_hybrid_classify_with_history,
+    calculate_boost_potential,
+    classify_prices,
+)
 from ..settings import (
     DEFAULT_HOUSE_INERTIA,
     HOLIDAY_TEMP,
@@ -27,6 +32,7 @@ from ..settings import (
     WINTER_BRAKE_TEMP_OFFSET,
     WINTER_BRAKE_THRESHOLD,
     CHEAP_PRICE_OVERSHOOT,
+    PRICE_BOOST_OVERSHOOT,
     PRECOOL_MARGIN,
 )
 from ..utils import (
@@ -265,6 +271,7 @@ class PumpSteerSensor(Entity):
         sensor_data: Dict[str, Any],
         price_category: str,
         current_slot_index: int,
+        boost_active: bool = False,
     ) -> Tuple[float, str]:
         """Calculate output temperature based on current conditions"""
         indoor_temp = sensor_data["indoor_temp"]
@@ -295,6 +302,12 @@ class PumpSteerSensor(Entity):
         target_temp_for_logic = target_temp
         if "very_cheap" in price_category:
             target_temp_for_logic += CHEAP_PRICE_OVERSHOOT
+        if boost_active:
+            target_temp_for_logic += PRICE_BOOST_OVERSHOOT
+            _LOGGER.info(
+                "Price boost active: increasing target for logic by %.1f °C",
+                PRICE_BOOST_OVERSHOOT,
+            )
 
         # Dynamic braking temperature based on outdoor temp
         brake_temp = (
@@ -499,6 +512,7 @@ class PumpSteerSensor(Entity):
         now_hour: int,
         price_interval_minutes: int,
         current_slot_index: int,
+        boost_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
@@ -538,6 +552,7 @@ class PumpSteerSensor(Entity):
             3,
             price_interval_minutes,
         )
+        boost_data = boost_data or {}
 
         attributes = {
             "mode": mode,
@@ -569,6 +584,11 @@ class PumpSteerSensor(Entity):
             "current_hour": now_hour,
             "current_price_slot_index": current_slot_index,
             "price_interval_minutes": price_interval_minutes,
+            "price_boost_active": boost_data.get("price_boost_active", False),
+            "price_boost_reason": boost_data.get("reason"),
+            "price_boost_hours": boost_data.get("boost_hours", 0),
+            "price_boost_indices": boost_data.get("boost_indices", []),
+            "price_boost_savings_potential": boost_data.get("savings_potential"),
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
@@ -617,10 +637,28 @@ class PumpSteerSensor(Entity):
         if holiday:
             sensor_data["target_temp"] = HOLIDAY_TEMP
 
+        forecast_prices = await async_get_forecast_prices(
+            self.hass,
+            config.get("electricity_price_entity"),
+            hours_ahead=6,
+        )
+        boost_data = calculate_boost_potential(
+            prices,
+            forecast_prices,
+            aggressiveness=int(round(sensor_data["aggressiveness"])),
+        )
+        boost_indices = boost_data.get("boost_indices", [])
+        boost_active = (
+            boost_data.get("should_boost", False)
+            and current_slot_index in boost_indices
+        )
+        boost_data["price_boost_active"] = boost_active
+
         fake_temp, mode = self._calculate_output_temperature(
             sensor_data,
             price_category,
             current_slot_index,
+            boost_active,
         )
         fake_temp = self._apply_temperature_ramp(
             fake_temp,
@@ -640,6 +678,7 @@ class PumpSteerSensor(Entity):
             now_hour,
             price_interval_minutes,
             current_slot_index,
+            boost_data,
         )
 
         if self.ml_collector:

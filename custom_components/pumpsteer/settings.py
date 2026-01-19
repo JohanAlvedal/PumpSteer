@@ -32,6 +32,9 @@ WINTER_BRAKE_THRESHOLD: Final[float] = (
 CHEAP_PRICE_OVERSHOOT: Final[float] = (
     1.5  # °C to overshoot target when prices are very cheap
 )
+PRICE_BOOST_OVERSHOOT: Final[float] = (
+    1.0  # °C extra overshoot when preheating ahead of expensive prices
+)
 HEATING_COMPENSATION_FACTOR: Final[float] = (
     0.2  # Factor for lowering fake temp per °C deficit and aggressiveness unit
 )
