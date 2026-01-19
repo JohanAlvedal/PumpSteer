@@ -150,6 +150,9 @@ class PumpSteerSensor(SensorEntity):
         self._comfort_integral = 0.0
         self._last_price_brake_level = None
         self._last_debug_log = None
+        domain_data = self.hass.data.setdefault(DOMAIN, {})
+        diagnostics_store = domain_data.setdefault("diagnostics", {})
+        self._diagnostics = diagnostics_store.setdefault(config_entry.entry_id, {})
 
         if ML_AVAILABLE:
             self.ml_collector = PumpSteerMLCollector(hass)
@@ -571,12 +574,6 @@ class PumpSteerSensor(SensorEntity):
             decision_reason = (
                 f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
             )
-        next_3_hours_prices = get_price_window_for_hours(
-            prices,
-            current_slot_index,
-            3,
-            price_interval_minutes,
-        )
 
         block = pi_data["price_block"]
         block_detected = block is not None
@@ -616,10 +613,8 @@ class PumpSteerSensor(SensorEntity):
             "to_summer_threshold_c": round(
                 sensor_data["summer_threshold"] - sensor_data["outdoor_temp"], 2
             ),
-            "next_3_hours_prices": next_3_hours_prices,
             "saving_potential_sek_per_kwh": round(max_price - current_price, 3),
             "decision_reason": decision_reason,
-            "price_categories_all_hours": categories,
             "current_hour": now_hour,
             "current_price_slot_index": current_slot_index,
             "price_interval_minutes": price_interval_minutes,
@@ -650,6 +645,28 @@ class PumpSteerSensor(SensorEntity):
 
         return attributes
 
+    def _update_diagnostics(
+        self,
+        prices: List[float],
+        categories: List[str],
+        next_3_hours_prices: List[float],
+        price_interval_minutes: int,
+        current_slot_index: int,
+        update_time: datetime,
+    ) -> None:
+        """Update diagnostics data with large debug arrays."""
+        self._diagnostics.clear()
+        self._diagnostics.update(
+            {
+                "price_categories_all_hours": categories,
+                "next_3_hours_prices": next_3_hours_prices,
+                "price_interval_minutes": price_interval_minutes,
+                "current_price_slot_index": current_slot_index,
+                "prices_count": len(prices),
+                "last_updated": update_time.isoformat(),
+            }
+        )
+
     async def async_update(self) -> None:
         """Update sensor data"""
 
@@ -677,6 +694,7 @@ class PumpSteerSensor(SensorEntity):
                 "Last Updated": update_time.isoformat(),
                 "Current Hour": now_hour,
             }
+            self._diagnostics.clear()
             return
         self._attr_available = True
 
@@ -711,6 +729,12 @@ class PumpSteerSensor(SensorEntity):
         )
         self._attr_native_value = round(fake_temp, 1)
 
+        next_3_hours_prices = get_price_window_for_hours(
+            prices,
+            current_slot_index,
+            3,
+            price_interval_minutes,
+        )
         self._attributes = self._build_attributes(
             sensor_data,
             prices,
@@ -724,6 +748,14 @@ class PumpSteerSensor(SensorEntity):
             current_slot_index,
             pi_data,
             final_adjust,
+            update_time,
+        )
+        self._update_diagnostics(
+            prices,
+            categories,
+            next_3_hours_prices,
+            price_interval_minutes,
+            current_slot_index,
             update_time,
         )
 
