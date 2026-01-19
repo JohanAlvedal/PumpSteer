@@ -24,6 +24,8 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+HISTORY_CACHE_KEY = "pumpsteer_price_history_cache"
+HISTORY_CACHE_TTL = timedelta(hours=1)
 
 
 def validate_price_list(
@@ -179,38 +181,61 @@ async def async_hybrid_classify_with_history(
     end_time = dt_now()
     start_time = end_time - timedelta(hours=trailing_hours)
 
+    history_cache: Dict[str, Dict[str, any]] = hass.data.setdefault(
+        HISTORY_CACHE_KEY, {}
+    )
+    cached_entry = history_cache.get(price_entity_id)
+    if cached_entry:
+        cached_age = end_time - cached_entry["fetched"]
+        if cached_age < HISTORY_CACHE_TTL:
+            avg_price = cached_entry["avg_price"]
+            _LOGGER.debug(
+                "Using cached trailing average for %s (age: %s)",
+                price_entity_id,
+                cached_age,
+            )
+        else:
+            cached_entry = None
+
     recorder = get_instance(hass)
 
     def get_price_history():
         return get_significant_states(hass, start_time, end_time, [price_entity_id])
 
-    history = await recorder.async_add_executor_job(get_price_history)
+    if not cached_entry:
+        history = await recorder.async_add_executor_job(get_price_history)
 
-    states = history.get(price_entity_id, [])
-    trailing_prices = []
+        states = history.get(price_entity_id, [])
+        trailing_prices = []
 
-    # Process historical states to extract valid numeric prices
-    for s in states:
-        try:
-            if s.state not in ("unknown", "unavailable"):
-                trailing_prices.append(float(s.state))
-        except (ValueError, TypeError):
-            _LOGGER.debug("Skipping invalid state value from history: %s", s.state)
-            continue
+        # Process historical states to extract valid numeric prices
+        for s in states:
+            try:
+                if s.state not in ("unknown", "unavailable"):
+                    trailing_prices.append(float(s.state))
+            except (ValueError, TypeError):
+                _LOGGER.debug("Skipping invalid state value from history: %s", s.state)
+                continue
 
-    # Calculate the average price from the retrieved historical data
-    if not trailing_prices:
-        _LOGGER.warning(
-            "Could not retrieve trailing prices; fallback to daily average of current list."
-        )
-        avg_price = get_daily_average(
-            price_list
-        )  # Fallback to current list average if history fails
-    else:
-        avg_price = get_daily_average(trailing_prices)  # Use historical average
+        # Calculate the average price from the retrieved historical data
+        if not trailing_prices:
+            _LOGGER.warning(
+                "Could not retrieve trailing prices; fallback to daily average of current list."
+            )
+            avg_price = get_daily_average(
+                price_list
+            )  # Fallback to current list average if history fails
+        else:
+            avg_price = get_daily_average(trailing_prices)  # Use historical average
 
-    _LOGGER.debug("Retrieved %d trailing prices from history", len(trailing_prices))
-    _LOGGER.debug("Trailing average: %s", avg_price)
+        history_cache[price_entity_id] = {
+            "fetched": end_time,
+            "avg_price": avg_price,
+            "sample_count": len(trailing_prices),
+        }
+
+        _LOGGER.debug("Retrieved %d trailing prices from history", len(trailing_prices))
+        _LOGGER.debug("Trailing average: %s", avg_price)
 
     # Fallback to standard percentile classification if the calculated average is invalid (e.g., zero)
     if avg_price <= 0:
