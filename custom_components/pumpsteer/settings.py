@@ -1,4 +1,4 @@
-from typing import List, Final
+from typing import List, Final, Optional
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,6 +37,16 @@ PRICE_PI_KI: Final[float] = 0.04
 PRICE_HORIZON_STEPS_15M: Final[int] = 8
 PRICE_HORIZON_STEPS_HOURLY: Final[int] = 6
 PRICE_MAX_DELTA_PER_STEP: Final[float] = 0.08
+PRICE_BRAKE_MAX_DELTA_PER_STEP: Final[float] = 0.08
+MPC_HORIZON_STEPS: Final[int] = 6
+
+# === PRICE BRAKE BLOCK SETTINGS ===
+MIN_BLOCK_DURATION_MIN: Final[int] = 60
+PRICE_BLOCK_THRESHOLD_DELTA: Final[float] = 0.3
+PRICE_BLOCK_THRESHOLD_PERCENTILE: Final[Optional[float]] = None
+PRICE_BRAKE_PRE_MINUTES: Final[int] = 60
+PRICE_BRAKE_POST_MINUTES: Final[int] = 60
+PRICE_BLOCK_AREA_SCALE: Final[float] = 4.0
 
 COMFORT_PI_KP: Final[float] = 0.6
 COMFORT_PI_KI: Final[float] = 0.1
