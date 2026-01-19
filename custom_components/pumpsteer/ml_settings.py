@@ -158,7 +158,6 @@ def get_ml_settings_info() -> dict:
     }
 
 
-validate_ml_settings()
 _LOGGER.debug(
-    "PumpSteer ML settings loaded successfully (version %s)", ML_MODULE_VERSION
+    "PumpSteer ML settings module loaded (version %s)", ML_MODULE_VERSION
 )

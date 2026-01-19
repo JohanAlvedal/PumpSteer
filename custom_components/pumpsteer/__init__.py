@@ -4,7 +4,9 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .ml_settings import validate_ml_settings
 from .options_flow import PumpSteerOptionsFlowHandler
+from .settings import validate_core_settings
 
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pumpsteer"
@@ -12,6 +14,16 @@ DOMAIN = "pumpsteer"
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the PumpSteer integration"""
+    try:
+        validate_core_settings()
+        validate_ml_settings()
+    except ValueError as err:
+        _LOGGER.error(
+            "PumpSteer settings validation failed; setup aborted: %s",
+            err,
+        )
+        return False
+
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
 
     _LOGGER.info("PumpSteer integration setup completed")
