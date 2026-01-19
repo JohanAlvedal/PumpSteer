@@ -23,7 +23,9 @@
         "data": {
           "indoor_temp_entity": "options.step.init.data.indoor_temp_entity",
           "real_outdoor_entity": "options.step.init.data.real_outdoor_entity",
-          "electricity_price_entity": "options.step.init.data.electricity_price_entity"
+          "electricity_price_entity": "options.step.init.data.electricity_price_entity",
+          "price_brake_threshold_delta": "options.step.init.data.price_brake_threshold_delta",
+          "price_brake_threshold_percentile": "options.step.init.data.price_brake_threshold_percentile"
         }
       }
     },

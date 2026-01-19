@@ -5,6 +5,8 @@ from homeassistant import config_entries
 from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
+from .settings import PRICE_BLOCK_THRESHOLD_DELTA
+
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
@@ -63,6 +65,38 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "electricity_price_entity",
                         default=current_data.get("electricity_price_entity"),
                     ): selector({"entity": {"domain": "sensor"}}),
+                    vol.Optional(
+                        "price_brake_threshold_delta",
+                        default=current_data.get(
+                            "price_brake_threshold_delta",
+                            PRICE_BLOCK_THRESHOLD_DELTA,
+                        ),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0,
+                                "max": 10,
+                                "step": 0.05,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "price_brake_threshold_percentile",
+                        default=current_data.get(
+                            "price_brake_threshold_percentile",
+                            0,
+                        ),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0,
+                                "max": 100,
+                                "step": 1,
+                                "mode": "box",
+                            }
+                        }
+                    ),
                 }
             ),
             errors=errors,
