@@ -15,11 +15,14 @@ import numpy as np
 
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 import homeassistant.util.dt as dt_util
 
 from .ml_settings import (
     ML_MODULE_VERSION,
-    ML_DATA_FILE_PATH,
+    ML_STORAGE_KEY,
+    ML_STORAGE_VERSION,
+    ML_LEGACY_DATA_FILENAME,
     ML_MAX_SAVED_SESSIONS,
     ML_MAX_SESSION_UPDATES,
     ML_TRIMMED_UPDATES,
@@ -35,9 +38,10 @@ _LOGGER = logging.getLogger(__name__)
 class PumpSteerMLCollector:
     """Collects, analyzes, and learns from PumpSteer operation sessions"""
 
-    def __init__(self, hass: HomeAssistant, data_file_path: str = ML_DATA_FILE_PATH):
+    def __init__(self, hass: HomeAssistant):
         self.hass = hass
-        self.data_file = data_file_path
+        self._store = Store(hass, ML_STORAGE_VERSION, ML_STORAGE_KEY)
+        self._legacy_data_path = hass.config.path(ML_LEGACY_DATA_FILENAME)
         self.learning_sessions: List[Dict[str, Any]] = []
         self.current_session: Optional[Dict[str, Any]] = None
         self.learning_summary: Dict[str, Any] = {}
@@ -54,57 +58,70 @@ class PumpSteerMLCollector:
 
     async def async_load_data(self) -> None:
         """Load previously saved learning data from disk"""
-        await self.hass.async_add_executor_job(self._load_data_sync)
+        data = await self._store.async_load()
+        source = "storage"
+        if data is None:
+            data = await self._async_load_legacy_data()
+            if data is not None:
+                source = "legacy file"
+            else:
+                data = self._default_payload()
+                source = "defaults"
+
+        if not isinstance(data, dict):
+            _LOGGER.warning("ML: Unexpected data format; resetting to defaults.")
+            data = self._default_payload()
+
+        if data.get("version", "unknown") != ML_DATA_VERSION:
+            data = await self._async_handle_version_mismatch(data)
+            source = f"{source} (migrated)"
+
+        await self._store.async_save(data)
+        self._apply_loaded_data(data)
         _LOGGER.info(
-            "ML: Loaded %d sessions from %s",
-            len(self.learning_sessions),
-            self.data_file,
+            "ML: Loaded %d sessions from %s", len(self.learning_sessions), source
         )
 
-    def _load_data_sync(self) -> None:
-        if not Path(self.data_file).exists():
-            _LOGGER.debug("ML: No previous data found.")
-            return
+    async def _async_load_legacy_data(self) -> Optional[Dict[str, Any]]:
+        return await self.hass.async_add_executor_job(self._load_legacy_data_sync)
+
+    def _load_legacy_data_sync(self) -> Optional[Dict[str, Any]]:
+        legacy_path = Path(self._legacy_data_path)
+        if not legacy_path.exists():
+            _LOGGER.debug("ML: No legacy data file found.")
+            return None
 
         try:
-            with open(self.data_file, "r", encoding="utf-8") as f:
+            with open(legacy_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (OSError, json.JSONDecodeError) as exc:
             _LOGGER.warning(
-                "ML: Failed to read data file %s (%s). Resetting to defaults.",
-                self.data_file,
+                "ML: Failed to read legacy data file %s (%s). Using defaults.",
+                legacy_path,
                 exc,
             )
-            self._backup_and_reset_data(raw_error=True)
-            return
+            return None
 
-        file_version = data.get("version", "unknown")
-        if file_version != ML_DATA_VERSION:
-            _LOGGER.warning(
-                "ML: Data version mismatch (found %s, expected %s)",
-                file_version,
-                ML_DATA_VERSION,
-            )
-            data = self._handle_version_mismatch(data)
+        _LOGGER.info("ML: Imported legacy data from %s", legacy_path)
+        return data
 
-        self.learning_sessions = data.get("sessions", [])
-        self.learning_summary = data.get("learning_summary", {})
-        self.model_coefficients = data.get("model_coefficients", None)
-
-    def _handle_version_mismatch(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Try to migrate mismatched data; otherwise reset with backup."""
+    async def _async_handle_version_mismatch(
+        self, data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Try to migrate mismatched data; otherwise reset to defaults."""
         migrated = self._migrate_data(data)
         if migrated is None:
-            _LOGGER.warning("ML: Unable to migrate data; backing up and resetting.")
-            self._backup_and_reset_data()
-            return self._default_payload()
+            _LOGGER.warning("ML: Unable to migrate data; resetting to defaults.")
+            defaults = self._default_payload()
+            await self._store.async_save(defaults)
+            return defaults
 
         if migrated.get("version") != ML_DATA_VERSION:
             migrated["version"] = ML_DATA_VERSION
         migrated.setdefault("ml_module_version", ML_MODULE_VERSION)
         migrated.setdefault("created", dt_util.now().isoformat())
         migrated.setdefault("session_count", len(migrated.get("sessions", [])))
-        self._write_data_file(migrated)
+        await self._store.async_save(migrated)
         return migrated
 
     def _migrate_data(self, data: Any) -> Optional[Dict[str, Any]]:
@@ -140,27 +157,6 @@ class PumpSteerMLCollector:
         migrated["sessions"] = normalized_sessions
         return migrated
 
-    def _backup_and_reset_data(self, raw_error: bool = False) -> None:
-        """Back up the existing data file and reinitialize defaults."""
-        data_path = Path(self.data_file)
-        if data_path.exists():
-            timestamp = dt_util.now().strftime("%Y%m%d%H%M%S")
-            suffix = "corrupt" if raw_error else "backup"
-            backup_path = data_path.with_suffix(
-                f"{data_path.suffix}.{suffix}-{timestamp}"
-            )
-            try:
-                data_path.replace(backup_path)
-                _LOGGER.warning("ML: Backed up data to %s", backup_path)
-            except OSError as exc:
-                _LOGGER.warning("ML: Failed to back up data file (%s)", exc)
-
-        defaults = self._default_payload()
-        self._write_data_file(defaults)
-        self.learning_sessions = defaults["sessions"]
-        self.learning_summary = defaults["learning_summary"]
-        self.model_coefficients = defaults["model_coefficients"]
-
     def _default_payload(self) -> Dict[str, Any]:
         return {
             "version": ML_DATA_VERSION,
@@ -172,15 +168,12 @@ class PumpSteerMLCollector:
             "model_coefficients": None,
         }
 
-    def _write_data_file(self, data: Dict[str, Any]) -> None:
-        Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(self.data_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+    def _apply_loaded_data(self, data: Dict[str, Any]) -> None:
+        self.learning_sessions = data.get("sessions", [])
+        self.learning_summary = data.get("learning_summary", {})
+        self.model_coefficients = data.get("model_coefficients", None)
 
     async def async_save_data(self) -> None:
-        await self.hass.async_add_executor_job(self._save_data_sync)
-
-    def _save_data_sync(self) -> None:
         data = {
             "version": ML_DATA_VERSION,
             "ml_module_version": ML_MODULE_VERSION,
@@ -191,7 +184,7 @@ class PumpSteerMLCollector:
             "model_coefficients": self.model_coefficients,
         }
 
-        self._write_data_file(data)
+        await self._store.async_save(data)
 
     def start_session(self, initial_data: Dict[str, Any]) -> None:
         """Start a new learning session"""
