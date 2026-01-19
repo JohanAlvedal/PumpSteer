@@ -319,8 +319,12 @@ class PumpSteerMLCollector:
         )
 
         # Trigger learning update
-        self._update_learning_model()
+        self.hass.async_create_task(self._async_update_learning_model())
         self.hass.async_create_task(self.async_save_data())
+
+    async def _async_update_learning_model(self) -> None:
+        """Run the regression update in the executor to avoid blocking."""
+        await self.hass.async_add_executor_job(self._update_learning_model)
 
     def _update_learning_model(self) -> None:
         """Perform a simple regression analysis on collected sessions"""
