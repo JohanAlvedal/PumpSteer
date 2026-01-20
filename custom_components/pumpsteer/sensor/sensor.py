@@ -342,6 +342,7 @@ class PumpSteerSensor(SensorEntity):
             area_scale=PRICE_BLOCK_AREA_SCALE,
             now_offset_minutes=0.0,
         )
+        next_block = price_brake.get("next_block")
 
         (
             block_start,
@@ -370,7 +371,16 @@ class PumpSteerSensor(SensorEntity):
                 desired_brake_level, base_min + 0.20 * scale
             )
             brake_blocked_reason = "expensive_now"
-        if desired_brake_level <= 0.0 and not in_price_block and not expensive_now:
+        pre_window_active = False
+        if next_block is not None:
+            pre_start = next_block.start_offset_minutes - PRICE_BRAKE_PRE_MINUTES
+            pre_window_active = pre_start <= 0 < next_block.start_offset_minutes
+        if (
+            desired_brake_level <= 0.0
+            and not in_price_block
+            and not expensive_now
+            and not pre_window_active
+        ):
             brake_blocked_reason = "no_price_block"
         if too_cold_to_brake:
             desired_brake_level = 0.0
