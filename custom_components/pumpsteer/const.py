@@ -51,6 +51,7 @@ PRICE_BLOCK_THRESHOLD_PERCENTILE: Final[Optional[float]] = None
 PRICE_BRAKE_PRE_MINUTES: Final[int] = 60
 PRICE_BRAKE_POST_MINUTES: Final[int] = 60
 PRICE_BLOCK_AREA_SCALE: Final[float] = 4.0
+LOOKAHEAD_HOURS: Final[int] = 12
 
 COMFORT_PI_KP: Final[float] = 0.6
 COMFORT_PI_KI: Final[float] = 0.1
