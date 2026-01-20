@@ -208,6 +208,7 @@ class PumpSteerSensor(SensorEntity):
         self._last_price_category = "unknown"
         self._comfort_integral = 0.0
         self._last_price_brake_level = None
+        self._last_brake_offset = None
         self._last_debug_log = None
         domain_data = self.hass.data.setdefault(DOMAIN, {})
         diagnostics_store = domain_data.setdefault("diagnostics", {})
@@ -545,7 +546,7 @@ class PumpSteerSensor(SensorEntity):
         # Dynamic braking temperature based on outdoor temp
         brake_temp = (
             outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
-            if outdoor_temp < WINTER_BRAKE_THRESHOLD
+            if outdoor_temp <= WINTER_BRAKE_THRESHOLD
             else BRAKE_FAKE_TEMP
         )
 
@@ -671,6 +672,7 @@ class PumpSteerSensor(SensorEntity):
         prices: List[float],
         current_price: float,
         price_category: str,
+        price_factor_percent: float,
         mode: str,
         holiday: bool,
         categories: List[str],
@@ -680,20 +682,16 @@ class PumpSteerSensor(SensorEntity):
         pi_data: Dict[str, Any],
         final_adjust: float,
         fake_temp: float,
+        control_outdoor_temperature: float,
         output_temp: float,
+        brake_offset_c: float,
+        brake_target_c: float,
+        is_winter_brake: bool,
         update_time: datetime,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
         min_price = min(prices) if prices else 0.0
-
-        price_range = max_price - min_price
-        if price_range > 0:
-            price_factor = (current_price - min_price) / price_range
-        else:
-            price_factor = 0.0
-
-        price_factor = max(0.0, min(price_factor, 1.0))
         braking_threshold_ratio = (
             1.0 - (sensor_data["aggressiveness"] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
         )
@@ -753,6 +751,7 @@ class PumpSteerSensor(SensorEntity):
             "mode": mode,
             "output_temperature": round(output_temp, 1),
             "fake_outdoor_temperature": round(fake_temp, 1),
+            "control_outdoor_temperature": round(control_outdoor_temperature, 1),
             "price_category": price_category,
             "status": "ok",
             "current_price": round(current_price, 3),
@@ -764,7 +763,7 @@ class PumpSteerSensor(SensorEntity):
             "outdoor_temperature": sensor_data["outdoor_temp"],
             "summer_threshold": sensor_data["summer_threshold"],
             "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
-            "price_factor_percent": round(price_factor * 100, 1),
+            "price_factor_percent": round(price_factor_percent, 1),
             "holiday_mode": holiday,
             "last_updated": update_time.isoformat(),
             "temp_error_c": round(
@@ -811,6 +810,9 @@ class PumpSteerSensor(SensorEntity):
             "price_rate_limited": pi_data["price_rate_limited"],
             "rate_limited": pi_data["price_rate_limited"],
             "brake_blocked_reason": pi_data["brake_blocked_reason"],
+            "brake_offset_c": round(brake_offset_c, 2),
+            "brake_target_c": round(brake_target_c, 2),
+            "is_winter_brake": is_winter_brake,
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
@@ -886,6 +888,15 @@ class PumpSteerSensor(SensorEntity):
         combined_prices = self._get_combined_prices(
             config.get("electricity_price_entity", "")
         )
+        max_price = max(prices) if prices else 1.0
+        min_price = min(prices) if prices else 0.0
+        price_range = max_price - min_price
+        if price_range > 0:
+            price_factor = (current_price - min_price) / price_range
+        else:
+            price_factor = 0.0
+        price_factor = max(0.0, min(price_factor, 1.0))
+        price_factor_percent = price_factor * 100.0
         pi_data = self._compute_controls(
             sensor_data,
             combined_prices,
@@ -909,10 +920,33 @@ class PumpSteerSensor(SensorEntity):
             in {"allowed", "rate_limited", "expensive_now"}
         ):
             mode = "braking_by_price"
+        price_pressure = max(0.0, min(price_factor_percent / 100.0, 1.0))
+        is_winter = sensor_data["outdoor_temp"] <= WINTER_BRAKE_THRESHOLD
+        target_brake_offset_c = (
+            price_pressure * WINTER_BRAKE_TEMP_OFFSET
+            if mode == "braking_by_price" and is_winter
+            else 0.0
+        )
+        brake_offset_c, _ = apply_rate_limit(
+            target_brake_offset_c,
+            self._last_brake_offset,
+            PRICE_BRAKE_MAX_DELTA_PER_STEP * WINTER_BRAKE_TEMP_OFFSET,
+        )
+        self._last_brake_offset = brake_offset_c
+        control_outdoor_temperature = fake_temp + brake_offset_c
+        control_outdoor_temperature = max(
+            MIN_FAKE_TEMP,
+            min(MAX_FAKE_TEMP, control_outdoor_temperature),
+        )
         adjusted_temp, final_adjust = self._apply_control_bias(
-            fake_temp, sensor_data, pi_data
+            control_outdoor_temperature, sensor_data, pi_data
         )
         self._attr_native_value = round(adjusted_temp, 1)
+        is_winter_brake = (
+            mode == "braking_by_price"
+            and is_winter
+            and target_brake_offset_c > 0.0
+        )
 
         next_3_hours_prices = get_price_window_for_hours(
             prices,
@@ -925,6 +959,7 @@ class PumpSteerSensor(SensorEntity):
             prices,
             current_price,
             price_category,
+            price_factor_percent,
             mode,
             holiday,
             categories,
@@ -934,7 +969,11 @@ class PumpSteerSensor(SensorEntity):
             pi_data,
             final_adjust,
             fake_temp,
+            control_outdoor_temperature,
             adjusted_temp,
+            brake_offset_c,
+            target_brake_offset_c,
+            is_winter_brake,
             update_time,
         )
         self._update_diagnostics(
