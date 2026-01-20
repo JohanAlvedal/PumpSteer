@@ -980,8 +980,17 @@ class PumpSteerSensor(SensorEntity):
             mode = "braking_by_price"
         price_pressure = max(0.0, min(price_factor_percent / 100.0, 1.0))
         is_winter = sensor_data["outdoor_temp"] <= WINTER_BRAKE_THRESHOLD
+        block_state = pi_data.get("block_state", "none")
+        block_scale = 0.0
+        if block_state == "active":
+            block_scale = 1.0
+        elif block_state == "upcoming":
+            block_scale = 0.5
+        # Apply block-based scaling to the winter brake target.
         target_brake_offset_c = (
-            price_pressure * WINTER_BRAKE_TEMP_OFFSET if is_winter else 0.0
+            price_pressure * WINTER_BRAKE_TEMP_OFFSET * block_scale
+            if is_winter
+            else 0.0
         )
         previous_brake_offset = (
             self._last_brake_offset if self._last_brake_offset is not None else 0.0
