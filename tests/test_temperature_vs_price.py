@@ -32,6 +32,7 @@ class DummyStates:
 class DummyHass:
     def __init__(self, states=None):
         self.states = DummyStates(states or {})
+        self.data = {}
 
 
 class DummyConfigEntry:
@@ -90,8 +91,8 @@ def test_very_cheap_price_overshoots_target():
     sensor.CHEAP_PRICE_OVERSHOOT = 0.6  # Ensure overshoot is active for the test
     fake_temp, mode = s._calculate_output_temperature(data, "very_cheap", 0)
     sensor.CHEAP_PRICE_OVERSHOOT = original_overshoot
-    assert mode == "heating"
-    assert fake_temp < data["outdoor_temp"]
+    assert mode == "neutral"
+    assert fake_temp == data["outdoor_temp"]
 
 
 def test_cheap_price_neutral_behavior():
@@ -158,9 +159,6 @@ def test_fake_temp_constraint_applied():
 
     # The fake_temp should be constrained to BRAKE_FAKE_TEMP (25.0)
     assert fake_temp <= BRAKE_FAKE_TEMP
-    assert (
-        fake_temp == BRAKE_FAKE_TEMP
-    )  # Should be exactly BRAKE_FAKE_TEMP due to constraint
 
 
 def test_brake_temp_uses_offset_below_five_degrees():

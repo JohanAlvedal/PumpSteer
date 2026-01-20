@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -9,7 +10,8 @@ from custom_components.pumpsteer.sensor import sensor
 
 
 class DummyHass:
-    pass
+    def __init__(self):
+        self.data = {}
 
 
 class DummyConfigEntry:
@@ -39,18 +41,25 @@ def test_build_attributes_basic():
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
+    s._attr_native_value = 5.0
 
     pi_data = {
         "price_brake_level": 0.0,
-        "price_pressure": 0.0,
         "price_baseline": 0.0,
-        "price_horizon": 6,
-        "price_I": 0.0,
+        "price_threshold": 0.0,
+        "price_area": 0.0,
+        "price_amplitude": 0.0,
+        "price_block": None,
+        "price_block_start": None,
+        "price_block_end": None,
+        "in_price_block": False,
+        "block_state": "none",
         "price_rate_limited": False,
         "comfort_push": 0.0,
         "comfort_I": 0.0,
         "temp_error": 0.0,
         "dt_minutes": 60,
+        "brake_blocked_reason": "no_price_block",
     }
 
     attrs = s._build_attributes(
@@ -66,6 +75,7 @@ def test_build_attributes_basic():
         current_slot_index=0,
         pi_data=pi_data,
         final_adjust=0.0,
+        update_time=datetime(2024, 1, 1, now_hour, 0, 0),
     )
     assert attrs["mode"] == "heating"
     assert attrs["current_price"] == 1.2
@@ -93,18 +103,25 @@ def test_decision_reason_very_cheap_heating():
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
+    s._attr_native_value = 5.0
 
     pi_data = {
         "price_brake_level": 0.0,
-        "price_pressure": 0.0,
         "price_baseline": 0.0,
-        "price_horizon": 6,
-        "price_I": 0.0,
+        "price_threshold": 0.0,
+        "price_area": 0.0,
+        "price_amplitude": 0.0,
+        "price_block": None,
+        "price_block_start": None,
+        "price_block_end": None,
+        "in_price_block": False,
+        "block_state": "none",
         "price_rate_limited": False,
         "comfort_push": 0.0,
         "comfort_I": 0.0,
         "temp_error": 0.0,
         "dt_minutes": 60,
+        "brake_blocked_reason": "no_price_block",
     }
 
     attrs = s._build_attributes(
@@ -120,6 +137,7 @@ def test_decision_reason_very_cheap_heating():
         current_slot_index=0,
         pi_data=pi_data,
         final_adjust=0.0,
+        update_time=datetime(2024, 1, 1, now_hour, 0, 0),
     )
     assert attrs["decision_reason"] == "heating - Triggered by very cheap price"
 
@@ -144,18 +162,25 @@ def test_decision_reason_precool():
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
+    s._attr_native_value = 5.0
 
     pi_data = {
         "price_brake_level": 0.0,
-        "price_pressure": 0.0,
         "price_baseline": 0.0,
-        "price_horizon": 6,
-        "price_I": 0.0,
+        "price_threshold": 0.0,
+        "price_area": 0.0,
+        "price_amplitude": 0.0,
+        "price_block": None,
+        "price_block_start": None,
+        "price_block_end": None,
+        "in_price_block": False,
+        "block_state": "none",
         "price_rate_limited": False,
         "comfort_push": 0.0,
         "comfort_I": 0.0,
         "temp_error": 0.0,
         "dt_minutes": 60,
+        "brake_blocked_reason": "no_price_block",
     }
 
     attrs = s._build_attributes(
@@ -171,5 +196,6 @@ def test_decision_reason_precool():
         current_slot_index=0,
         pi_data=pi_data,
         final_adjust=0.0,
+        update_time=datetime(2024, 1, 1, now_hour, 0, 0),
     )
     assert attrs["decision_reason"] == "precool - Triggered by pre-cool (warm forecast)"

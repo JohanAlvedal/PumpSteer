@@ -117,6 +117,25 @@ def safe_get_current_price_and_category(
     return current_price, price_category
 
 
+def compute_block_window(
+    update_time: datetime,
+    block: Optional["PriceBlock"],
+) -> Tuple[Optional[datetime], Optional[datetime], bool, str]:
+    """Compute the price block window and its state."""
+    if block is None:
+        return None, None, False, "none"
+
+    block_start = update_time + timedelta(minutes=block.start_offset_minutes)
+    block_end = update_time + timedelta(minutes=block.end_offset_minutes)
+
+    now_utc = dt_util.as_utc(update_time)
+    block_start_utc = dt_util.as_utc(block_start)
+    block_end_utc = dt_util.as_utc(block_end)
+    in_price_block = block_start_utc <= now_utc < block_end_utc
+    block_state = "active" if in_price_block else "upcoming"
+    return block_start, block_end, in_price_block, block_state
+
+
 class PumpSteerSensor(SensorEntity):
     """PumpSteer sensor for heat pump control"""
 
@@ -255,6 +274,7 @@ class PumpSteerSensor(SensorEntity):
         current_slot_index: int,
         price_interval_minutes: int,
         config: Dict[str, Any],
+        update_time: datetime,
     ) -> Dict[str, Any]:
         """Compute price brake and comfort push controls."""
         dt_minutes = price_interval_minutes if price_interval_minutes > 0 else 60
@@ -282,12 +302,15 @@ class PumpSteerSensor(SensorEntity):
             now_offset_minutes=0.0,
         )
 
+        block_start, block_end, in_price_block, block_state = compute_block_window(
+            update_time, price_brake["block"]
+        )
         temp_delta = sensor_data["indoor_temp"] - sensor_data["target_temp"]
         too_cold_to_brake = temp_delta < HEATING_THRESHOLD
         desired_brake_level = price_brake["brake_level"]
         brake_blocked_reason = "allowed"
 
-        if desired_brake_level <= 0.0:
+        if desired_brake_level <= 0.0 and not in_price_block:
             brake_blocked_reason = "no_price_block"
         elif too_cold_to_brake:
             desired_brake_level = 0.0
@@ -329,6 +352,10 @@ class PumpSteerSensor(SensorEntity):
             "price_area": price_brake["area"],
             "price_amplitude": price_brake["amplitude"],
             "price_block": price_brake["block"],
+            "price_block_start": block_start,
+            "price_block_end": block_end,
+            "in_price_block": in_price_block,
+            "block_state": block_state,
             "price_rate_limited": rate_limited,
             "comfort_push": comfort_output,
             "comfort_I": self._comfort_integral,
@@ -598,13 +625,13 @@ class PumpSteerSensor(SensorEntity):
         block = pi_data["price_block"]
         block_detected = block is not None
         next_block_start = (
-            (update_time + timedelta(minutes=block.start_offset_minutes)).isoformat()
-            if block
+            pi_data["price_block_start"].isoformat()
+            if pi_data["price_block_start"]
             else None
         )
         next_block_end = (
-            (update_time + timedelta(minutes=block.end_offset_minutes)).isoformat()
-            if block
+            pi_data["price_block_end"].isoformat()
+            if pi_data["price_block_end"]
             else None
         )
         duration_minutes = block.duration_minutes if block else 0
@@ -648,6 +675,8 @@ class PumpSteerSensor(SensorEntity):
             "duration_minutes": duration_minutes,
             "peak_price": round(peak_price, 3),
             "block_detected": block_detected,
+            "in_price_block": pi_data["in_price_block"],
+            "block_state": pi_data["block_state"],
             "comfort_push": round(pi_data["comfort_push"], 3),
             "temp_error": round(pi_data["temp_error"], 3),
             "comfort_pi_kp": COMFORT_PI_KP,
@@ -738,6 +767,7 @@ class PumpSteerSensor(SensorEntity):
             current_slot_index,
             price_interval_minutes,
             config,
+            update_time,
         )
 
         fake_temp, mode = self._calculate_output_temperature(

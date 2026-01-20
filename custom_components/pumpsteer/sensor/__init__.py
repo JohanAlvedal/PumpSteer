@@ -3,7 +3,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .sensor import PumpSteerSensor
-from .ml_sensor import PumpSteerMLSensor
 
 
 async def async_setup_entry(
@@ -13,5 +12,7 @@ async def async_setup_entry(
 ) -> None:
     """Register both control and ML analysis sensors"""
     sensor = PumpSteerSensor(hass, config_entry)
+    from .ml_sensor import PumpSteerMLSensor
+
     ml_sensor = PumpSteerMLSensor(hass, config_entry)
     async_add_entities([sensor, ml_sensor], update_before_add=True)
