@@ -145,15 +145,14 @@ def compute_block_status(
         else dt_util.as_utc(dt_util.now())
     )
     active_index = 0
+    active_window = None
     for index, (_, block_start, block_end) in enumerate(block_windows, start=1):
         block_start_utc = dt_util.as_utc(block_start)
         block_end_utc = dt_util.as_utc(block_end)
         if block_start_utc <= now_utc < block_end_utc:
             active_index = index
+            active_window = (block_start, block_end)
             break
-
-    in_price_block = active_index > 0
-    block_state = "active" if in_price_block else "upcoming"
 
     upcoming = [
         window
@@ -162,17 +161,41 @@ def compute_block_status(
     ]
     upcoming.sort(key=lambda window: window[1])
     next_window = upcoming[0] if upcoming else None
-    next_block_start = next_window[1] if next_window else None
-    next_block_end = next_window[2] if next_window else None
+
+    canonical_window = active_window or (
+        (next_window[1], next_window[2]) if next_window else None
+    )
+    canonical_start = canonical_window[0] if canonical_window else None
+    canonical_end = canonical_window[1] if canonical_window else None
+
+    in_price_block = active_window is not None
+    if canonical_window is None:
+        block_state = "none"
+    else:
+        block_state = "active" if in_price_block else "upcoming"
 
     return (
-        next_block_start,
-        next_block_end,
+        canonical_start,
+        canonical_end,
         in_price_block,
         block_state,
         active_index,
         block_windows,
     )
+
+
+def compute_block_window(
+    update_time: datetime,
+    blocks: Optional["PriceBlock"] | List["PriceBlock"],
+) -> Tuple[Optional[datetime], Optional[datetime], bool, str]:
+    """Return the canonical block window and state for a block or list."""
+    if blocks is None:
+        return None, None, False, "none"
+    block_list = blocks if isinstance(blocks, list) else [blocks]
+    block_start, block_end, in_price_block, block_state, _, _ = compute_block_status(
+        update_time, block_list
+    )
+    return block_start, block_end, in_price_block, block_state
 
 
 class PumpSteerSensor(SensorEntity):
@@ -344,6 +367,7 @@ class PumpSteerSensor(SensorEntity):
             now_offset_minutes=0.0,
         )
         next_block = price_brake.get("next_block")
+        block_candidates = price_brake.get("blocks") or []
 
         (
             block_start,
@@ -352,7 +376,7 @@ class PumpSteerSensor(SensorEntity):
             block_state,
             active_block_index,
             block_windows,
-        ) = compute_block_status(update_time, price_brake["blocks"])
+        ) = compute_block_status(update_time, block_candidates)
         temp_delta = sensor_data["indoor_temp"] - sensor_data["target_temp"]
         too_cold_to_brake = temp_delta < HEATING_THRESHOLD
         desired_brake_level = price_brake["brake_level"]
@@ -442,7 +466,7 @@ class PumpSteerSensor(SensorEntity):
             "price_area": price_brake["area"],
             "price_amplitude": price_brake["amplitude"],
             "price_block": price_brake["block"],
-            "price_blocks": price_brake["blocks"],
+            "price_blocks": block_candidates,
             "price_block_start": block_start,
             "price_block_end": block_end,
             "in_price_block": in_price_block,
@@ -672,7 +696,6 @@ class PumpSteerSensor(SensorEntity):
         prices: List[float],
         current_price: float,
         price_category: str,
-        price_factor_percent: float,
         mode: str,
         holiday: bool,
         categories: List[str],
@@ -681,13 +704,14 @@ class PumpSteerSensor(SensorEntity):
         current_slot_index: int,
         pi_data: Dict[str, Any],
         final_adjust: float,
-        fake_temp: float,
-        control_outdoor_temperature: float,
-        output_temp: float,
-        brake_offset_c: float,
-        brake_target_c: float,
-        is_winter_brake: bool,
         update_time: datetime,
+        price_factor_percent: float = 0.0,
+        fake_temp: float = 0.0,
+        control_outdoor_temperature: float = 0.0,
+        output_temp: float = 0.0,
+        brake_offset_c: float = 0.0,
+        brake_target_c: float = 0.0,
+        is_winter_brake: bool = False,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
@@ -714,33 +738,35 @@ class PumpSteerSensor(SensorEntity):
                 f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
             )
 
-        block_windows = pi_data["block_windows"]
-        active_block_index = pi_data["active_block_index"]
-        blocks_detected = len(pi_data["price_blocks"])
+        block_windows = pi_data.get("block_windows", [])
+        active_block_index = pi_data.get("active_block_index", 0)
+        blocks_detected = len(pi_data.get("price_blocks", []))
         block_detected = blocks_detected > 0
-        next_block_start = (
+        active_block_start = (
             pi_data["price_block_start"].isoformat()
             if pi_data["price_block_start"]
             else None
         )
-        next_block_end = (
+        active_block_end = (
             pi_data["price_block_end"].isoformat()
             if pi_data["price_block_end"]
             else None
         )
-        next_block = None
+        next_block_start = active_block_start
+        next_block_end = active_block_end
+        canonical_block = None
         if pi_data["price_block_start"] and pi_data["price_block_end"]:
             for block, block_start, block_end in block_windows:
                 if (
                     block_start == pi_data["price_block_start"]
                     and block_end == pi_data["price_block_end"]
                 ):
-                    next_block = block
+                    canonical_block = block
                     break
         active_block = None
         if 0 < active_block_index <= len(block_windows):
             active_block = block_windows[active_block_index - 1][0]
-        duration_source = next_block or active_block
+        duration_source = canonical_block or active_block
         duration_minutes = duration_source.duration_minutes if duration_source else 0
         peak_price = duration_source.peak if duration_source else 0.0
 
@@ -782,6 +808,8 @@ class PumpSteerSensor(SensorEntity):
             "threshold": round(pi_data["price_threshold"], 3),
             "area": round(pi_data["price_area"], 3),
             "amplitude": round(pi_data["price_amplitude"], 3),
+            "active_block_start": active_block_start,
+            "active_block_end": active_block_end,
             "next_block_start": next_block_start,
             "next_block_end": next_block_end,
             "duration_minutes": duration_minutes,
@@ -959,7 +987,6 @@ class PumpSteerSensor(SensorEntity):
             prices,
             current_price,
             price_category,
-            price_factor_percent,
             mode,
             holiday,
             categories,
@@ -968,13 +995,14 @@ class PumpSteerSensor(SensorEntity):
             current_slot_index,
             pi_data,
             final_adjust,
-            fake_temp,
-            control_outdoor_temperature,
-            adjusted_temp,
-            brake_offset_c,
-            target_brake_offset_c,
-            is_winter_brake,
             update_time,
+            price_factor_percent=price_factor_percent,
+            fake_temp=fake_temp,
+            control_outdoor_temperature=control_outdoor_temperature,
+            output_temp=adjusted_temp,
+            brake_offset_c=brake_offset_c,
+            brake_target_c=target_brake_offset_c,
+            is_winter_brake=is_winter_brake,
         )
         self._update_diagnostics(
             prices,
