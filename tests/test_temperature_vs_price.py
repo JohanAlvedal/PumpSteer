@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from custom_components.pumpsteer.sensor import sensor
@@ -82,6 +83,48 @@ def test_extreme_price_brake_when_neutral():
     fake_temp, mode = s._calculate_output_temperature(data, "extreme", 0)
     assert mode == "neutral"
     assert fake_temp == data["outdoor_temp"]
+
+
+def test_expensive_now_braking_outside_block(monkeypatch):
+    s = create_sensor()
+    data = base_sensor_data()
+    combined_prices = [1.0, 3.28, 2.0]
+    update_time = datetime(2024, 1, 1, 12, 0, 0)
+
+    def fake_compute_price_brake(**_kwargs):
+        return {
+            "brake_level": 0.0,
+            "baseline": 0.0,
+            "threshold": 2.54,
+            "area": 0.0,
+            "amplitude": 0.0,
+            "block": None,
+        }
+
+    monkeypatch.setattr(sensor, "compute_price_brake", fake_compute_price_brake)
+
+    pi_data = s._compute_controls(
+        data,
+        combined_prices,
+        0,
+        60,
+        {},
+        3.28,
+        "expensive",
+        update_time,
+    )
+    assert pi_data["price_brake_level"] > 0.0
+    assert pi_data["brake_blocked_reason"] != "no_price_block"
+
+    fake_temp, mode = s._calculate_output_temperature(data, "expensive", 0)
+    assert mode == "neutral"
+    if (
+        mode == "neutral"
+        and pi_data["price_brake_level"] > 0.0
+        and pi_data["brake_blocked_reason"] in {"allowed", "rate_limited"}
+    ):
+        mode = "braking_by_price"
+    assert mode == "braking_by_price"
 
 
 def test_very_cheap_price_overshoots_target():

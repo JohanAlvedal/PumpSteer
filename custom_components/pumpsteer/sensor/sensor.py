@@ -128,7 +128,11 @@ def compute_block_window(
     block_start = update_time + timedelta(minutes=block.start_offset_minutes)
     block_end = update_time + timedelta(minutes=block.end_offset_minutes)
 
-    now_utc = dt_util.as_utc(update_time)
+    now_utc = (
+        dt_util.utcnow()
+        if hasattr(dt_util, "utcnow")
+        else dt_util.as_utc(dt_util.now())
+    )
     block_start_utc = dt_util.as_utc(block_start)
     block_end_utc = dt_util.as_utc(block_end)
     in_price_block = block_start_utc <= now_utc < block_end_utc
@@ -274,6 +278,8 @@ class PumpSteerSensor(SensorEntity):
         current_slot_index: int,
         price_interval_minutes: int,
         config: Dict[str, Any],
+        current_price: float,
+        price_category: str,
         update_time: datetime,
     ) -> Dict[str, Any]:
         """Compute price brake and comfort push controls."""
@@ -310,9 +316,31 @@ class PumpSteerSensor(SensorEntity):
         desired_brake_level = price_brake["brake_level"]
         brake_blocked_reason = "allowed"
 
-        if desired_brake_level <= 0.0 and not in_price_block:
+        category_label = price_category.split(" ")[0]
+        is_very_expensive = category_label in {"very_expensive", "extreme"}
+        is_expensive = category_label == "expensive"
+        expensive_now = is_very_expensive or (
+            is_expensive and current_price > price_brake["threshold"]
+        )
+        if desired_brake_level <= 0.0 and expensive_now:
+            min_price = min(combined_prices) if combined_prices else current_price
+            max_price = max(combined_prices) if combined_prices else current_price
+            price_range = max_price - min_price
+            if price_range > 0.0:
+                price_factor = (current_price - min_price) / price_range
+            else:
+                price_factor = 0.0
+            price_factor = max(0.0, min(price_factor, 1.0))
+            aggressiveness_factor = min(
+                1.0, max(0.0, sensor_data["aggressiveness"] / 5.0)
+            )
+            min_brake_level = 0.25 + 0.25 * (
+                0.5 * (aggressiveness_factor + price_factor)
+            )
+            desired_brake_level = max(desired_brake_level, min_brake_level)
+        if desired_brake_level <= 0.0 and not in_price_block and not expensive_now:
             brake_blocked_reason = "no_price_block"
-        elif too_cold_to_brake:
+        if too_cold_to_brake:
             desired_brake_level = 0.0
             brake_blocked_reason = "too_cold"
 
@@ -767,6 +795,8 @@ class PumpSteerSensor(SensorEntity):
             current_slot_index,
             price_interval_minutes,
             config,
+            current_price,
+            price_category,
             update_time,
         )
 
