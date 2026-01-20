@@ -679,6 +679,8 @@ class PumpSteerSensor(SensorEntity):
         current_slot_index: int,
         pi_data: Dict[str, Any],
         final_adjust: float,
+        fake_temp: float,
+        output_temp: float,
         update_time: datetime,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
@@ -749,7 +751,8 @@ class PumpSteerSensor(SensorEntity):
 
         attributes = {
             "mode": mode,
-            "fake_outdoor_temperature": self._attr_native_value,
+            "output_temperature": round(output_temp, 1),
+            "fake_outdoor_temperature": round(fake_temp, 1),
             "price_category": price_category,
             "status": "ok",
             "current_price": round(current_price, 3),
@@ -909,7 +912,7 @@ class PumpSteerSensor(SensorEntity):
         adjusted_temp, final_adjust = self._apply_control_bias(
             fake_temp, sensor_data, pi_data
         )
-        self._attr_native_value = round(fake_temp, 1)
+        self._attr_native_value = round(adjusted_temp, 1)
 
         next_3_hours_prices = get_price_window_for_hours(
             prices,
@@ -930,6 +933,8 @@ class PumpSteerSensor(SensorEntity):
             current_slot_index,
             pi_data,
             final_adjust,
+            fake_temp,
+            adjusted_temp,
             update_time,
         )
         self._update_diagnostics(
