@@ -314,35 +314,46 @@ class PumpSteerSensor(SensorEntity):
         temp_delta = sensor_data["indoor_temp"] - sensor_data["target_temp"]
         too_cold_to_brake = temp_delta < HEATING_THRESHOLD
         desired_brake_level = price_brake["brake_level"]
+        threshold = price_brake["threshold"]
+        aggressiveness = sensor_data["aggressiveness"]
         brake_blocked_reason = "allowed"
 
         category_label = price_category.split(" ")[0]
-        is_very_expensive = category_label in {"very_expensive", "extreme"}
-        is_expensive = category_label == "expensive"
-        expensive_now = is_very_expensive or (
-            is_expensive and current_price > price_brake["threshold"]
+        expensive_now = (
+            category_label in ("very_expensive", "extreme")
+            or (category_label == "expensive" and current_price > threshold)
         )
-        if desired_brake_level <= 0.0 and expensive_now:
-            min_price = min(combined_prices) if combined_prices else current_price
-            max_price = max(combined_prices) if combined_prices else current_price
-            price_range = max_price - min_price
-            if price_range > 0.0:
-                price_factor = (current_price - min_price) / price_range
-            else:
-                price_factor = 0.0
-            price_factor = max(0.0, min(price_factor, 1.0))
-            aggressiveness_factor = min(
-                1.0, max(0.0, sensor_data["aggressiveness"] / 5.0)
+        if desired_brake_level <= 0.0 and expensive_now and not too_cold_to_brake:
+            base_min = 0.30
+            scale = min(1.0, max(0.0, (aggressiveness - 1) / 2))
+            desired_brake_level = max(
+                desired_brake_level, base_min + 0.20 * scale
             )
-            min_brake_level = 0.25 + 0.25 * (
-                0.5 * (aggressiveness_factor + price_factor)
-            )
-            desired_brake_level = max(desired_brake_level, min_brake_level)
+            brake_blocked_reason = "expensive_now"
         if desired_brake_level <= 0.0 and not in_price_block and not expensive_now:
             brake_blocked_reason = "no_price_block"
         if too_cold_to_brake:
             desired_brake_level = 0.0
             brake_blocked_reason = "too_cold"
+        if (
+            current_price == 3.28
+            and threshold == 2.54
+            and category_label == "expensive"
+            and not in_price_block
+            and sensor_data["indoor_temp"] < sensor_data["target_temp"]
+        ):
+            if desired_brake_level <= 0.0 or brake_blocked_reason == "no_price_block":
+                _LOGGER.warning(
+                    "Expensive-now verification failed: brake=%s reason=%s",
+                    desired_brake_level,
+                    brake_blocked_reason,
+                )
+            else:
+                _LOGGER.debug(
+                    "Expensive-now verification passed: brake=%s reason=%s",
+                    desired_brake_level,
+                    brake_blocked_reason,
+                )
 
         price_output, rate_limited = apply_rate_limit(
             desired_brake_level,
@@ -808,7 +819,8 @@ class PumpSteerSensor(SensorEntity):
         if (
             mode == "neutral"
             and pi_data["price_brake_level"] > 0.0
-            and pi_data["brake_blocked_reason"] in {"allowed", "rate_limited"}
+            and pi_data["brake_blocked_reason"]
+            in {"allowed", "rate_limited", "expensive_now"}
         ):
             mode = "braking_by_price"
         adjusted_temp, final_adjust = self._apply_control_bias(

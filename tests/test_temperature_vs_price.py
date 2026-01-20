@@ -121,7 +121,8 @@ def test_expensive_now_braking_outside_block(monkeypatch):
     if (
         mode == "neutral"
         and pi_data["price_brake_level"] > 0.0
-        and pi_data["brake_blocked_reason"] in {"allowed", "rate_limited"}
+        and pi_data["brake_blocked_reason"]
+        in {"allowed", "rate_limited", "expensive_now"}
     ):
         mode = "braking_by_price"
     assert mode == "braking_by_price"
