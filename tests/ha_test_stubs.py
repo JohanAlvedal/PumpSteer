@@ -35,6 +35,7 @@ core.HomeAssistant = HomeAssistant
 sys.modules["homeassistant.core"] = core
 
 helpers = types.ModuleType("homeassistant.helpers")
+helpers.__path__ = []
 sys.modules["homeassistant.helpers"] = helpers
 
 entity = types.ModuleType("homeassistant.helpers.entity")
@@ -77,6 +78,23 @@ class AddEntitiesCallback:
 
 entity_platform.AddEntitiesCallback = AddEntitiesCallback
 sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
+
+storage_mod = types.ModuleType("homeassistant.helpers.storage")
+
+
+class Store:
+    def __init__(self, hass, version, key):
+        self._data = None
+
+    async def async_load(self):
+        return self._data
+
+    async def async_save(self, data):
+        self._data = data
+
+
+storage_mod.Store = Store
+sys.modules["homeassistant.helpers.storage"] = storage_mod
 
 selector_mod = types.ModuleType("homeassistant.helpers.selector")
 

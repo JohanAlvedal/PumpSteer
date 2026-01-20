@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.storage import Store
 import homeassistant.util.dt as dt_util
 
 from ..holiday import is_holiday_mode_active
@@ -232,12 +233,18 @@ class PumpSteerSensor(SensorEntity):
         self._comfort_integral = 0.0
         self._last_price_brake_level = None
         self._last_brake_offset = None
+        self._stored_brake_offset = None
+        self._brake_offset_store = Store(
+            hass,
+            1,
+            f"{DOMAIN}.brake_offset.{config_entry.entry_id}",
+        )
         self._last_debug_log = None
         domain_data = self.hass.data.setdefault(DOMAIN, {})
         diagnostics_store = domain_data.setdefault("diagnostics", {})
         self._diagnostics = diagnostics_store.setdefault(config_entry.entry_id, {})
 
-        if ML_AVAILABLE:
+        if ML_AVAILABLE and hasattr(hass, "config") and hasattr(hass.config, "path"):
             self.ml_collector = PumpSteerMLCollector(hass)
             _LOGGER.info("PumpSteer: ML system enabled")
 
@@ -260,6 +267,7 @@ class PumpSteerSensor(SensorEntity):
             await self.ml_collector.async_load_data()
             _LOGGER.debug("ML data loaded successfully")
 
+        await self._load_brake_offset()
         await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self) -> None:
@@ -268,6 +276,28 @@ class PumpSteerSensor(SensorEntity):
             await self.ml_collector.async_shutdown()
         self.ml_collector = None
         await super().async_will_remove_from_hass()
+
+    async def _load_brake_offset(self) -> None:
+        """Load the persisted winter brake offset for this entry."""
+        stored = await self._brake_offset_store.async_load()
+        saved_offset = None
+        if stored:
+            saved_offset = stored.get("brake_offset_c")
+        if saved_offset is None:
+            saved_offset = 0.0
+        self._stored_brake_offset = float(saved_offset)
+        self._last_brake_offset = float(saved_offset)
+
+    async def _persist_brake_offset(self, brake_offset_c: float) -> None:
+        """Persist the winter brake offset if it has changed."""
+        if (
+            self._stored_brake_offset is None
+            or abs(brake_offset_c - self._stored_brake_offset) >= 0.01
+        ):
+            await self._brake_offset_store.async_save(
+                {"brake_offset_c": brake_offset_c}
+            )
+            self._stored_brake_offset = brake_offset_c
 
     def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch sensor data from Home Assistant"""
@@ -951,16 +981,18 @@ class PumpSteerSensor(SensorEntity):
         price_pressure = max(0.0, min(price_factor_percent / 100.0, 1.0))
         is_winter = sensor_data["outdoor_temp"] <= WINTER_BRAKE_THRESHOLD
         target_brake_offset_c = (
-            price_pressure * WINTER_BRAKE_TEMP_OFFSET
-            if mode == "braking_by_price" and is_winter
-            else 0.0
+            price_pressure * WINTER_BRAKE_TEMP_OFFSET if is_winter else 0.0
+        )
+        previous_brake_offset = (
+            self._last_brake_offset if self._last_brake_offset is not None else 0.0
         )
         brake_offset_c, _ = apply_rate_limit(
             target_brake_offset_c,
-            self._last_brake_offset,
+            previous_brake_offset,
             PRICE_BRAKE_MAX_DELTA_PER_STEP * WINTER_BRAKE_TEMP_OFFSET,
         )
         self._last_brake_offset = brake_offset_c
+        await self._persist_brake_offset(brake_offset_c)
         control_outdoor_temperature = fake_temp + brake_offset_c
         control_outdoor_temperature = max(
             MIN_FAKE_TEMP,
@@ -971,9 +1003,7 @@ class PumpSteerSensor(SensorEntity):
         )
         self._attr_native_value = round(adjusted_temp, 1)
         is_winter_brake = (
-            mode == "braking_by_price"
-            and is_winter
-            and target_brake_offset_c > 0.0
+            is_winter and target_brake_offset_c > 0.0
         )
 
         next_3_hours_prices = get_price_window_for_hours(
