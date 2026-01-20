@@ -720,38 +720,8 @@ class PumpSteerSensor(SensorEntity):
             current_slot_index,
         )
 
-    def _build_attributes(
-        self,
-        sensor_data: Dict[str, Any],
-        prices: List[float],
-        current_price: float,
-        price_category: str,
-        mode: str,
-        holiday: bool,
-        categories: List[str],
-        now_hour: int,
-        price_interval_minutes: int,
-        current_slot_index: int,
-        pi_data: Dict[str, Any],
-        final_adjust: float,
-        update_time: datetime,
-        price_factor_percent: float = 0.0,
-        fake_temp: float = 0.0,
-        control_outdoor_temperature: float = 0.0,
-        output_temp: float = 0.0,
-        brake_offset_c: float = 0.0,
-        brake_target_c: float = 0.0,
-        is_winter_brake: bool = False,
-        ramp_up_c_per_15min: float = 0.0,
-        ramp_down_c_per_15min: float = 0.0,
-    ) -> Dict[str, Any]:
-        """Build attribute dictionary for the sensor"""
-        max_price = max(prices) if prices else 1.0
-        min_price = min(prices) if prices else 0.0
-        braking_threshold_ratio = (
-            1.0 - (sensor_data["aggressiveness"] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
-        )
-
+    def _get_decision_reason(self, mode: str, price_category: str) -> str:
+        """Return a human-readable decision reason."""
         decision_triggers = {
             "braking_by_price": "price",
             "braking_by_temp": "temperature",
@@ -764,122 +734,64 @@ class PumpSteerSensor(SensorEntity):
         }
         # If heating is enabled while prices are very cheap, the trigger should reflect that
         if mode == "heating" and "very_cheap" in price_category:
-            decision_reason = f"{mode} - Triggered by very cheap price"
-        else:
-            decision_reason = (
-                f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
-            )
+            return f"{mode} - Triggered by very cheap price"
+        return f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
 
-        block_windows = pi_data.get("block_windows", [])
-        active_block_index = pi_data.get("active_block_index", 0)
-        blocks_detected = len(pi_data.get("price_blocks", []))
-        block_detected = blocks_detected > 0
-        active_block_start = (
-            pi_data["price_block_start"].isoformat()
-            if pi_data["price_block_start"]
-            else None
-        )
-        active_block_end = (
-            pi_data["price_block_end"].isoformat()
-            if pi_data["price_block_end"]
-            else None
-        )
-        next_block_start = active_block_start
-        next_block_end = active_block_end
-        canonical_block = None
-        if pi_data["price_block_start"] and pi_data["price_block_end"]:
-            for block, block_start, block_end in block_windows:
-                if (
-                    block_start == pi_data["price_block_start"]
-                    and block_end == pi_data["price_block_end"]
-                ):
-                    canonical_block = block
-                    break
-        active_block = None
-        if 0 < active_block_index <= len(block_windows):
-            active_block = block_windows[active_block_index - 1][0]
-        duration_source = canonical_block or active_block
-        duration_minutes = duration_source.duration_minutes if duration_source else 0
-        peak_price = duration_source.peak if duration_source else 0.0
+    def _serialize_block(self, block: Optional["PriceBlock"]) -> Optional[Dict[str, Any]]:
+        """Serialize a price block for diagnostics."""
+        if block is None:
+            return None
+        return {
+            "start_index": block.start_index,
+            "end_index": block.end_index,
+            "dt_minutes": block.dt_minutes,
+            "area": round(block.area, 3),
+            "peak": round(block.peak, 3),
+            "duration_minutes": block.duration_minutes,
+            "start_offset_minutes": block.start_offset_minutes,
+            "end_offset_minutes": block.end_offset_minutes,
+        }
 
-        block_1 = block_windows[0] if len(block_windows) > 0 else None
-        block_2 = block_windows[1] if len(block_windows) > 1 else None
+    def _serialize_block_window(
+        self, block: "PriceBlock", block_start: datetime, block_end: datetime
+    ) -> Dict[str, Any]:
+        """Serialize a block window for diagnostics."""
+        return {
+            "block": self._serialize_block(block),
+            "start": block_start.isoformat(),
+            "end": block_end.isoformat(),
+        }
 
+    def _build_attributes(
+        self,
+        sensor_data: Dict[str, Any],
+        current_price: float,
+        price_category: str,
+        mode: str,
+        holiday: bool,
+        price_interval_minutes: int,
+        pi_data: Dict[str, Any],
+        decision_reason: str,
+        brake_offset_c: float = 0.0,
+    ) -> Dict[str, Any]:
+        """Build attribute dictionary for the sensor"""
         attributes = {
             "mode": mode,
-            "output_temperature": round(output_temp, 1),
-            "fake_outdoor_temperature": round(fake_temp, 1),
-            "control_outdoor_temperature": round(control_outdoor_temperature, 1),
-            "price_category": price_category,
             "status": "ok",
+            "decision_reason": decision_reason,
             "current_price": round(current_price, 3),
-            "max_price": round(max_price, 3),
+            "price_category": price_category,
             "aggressiveness": sensor_data["aggressiveness"],
             "inertia": sensor_data["inertia"],
             "target_temperature": sensor_data["target_temp"],
             "indoor_temperature": sensor_data["indoor_temp"],
             "outdoor_temperature": sensor_data["outdoor_temp"],
-            "summer_threshold": sensor_data["summer_threshold"],
-            "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
-            "price_factor_percent": round(price_factor_percent, 1),
             "holiday_mode": holiday,
-            "last_updated": update_time.isoformat(),
-            "temp_error_c": round(
-                sensor_data["indoor_temp"] - sensor_data["target_temp"], 2
-            ),
-            "to_summer_threshold_c": round(
-                sensor_data["summer_threshold"] - sensor_data["outdoor_temp"], 2
-            ),
-            "saving_potential_sek_per_kwh": round(max_price - current_price, 3),
-            "decision_reason": decision_reason,
-            "current_hour": now_hour,
-            "current_price_slot_index": current_slot_index,
             "price_interval_minutes": price_interval_minutes,
-            "price_brake_level": round(pi_data["price_brake_level"], 3),
-            "baseline": round(pi_data["price_baseline"], 3),
-            "threshold": round(pi_data["price_threshold"], 3),
-            "area": round(pi_data["price_area"], 3),
-            "amplitude": round(pi_data["price_amplitude"], 3),
-            "active_block_start": active_block_start,
-            "active_block_end": active_block_end,
-            "next_block_start": next_block_start,
-            "next_block_end": next_block_end,
-            "duration_minutes": duration_minutes,
-            "peak_price": round(peak_price, 3),
-            "block_detected": block_detected,
-            "blocks_detected": blocks_detected,
-            "block_1_start": block_1[1].isoformat() if block_1 else None,
-            "block_1_end": block_1[2].isoformat() if block_1 else None,
-            "block_1_peak": round(block_1[0].peak, 3) if block_1 else None,
-            "block_1_area": round(block_1[0].area, 3) if block_1 else None,
-            "block_1_duration_minutes": block_1[0].duration_minutes if block_1 else 0,
-            "block_2_start": block_2[1].isoformat() if block_2 else None,
-            "block_2_end": block_2[2].isoformat() if block_2 else None,
-            "block_2_peak": round(block_2[0].peak, 3) if block_2 else None,
-            "block_2_area": round(block_2[0].area, 3) if block_2 else None,
-            "block_2_duration_minutes": block_2[0].duration_minutes if block_2 else 0,
             "in_price_block": pi_data["in_price_block"],
             "block_state": pi_data["block_state"],
-            "active_block_index": active_block_index,
-            "comfort_push": round(pi_data["comfort_push"], 3),
-            "temp_error": round(pi_data["temp_error"], 3),
-            "comfort_pi_kp": COMFORT_PI_KP,
-            "comfort_pi_ki": COMFORT_PI_KI,
-            "comfort_I": round(pi_data["comfort_I"], 4),
-            "final_adjust": round(final_adjust, 3),
-            "price_rate_limited": pi_data["price_rate_limited"],
-            "rate_limited": pi_data["price_rate_limited"],
-            "brake_blocked_reason": pi_data["brake_blocked_reason"],
             "brake_offset_c": round(brake_offset_c, 2),
-            "brake_target_c": round(brake_target_c, 2),
-            "is_winter_brake": is_winter_brake,
-            "ramp_up_c_per_15min": round(ramp_up_c_per_15min, 2),
-            "ramp_down_c_per_15min": round(ramp_down_c_per_15min, 2),
-            "data_quality": {
-                "prices_count": len(prices),
-                "categories_count": len(categories),
-                "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
-            },
+            "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
         }
 
         return attributes
@@ -892,11 +804,13 @@ class PumpSteerSensor(SensorEntity):
         price_interval_minutes: int,
         current_slot_index: int,
         update_time: datetime,
+        diagnostics_payload: Dict[str, Any],
     ) -> None:
         """Update diagnostics data with large debug arrays."""
         self._diagnostics.clear()
         self._diagnostics.update(
             {
+                **diagnostics_payload,
                 "price_categories_all_hours": categories,
                 "next_3_hours_prices": next_3_hours_prices,
                 "price_interval_minutes": price_interval_minutes,
@@ -929,9 +843,9 @@ class PumpSteerSensor(SensorEntity):
             self._attr_native_value = None
             self._attr_available = False
             self._attributes = {
-                "Status": f"Missing: {', '.join(missing)}",
-                "Last Updated": update_time.isoformat(),
-                "Current Hour": now_hour,
+                "mode": "unavailable",
+                "status": f"Missing: {', '.join(missing)}",
+                "decision_reason": "missing required data",
             }
             self._diagnostics.clear()
             return
@@ -1026,6 +940,155 @@ class PumpSteerSensor(SensorEntity):
         is_winter_brake = (
             is_winter and target_brake_offset_c > 0.0
         )
+        decision_reason = self._get_decision_reason(mode, price_category)
+
+        block_windows = pi_data.get("block_windows", [])
+        active_block_index = pi_data.get("active_block_index", 0)
+        blocks_detected = len(pi_data.get("price_blocks", []))
+        block_detected = blocks_detected > 0
+        active_block_start = (
+            pi_data["price_block_start"].isoformat()
+            if pi_data["price_block_start"]
+            else None
+        )
+        active_block_end = (
+            pi_data["price_block_end"].isoformat()
+            if pi_data["price_block_end"]
+            else None
+        )
+        next_block_start = active_block_start
+        next_block_end = active_block_end
+        canonical_block = None
+        if pi_data["price_block_start"] and pi_data["price_block_end"]:
+            for block, block_start, block_end in block_windows:
+                if (
+                    block_start == pi_data["price_block_start"]
+                    and block_end == pi_data["price_block_end"]
+                ):
+                    canonical_block = block
+                    break
+        active_block = None
+        if 0 < active_block_index <= len(block_windows):
+            active_block = block_windows[active_block_index - 1][0]
+        duration_source = canonical_block or active_block
+        duration_minutes = duration_source.duration_minutes if duration_source else 0
+        peak_price = duration_source.peak if duration_source else 0.0
+
+        block_1 = block_windows[0] if len(block_windows) > 0 else None
+        block_2 = block_windows[1] if len(block_windows) > 1 else None
+        serialized_block_windows = [
+            self._serialize_block_window(block, block_start, block_end)
+            for block, block_start, block_end in block_windows
+        ]
+        serialized_blocks = [
+            self._serialize_block(block) for block in pi_data.get("price_blocks", [])
+        ]
+        selected_block = self._serialize_block(pi_data.get("price_block"))
+
+        braking_threshold_ratio = (
+            1.0 - (sensor_data["aggressiveness"] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
+        )
+        diagnostics_payload = {
+            "mode": mode,
+            "decision_reason": decision_reason,
+            "control_temperatures": {
+                "output_temperature": round(adjusted_temp, 1),
+                "fake_outdoor_temperature": round(fake_temp, 1),
+                "control_outdoor_temperature": round(control_outdoor_temperature, 1),
+            },
+            "sensor_inputs": {
+                "indoor_temperature": sensor_data["indoor_temp"],
+                "outdoor_temperature": sensor_data["outdoor_temp"],
+                "target_temperature": sensor_data["target_temp"],
+                "summer_threshold": sensor_data["summer_threshold"],
+                "aggressiveness": sensor_data["aggressiveness"],
+                "inertia": sensor_data["inertia"],
+            },
+            "price_summary": {
+                "current_price": round(current_price, 3),
+                "max_price": round(max_price, 3),
+                "min_price": round(min_price, 3),
+                "price_range": round(price_range, 3),
+                "price_factor_percent": round(price_factor_percent, 1),
+                "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
+                "current_price_slot_index": current_slot_index,
+                "price_interval_minutes": price_interval_minutes,
+                "price_category": price_category,
+            },
+            "price_brake": {
+                "price_brake_level": round(pi_data["price_brake_level"], 3),
+                "baseline": round(pi_data["price_baseline"], 3),
+                "threshold": round(pi_data["price_threshold"], 3),
+                "area": round(pi_data["price_area"], 3),
+                "amplitude": round(pi_data["price_amplitude"], 3),
+                "price_rate_limited": pi_data["price_rate_limited"],
+                "rate_limited": pi_data["price_rate_limited"],
+                "brake_blocked_reason": pi_data["brake_blocked_reason"],
+            },
+            "block_details": {
+                "active_block_start": active_block_start,
+                "active_block_end": active_block_end,
+                "next_block_start": next_block_start,
+                "next_block_end": next_block_end,
+                "duration_minutes": duration_minutes,
+                "peak_price": round(peak_price, 3),
+                "block_detected": block_detected,
+                "blocks_detected": blocks_detected,
+                "active_block_index": active_block_index,
+                "block_state": pi_data["block_state"],
+                "in_price_block": pi_data["in_price_block"],
+                "block_windows": serialized_block_windows,
+                "price_blocks": serialized_blocks,
+                "selected_block": selected_block,
+                "block_1": {
+                    "start": block_1[1].isoformat() if block_1 else None,
+                    "end": block_1[2].isoformat() if block_1 else None,
+                    "peak": round(block_1[0].peak, 3) if block_1 else None,
+                    "area": round(block_1[0].area, 3) if block_1 else None,
+                    "duration_minutes": block_1[0].duration_minutes if block_1 else 0,
+                },
+                "block_2": {
+                    "start": block_2[1].isoformat() if block_2 else None,
+                    "end": block_2[2].isoformat() if block_2 else None,
+                    "peak": round(block_2[0].peak, 3) if block_2 else None,
+                    "area": round(block_2[0].area, 3) if block_2 else None,
+                    "duration_minutes": block_2[0].duration_minutes if block_2 else 0,
+                },
+            },
+            "pi_controller": {
+                "comfort_push": round(pi_data["comfort_push"], 3),
+                "temp_error": round(pi_data["temp_error"], 3),
+                "comfort_pi_kp": COMFORT_PI_KP,
+                "comfort_pi_ki": COMFORT_PI_KI,
+                "comfort_I": round(pi_data["comfort_I"], 4),
+                "comfort_saturated_high": pi_data["comfort_saturated_high"],
+                "comfort_saturated_low": pi_data["comfort_saturated_low"],
+                "final_adjust": round(final_adjust, 3),
+            },
+            "ramp": {
+                "brake_offset_c": round(brake_offset_c, 2),
+                "brake_target_c": round(target_brake_offset_c, 2),
+                "is_winter_brake": is_winter_brake,
+                "ramp_up_c_per_15min": round(ramp_up_c_per_15min, 2),
+                "ramp_down_c_per_15min": round(ramp_down_c_per_15min, 2),
+                "step_up": round(step_up, 3),
+                "step_down": round(step_down, 3),
+            },
+            "data_quality": {
+                "prices_count": len(prices),
+                "categories_count": len(categories),
+                "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
+            },
+            "current_hour": now_hour,
+            "last_updated": update_time.isoformat(),
+            "temp_error_c": round(
+                sensor_data["indoor_temp"] - sensor_data["target_temp"], 2
+            ),
+            "to_summer_threshold_c": round(
+                sensor_data["summer_threshold"] - sensor_data["outdoor_temp"], 2
+            ),
+            "saving_potential_sek_per_kwh": round(max_price - current_price, 3),
+        }
 
         next_3_hours_prices = get_price_window_for_hours(
             prices,
@@ -1035,27 +1098,14 @@ class PumpSteerSensor(SensorEntity):
         )
         self._attributes = self._build_attributes(
             sensor_data,
-            prices,
             current_price,
             price_category,
             mode,
             holiday,
-            categories,
-            now_hour,
             price_interval_minutes,
-            current_slot_index,
             pi_data,
-            final_adjust,
-            update_time,
-            price_factor_percent=price_factor_percent,
-            fake_temp=fake_temp,
-            control_outdoor_temperature=control_outdoor_temperature,
-            output_temp=adjusted_temp,
+            decision_reason,
             brake_offset_c=brake_offset_c,
-            brake_target_c=target_brake_offset_c,
-            is_winter_brake=is_winter_brake,
-            ramp_up_c_per_15min=ramp_up_c_per_15min,
-            ramp_down_c_per_15min=ramp_down_c_per_15min,
         )
         self._update_diagnostics(
             prices,
@@ -1064,6 +1114,7 @@ class PumpSteerSensor(SensorEntity):
             price_interval_minutes,
             current_slot_index,
             update_time,
+            diagnostics_payload,
         )
 
         self._log_control_debug(pi_data, final_adjust)

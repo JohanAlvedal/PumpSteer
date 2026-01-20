@@ -1,5 +1,4 @@
 import sys
-from datetime import datetime
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -31,12 +30,10 @@ def test_build_attributes_basic():
         "summer_threshold": 15.0,
         "outdoor_temp_forecast_entity": True,
     }
-    prices = [1.2, 1.5, 1.1, 1.3]
     current_price = 1.2
     price_category = "normal"
     mode = "heating"
     holiday = False
-    categories = ["normal", "high", "low"]
     now_hour = 1
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
@@ -62,20 +59,17 @@ def test_build_attributes_basic():
         "brake_blocked_reason": "no_price_block",
     }
 
+    decision_reason = s._get_decision_reason(mode, price_category)
     attrs = s._build_attributes(
         sensor_data,
-        prices,
         current_price,
         price_category,
         mode,
         holiday,
-        categories,
-        now_hour,
         price_interval_minutes=60,
-        current_slot_index=0,
         pi_data=pi_data,
-        final_adjust=0.0,
-        update_time=datetime(2024, 1, 1, now_hour, 0, 0),
+        decision_reason=decision_reason,
+        brake_offset_c=0.0,
     )
     assert attrs["mode"] == "heating"
     assert attrs["current_price"] == 1.2
@@ -93,12 +87,10 @@ def test_decision_reason_very_cheap_heating():
         "summer_threshold": 15.0,
         "outdoor_temp_forecast_entity": True,
     }
-    prices = [0.5, 0.6]
     current_price = 0.5
     price_category = "very_cheap"
     mode = "heating"
     holiday = False
-    categories = ["very_cheap", "cheap"]
     now_hour = 0
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
@@ -124,20 +116,17 @@ def test_decision_reason_very_cheap_heating():
         "brake_blocked_reason": "no_price_block",
     }
 
+    decision_reason = s._get_decision_reason(mode, price_category)
     attrs = s._build_attributes(
         sensor_data,
-        prices,
         current_price,
         price_category,
         mode,
         holiday,
-        categories,
-        now_hour,
         price_interval_minutes=60,
-        current_slot_index=0,
         pi_data=pi_data,
-        final_adjust=0.0,
-        update_time=datetime(2024, 1, 1, now_hour, 0, 0),
+        decision_reason=decision_reason,
+        brake_offset_c=0.0,
     )
     assert attrs["decision_reason"] == "heating - Triggered by very cheap price"
 
@@ -152,12 +141,10 @@ def test_decision_reason_precool():
         "summer_threshold": 15.0,
         "outdoor_temp_forecast_entity": True,
     }
-    prices = [1.0, 1.2]
     current_price = 1.0
     price_category = "normal"
     mode = "precool"
     holiday = False
-    categories = ["normal", "high"]
     now_hour = 0
 
     s = sensor.PumpSteerSensor(DummyHass(), DummyConfigEntry())
@@ -183,19 +170,16 @@ def test_decision_reason_precool():
         "brake_blocked_reason": "no_price_block",
     }
 
+    decision_reason = s._get_decision_reason(mode, price_category)
     attrs = s._build_attributes(
         sensor_data,
-        prices,
         current_price,
         price_category,
         mode,
         holiday,
-        categories,
-        now_hour,
         price_interval_minutes=60,
-        current_slot_index=0,
         pi_data=pi_data,
-        final_adjust=0.0,
-        update_time=datetime(2024, 1, 1, now_hour, 0, 0),
+        decision_reason=decision_reason,
+        brake_offset_c=0.0,
     )
     assert attrs["decision_reason"] == "precool - Triggered by pre-cool (warm forecast)"
