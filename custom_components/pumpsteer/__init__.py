@@ -3,7 +3,7 @@
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.integration import async_get_integration
+from homeassistant.loader import async_get_integration
 
 from .const import DATA_VERSION, DOMAIN
 from .ml_settings import validate_ml_settings
