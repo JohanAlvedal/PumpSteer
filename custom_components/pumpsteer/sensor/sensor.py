@@ -43,6 +43,8 @@ from ..const import (
     PRICE_BRAKE_PRE_MINUTES,
     PRICE_BRAKE_POST_MINUTES,
     PRICE_BLOCK_AREA_SCALE,
+    EXTREME_PRICE_BRAKE_OVERRIDE_PERCENTILE,
+    EXTREME_PRICE_MAX_DEFICIT_ALLOW_BRAKE_C,
 )
 from ..pi_controller import (
     apply_rate_limit,
@@ -254,6 +256,9 @@ class PumpSteerSensor(SensorEntity):
         current_slot_index: int,
         price_interval_minutes: int,
         config: Dict[str, Any],
+        prices: List[float],
+        current_price: float,
+        price_category: str,
     ) -> Dict[str, Any]:
         """Compute price brake and comfort push controls."""
         dt_minutes = price_interval_minutes if price_interval_minutes > 0 else 60
@@ -280,20 +285,57 @@ class PumpSteerSensor(SensorEntity):
             area_scale=PRICE_BLOCK_AREA_SCALE,
             now_offset_minutes=0.0,
         )
+        temp_deficit_c = sensor_data["target_temp"] - sensor_data["indoor_temp"]
+        if abs(temp_deficit_c) < COMFORT_DEADBAND:
+            temp_deficit_c = 0.0
+
+        max_price = max(prices) if prices else 1.0
+        min_price = min(prices) if prices else 0.0
+        price_range = max_price - min_price
+        if price_range > 0:
+            price_factor = (current_price - min_price) / price_range
+        else:
+            price_factor = 0.0
+        price_factor = max(0.0, min(price_factor, 1.0))
+
+        desired_brake_level = price_brake["brake_level"]
+        brake_blocked_reason = "none"
+        is_extreme_price = any(
+            label in price_category.lower()
+            for label in ["very_expensive", "extreme"]
+        ) or price_factor >= EXTREME_PRICE_BRAKE_OVERRIDE_PERCENTILE
+        if not forward_prices:
+            desired_brake_level = 0.0
+            brake_blocked_reason = "no_price_data"
+        elif (
+            is_extreme_price
+            and temp_deficit_c > EXTREME_PRICE_MAX_DEFICIT_ALLOW_BRAKE_C
+        ):
+            desired_brake_level = 0.0
+            brake_blocked_reason = "too_cold"
+        elif (
+            is_extreme_price
+            and temp_deficit_c <= EXTREME_PRICE_MAX_DEFICIT_ALLOW_BRAKE_C
+        ):
+            desired_brake_level = max(desired_brake_level, price_factor)
+        elif desired_brake_level <= 0:
+            brake_blocked_reason = "not_expensive"
+
         price_output, rate_limited = apply_rate_limit(
-            price_brake["brake_level"],
+            desired_brake_level,
             self._last_price_brake_level,
             PRICE_BRAKE_MAX_DELTA_PER_STEP,
         )
         self._last_price_brake_level = price_output
 
-        temp_error = sensor_data["target_temp"] - sensor_data["indoor_temp"]
-        if abs(temp_error) < COMFORT_DEADBAND:
-            temp_error = 0.0
+        if price_output > 0:
+            brake_blocked_reason = "none"
+        elif brake_blocked_reason == "none":
+            brake_blocked_reason = "rate_limited" if rate_limited else "other"
 
         comfort_output, self._comfort_integral, comfort_high, comfort_low = (
             update_pi_output(
-                temp_error,
+                temp_deficit_c,
                 self._comfort_integral,
                 COMFORT_PI_KP,
                 COMFORT_PI_KI,
@@ -311,11 +353,12 @@ class PumpSteerSensor(SensorEntity):
             "price_amplitude": price_brake["amplitude"],
             "price_block": price_brake["block"],
             "price_rate_limited": rate_limited,
+            "brake_blocked_reason": brake_blocked_reason,
             "comfort_push": comfort_output,
             "comfort_I": self._comfort_integral,
             "comfort_saturated_high": comfort_high,
             "comfort_saturated_low": comfort_low,
-            "temp_error": temp_error,
+            "temp_error": temp_deficit_c,
             "dt_minutes": dt_minutes,
         }
 
@@ -372,6 +415,8 @@ class PumpSteerSensor(SensorEntity):
         sensor_data: Dict[str, Any],
         price_category: str,
         current_slot_index: int,
+        price_brake_level: float = 0.0,
+        brake_blocked_reason: str = "none",
     ) -> Tuple[float, str]:
         """Calculate output temperature based on current conditions"""
         indoor_temp = sensor_data["indoor_temp"]
@@ -410,9 +455,9 @@ class PumpSteerSensor(SensorEntity):
             else BRAKE_FAKE_TEMP
         )
 
-        temp_diff = indoor_temp - target_temp_for_logic
+        temp_deficit_c = target_temp_for_logic - indoor_temp
 
-        if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
+        if abs(temp_deficit_c) <= NEUTRAL_TEMP_THRESHOLD:
             fake_temp = outdoor_temp
             mode = "neutral"
         else:
@@ -423,6 +468,13 @@ class PumpSteerSensor(SensorEntity):
                 aggressiveness,
                 brake_temp,
             )
+
+        if (
+            mode == "neutral"
+            and price_brake_level > 0
+            and brake_blocked_reason == "none"
+        ):
+            mode = "braking_by_price"
 
         fake_temp = min(fake_temp, BRAKE_FAKE_TEMP)
         return fake_temp, mode
@@ -653,6 +705,7 @@ class PumpSteerSensor(SensorEntity):
         price_interval_minutes: int,
         current_slot_index: int,
         update_time: datetime,
+        brake_blocked_reason: str,
     ) -> None:
         """Update diagnostics data with large debug arrays."""
         self._diagnostics.clear()
@@ -664,6 +717,7 @@ class PumpSteerSensor(SensorEntity):
                 "current_price_slot_index": current_slot_index,
                 "prices_count": len(prices),
                 "last_updated": update_time.isoformat(),
+                "brake_blocked_reason": brake_blocked_reason,
             }
         )
 
@@ -717,12 +771,17 @@ class PumpSteerSensor(SensorEntity):
             current_slot_index,
             price_interval_minutes,
             config,
+            prices,
+            current_price,
+            price_category,
         )
 
         fake_temp, mode = self._calculate_output_temperature(
             sensor_data,
             price_category,
             current_slot_index,
+            pi_data["price_brake_level"],
+            pi_data["brake_blocked_reason"],
         )
         adjusted_temp, final_adjust = self._apply_control_bias(
             fake_temp, sensor_data, pi_data
@@ -757,6 +816,7 @@ class PumpSteerSensor(SensorEntity):
             price_interval_minutes,
             current_slot_index,
             update_time,
+            pi_data["brake_blocked_reason"],
         )
 
         self._log_control_debug(pi_data, final_adjust)

@@ -221,3 +221,28 @@ def test_price_categories_do_not_force_braking():
 
         assert mode == "neutral"
         assert fake_temp == data["outdoor_temp"]
+
+
+def test_extreme_price_override_brakes_with_small_deficit():
+    s = create_sensor()
+    data = base_sensor_data(indoor_temp=20.48, target_temp=21.0)
+    prices = [4.39, 2.27, 2.27, 2.27]
+    pi_data = s._compute_controls(
+        data,
+        prices,
+        0,
+        60,
+        {},
+        prices,
+        4.39,
+        "very_expensive (percentiles)",
+    )
+    fake_temp, mode = s._calculate_output_temperature(
+        data,
+        "very_expensive (percentiles)",
+        0,
+        price_brake_level=pi_data["price_brake_level"],
+        brake_blocked_reason=pi_data["brake_blocked_reason"],
+    )
+    assert "brake" in mode
+    assert pi_data["price_brake_level"] > 0

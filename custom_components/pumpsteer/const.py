@@ -51,6 +51,8 @@ PRICE_BLOCK_THRESHOLD_PERCENTILE: Final[Optional[float]] = None
 PRICE_BRAKE_PRE_MINUTES: Final[int] = 60
 PRICE_BRAKE_POST_MINUTES: Final[int] = 60
 PRICE_BLOCK_AREA_SCALE: Final[float] = 4.0
+EXTREME_PRICE_BRAKE_OVERRIDE_PERCENTILE: Final[float] = 0.95
+EXTREME_PRICE_MAX_DEFICIT_ALLOW_BRAKE_C: Final[float] = 1.0
 
 COMFORT_PI_KP: Final[float] = 0.6
 COMFORT_PI_KI: Final[float] = 0.1
@@ -65,7 +67,7 @@ CONTROL_BIAS_TEMP_SCALE: Final[float] = 1.5
 # Defines when the system considers the indoor temperature "too cold"
 # to allow price braking. Previously hardcoded as -0.5 °C inside the logic.
 #
-# If indoor_temp - target_temp < HEATING_THRESHOLD:
+# If target_temp - indoor_temp > abs(HEATING_THRESHOLD):
 #     → PumpSteer enters heating mode regardless of price.
 #
 # Increasing the value to -1.0 or -1.5 allows more price braking

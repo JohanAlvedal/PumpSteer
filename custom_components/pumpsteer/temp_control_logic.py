@@ -49,7 +49,9 @@ def calculate_temperature_output(
 
     # Limit aggressiveness between 0–5
     aggressiveness = max(0, min(5, aggressiveness))
-    diff = indoor_temp - actual_target_temp_for_logic
+    temp_deficit_c = actual_target_temp_for_logic - indoor_temp
+    temp_surplus_c = -temp_deficit_c
+    heating_threshold_c = abs(HEATING_THRESHOLD)
 
     # PASSTHROUGH (Aggressiveness = 0)
     # If aggressiveness is 0, the system operates in passthrough mode,
@@ -71,15 +73,15 @@ def calculate_temperature_output(
     # HEATING mode (too cold indoors)
     # If indoor temperature is significantly below target, activate heating.
     # The fake temperature is reduced to make the heat pump work harder.
-    if diff < HEATING_THRESHOLD:
-        fake_temp += diff * aggressiveness * HEATING_COMPENSATION_FACTOR
+    if temp_deficit_c > heating_threshold_c:
+        fake_temp -= temp_deficit_c * aggressiveness * HEATING_COMPENSATION_FACTOR
 
         fake_temp = max(min(fake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
         mode = "heating"
         _LOGGER.debug(
-            "TempControl: Heating (fake temp: %.1f °C, diff: %.2f, agg: %.1f) - Mode: %s",
+            "TempControl: Heating (fake temp: %.1f °C, deficit: %.2f, agg: %.1f) - Mode: %s",
             fake_temp,
-            diff,
+            temp_deficit_c,
             aggressiveness,
             mode,
         )
@@ -87,23 +89,23 @@ def calculate_temperature_output(
     # BRAKING mode (too warm indoors)
     # If indoor temperature is significantly above target, activate braking.
     # The fake temperature is increased to make the heat pump work less (or cool).
-    elif diff > 0.5:
-        fake_temp += diff * aggressiveness * BRAKING_COMPENSATION_FACTOR
+    elif temp_surplus_c > 0.5:
+        fake_temp += temp_surplus_c * aggressiveness * BRAKING_COMPENSATION_FACTOR
         brake_cap = max(min(brake_temp, MAX_FAKE_TEMP), MIN_FAKE_TEMP)
         fake_temp = brake_cap
         mode = "braking_by_temp"
         _LOGGER.debug(
-            "TempControl: Braking (fake temp: %.1f °C, diff: %.2f, agg: %.1f) - Mode: %s",
+            "TempControl: Braking (fake temp: %.1f °C, surplus: %.2f, agg: %.1f) - Mode: %s",
             fake_temp,
-            diff,
+            temp_surplus_c,
             aggressiveness,
             mode,
         )
 
     else:
         _LOGGER.debug(
-            "TempControl: Within comfort zone (diff: %.2f) - Mode: %s",
-            diff,
+            "TempControl: Within comfort zone (deficit: %.2f) - Mode: %s",
+            temp_deficit_c,
             mode,
         )
 
