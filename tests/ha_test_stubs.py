@@ -3,6 +3,7 @@ import types
 import datetime
 
 ha = types.ModuleType("homeassistant")
+ha.__path__ = []
 sys.modules.setdefault("homeassistant", ha)
 
 config_entries = types.ModuleType("homeassistant.config_entries")
@@ -105,7 +106,22 @@ def now():
     return datetime.datetime.now()
 
 
+def as_utc(value):
+    return value
+
+
+def as_local(value):
+    return value
+
+
+def parse_datetime(value):
+    return value
+
+
 dt.now = now
+dt.as_utc = as_utc
+dt.as_local = as_local
+dt.parse_datetime = parse_datetime
 util.dt = dt
 sys.modules["homeassistant.util"] = util
 sys.modules["homeassistant.util.dt"] = dt
@@ -162,6 +178,7 @@ np_mod.select = select
 sys.modules["numpy"] = np_mod
 
 components_mod = types.ModuleType("homeassistant.components")
+components_mod.__path__ = []
 recorder_mod = types.ModuleType("homeassistant.components.recorder")
 
 
@@ -182,3 +199,36 @@ recorder_mod.history = history_mod
 sys.modules["homeassistant.components"] = components_mod
 sys.modules["homeassistant.components.recorder"] = recorder_mod
 sys.modules["homeassistant.components.recorder.history"] = history_mod
+
+sensor_mod = types.ModuleType("homeassistant.components.sensor")
+
+
+class SensorEntity:
+    pass
+
+
+class SensorDeviceClass:
+    TEMPERATURE = "temperature"
+
+
+class SensorStateClass:
+    MEASUREMENT = "measurement"
+
+
+sensor_mod.SensorEntity = SensorEntity
+sensor_mod.SensorDeviceClass = SensorDeviceClass
+sensor_mod.SensorStateClass = SensorStateClass
+sys.modules["homeassistant.components.sensor"] = sensor_mod
+
+loader_mod = types.ModuleType("homeassistant.loader")
+
+
+async def async_get_integration(hass, domain):
+    class Integration:
+        version = "test"
+
+    return Integration()
+
+
+loader_mod.async_get_integration = async_get_integration
+sys.modules["homeassistant.loader"] = loader_mod
