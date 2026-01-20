@@ -159,6 +159,28 @@ def select_price_block(blocks: List[PriceBlock]) -> Optional[PriceBlock]:
     return ranked[0] if ranked else None
 
 
+def blocks_overlap(left: PriceBlock, right: PriceBlock) -> bool:
+    """Return True when two blocks overlap in time."""
+    return not (left.end_index < right.start_index or right.end_index < left.start_index)
+
+
+def select_price_blocks(
+    blocks: List[PriceBlock], max_blocks: int = 2
+) -> List[PriceBlock]:
+    """Select up to max_blocks non-overlapping blocks by area."""
+    if max_blocks <= 0:
+        return []
+    ranked = rank_price_blocks(blocks)
+    selected: List[PriceBlock] = []
+    for candidate in ranked:
+        if len(selected) >= max_blocks:
+            break
+        if any(blocks_overlap(candidate, block) for block in selected):
+            continue
+        selected.append(candidate)
+    return sorted(selected, key=lambda block: block.start_index)
+
+
 def filter_upcoming_blocks(
     blocks: List[PriceBlock], now_offset_minutes: float
 ) -> List[PriceBlock]:
@@ -218,6 +240,7 @@ def compute_price_brake(
             "amplitude": 0.0,
             "brake_level": 0.0,
             "block": None,
+            "blocks": [],
         }
 
     baseline = compute_baseline(forward_prices)
@@ -228,12 +251,29 @@ def compute_price_brake(
         forward_prices, threshold, dt_minutes, min_block_duration_min
     )
     upcoming_blocks = filter_upcoming_blocks(blocks, now_offset_minutes)
-    block = select_price_block(upcoming_blocks)
-    area = block.area if block else 0.0
+    selected_blocks = select_price_blocks(upcoming_blocks, max_blocks=2)
+    active_block = None
+    for block in selected_blocks:
+        if block.start_offset_minutes <= now_offset_minutes < block.end_offset_minutes:
+            active_block = block
+            break
+    upcoming_block = None
+    if active_block is None:
+        upcoming_candidates = [
+            block
+            for block in selected_blocks
+            if block.start_offset_minutes > now_offset_minutes
+        ]
+        if upcoming_candidates:
+            upcoming_block = min(
+                upcoming_candidates, key=lambda block: block.start_offset_minutes
+            )
+    primary_block = active_block or upcoming_block
+    area = primary_block.area if primary_block else 0.0
     safe_area_scale = area_scale if area_scale > 0 else 1.0
-    amplitude = clamp(area / safe_area_scale, 0.0, 1.0) if block else 0.0
+    amplitude = clamp(area / safe_area_scale, 0.0, 1.0) if primary_block else 0.0
     brake_level = compute_brake_level(
-        block,
+        primary_block,
         amplitude,
         pre_brake_minutes,
         post_release_minutes,
@@ -246,5 +286,6 @@ def compute_price_brake(
         "area": area,
         "amplitude": amplitude,
         "brake_level": brake_level,
-        "block": block,
+        "block": primary_block,
+        "blocks": selected_blocks,
     }

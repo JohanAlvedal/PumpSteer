@@ -43,6 +43,7 @@ from ..const import (
     PRICE_BRAKE_PRE_MINUTES,
     PRICE_BRAKE_POST_MINUTES,
     PRICE_BLOCK_AREA_SCALE,
+    LOOKAHEAD_HOURS,
     HEATING_THRESHOLD,
 )
 from ..pi_controller import (
@@ -117,27 +118,61 @@ def safe_get_current_price_and_category(
     return current_price, price_category
 
 
-def compute_block_window(
+def compute_block_status(
     update_time: datetime,
-    block: Optional["PriceBlock"],
-) -> Tuple[Optional[datetime], Optional[datetime], bool, str]:
-    """Compute the price block window and its state."""
-    if block is None:
-        return None, None, False, "none"
+    blocks: List["PriceBlock"],
+) -> Tuple[
+    Optional[datetime],
+    Optional[datetime],
+    bool,
+    str,
+    int,
+    List[Tuple["PriceBlock", datetime, datetime]],
+]:
+    """Compute block timing and status details."""
+    if not blocks:
+        return None, None, False, "none", 0, []
 
-    block_start = update_time + timedelta(minutes=block.start_offset_minutes)
-    block_end = update_time + timedelta(minutes=block.end_offset_minutes)
+    block_windows: List[Tuple["PriceBlock", datetime, datetime]] = []
+    for block in blocks:
+        block_start = update_time + timedelta(minutes=block.start_offset_minutes)
+        block_end = update_time + timedelta(minutes=block.end_offset_minutes)
+        block_windows.append((block, block_start, block_end))
 
     now_utc = (
         dt_util.utcnow()
         if hasattr(dt_util, "utcnow")
         else dt_util.as_utc(dt_util.now())
     )
-    block_start_utc = dt_util.as_utc(block_start)
-    block_end_utc = dt_util.as_utc(block_end)
-    in_price_block = block_start_utc <= now_utc < block_end_utc
+    active_index = 0
+    for index, (_, block_start, block_end) in enumerate(block_windows, start=1):
+        block_start_utc = dt_util.as_utc(block_start)
+        block_end_utc = dt_util.as_utc(block_end)
+        if block_start_utc <= now_utc < block_end_utc:
+            active_index = index
+            break
+
+    in_price_block = active_index > 0
     block_state = "active" if in_price_block else "upcoming"
-    return block_start, block_end, in_price_block, block_state
+
+    upcoming = [
+        window
+        for window in block_windows
+        if dt_util.as_utc(window[1]) > now_utc
+    ]
+    upcoming.sort(key=lambda window: window[1])
+    next_window = upcoming[0] if upcoming else None
+    next_block_start = next_window[1] if next_window else None
+    next_block_end = next_window[2] if next_window else None
+
+    return (
+        next_block_start,
+        next_block_end,
+        in_price_block,
+        block_state,
+        active_index,
+        block_windows,
+    )
 
 
 class PumpSteerSensor(SensorEntity):
@@ -287,7 +322,7 @@ class PumpSteerSensor(SensorEntity):
         dt_hours = dt_minutes / 60.0
 
         forward_prices = build_forward_price_series(
-            combined_prices, current_slot_index, dt_minutes, max_hours=24
+            combined_prices, current_slot_index, dt_minutes, max_hours=LOOKAHEAD_HOURS
         )
         threshold_percentile = config.get(
             "price_brake_threshold_percentile", PRICE_BLOCK_THRESHOLD_PERCENTILE
@@ -308,9 +343,14 @@ class PumpSteerSensor(SensorEntity):
             now_offset_minutes=0.0,
         )
 
-        block_start, block_end, in_price_block, block_state = compute_block_window(
-            update_time, price_brake["block"]
-        )
+        (
+            block_start,
+            block_end,
+            in_price_block,
+            block_state,
+            active_block_index,
+            block_windows,
+        ) = compute_block_status(update_time, price_brake["blocks"])
         temp_delta = sensor_data["indoor_temp"] - sensor_data["target_temp"]
         too_cold_to_brake = temp_delta < HEATING_THRESHOLD
         desired_brake_level = price_brake["brake_level"]
@@ -391,10 +431,13 @@ class PumpSteerSensor(SensorEntity):
             "price_area": price_brake["area"],
             "price_amplitude": price_brake["amplitude"],
             "price_block": price_brake["block"],
+            "price_blocks": price_brake["blocks"],
             "price_block_start": block_start,
             "price_block_end": block_end,
             "in_price_block": in_price_block,
             "block_state": block_state,
+            "active_block_index": active_block_index,
+            "block_windows": block_windows,
             "price_rate_limited": rate_limited,
             "comfort_push": comfort_output,
             "comfort_I": self._comfort_integral,
@@ -661,8 +704,10 @@ class PumpSteerSensor(SensorEntity):
                 f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
             )
 
-        block = pi_data["price_block"]
-        block_detected = block is not None
+        block_windows = pi_data["block_windows"]
+        active_block_index = pi_data["active_block_index"]
+        blocks_detected = len(pi_data["price_blocks"])
+        block_detected = blocks_detected > 0
         next_block_start = (
             pi_data["price_block_start"].isoformat()
             if pi_data["price_block_start"]
@@ -673,8 +718,24 @@ class PumpSteerSensor(SensorEntity):
             if pi_data["price_block_end"]
             else None
         )
-        duration_minutes = block.duration_minutes if block else 0
-        peak_price = block.peak if block else 0.0
+        next_block = None
+        if pi_data["price_block_start"] and pi_data["price_block_end"]:
+            for block, block_start, block_end in block_windows:
+                if (
+                    block_start == pi_data["price_block_start"]
+                    and block_end == pi_data["price_block_end"]
+                ):
+                    next_block = block
+                    break
+        active_block = None
+        if 0 < active_block_index <= len(block_windows):
+            active_block = block_windows[active_block_index - 1][0]
+        duration_source = next_block or active_block
+        duration_minutes = duration_source.duration_minutes if duration_source else 0
+        peak_price = duration_source.peak if duration_source else 0.0
+
+        block_1 = block_windows[0] if len(block_windows) > 0 else None
+        block_2 = block_windows[1] if len(block_windows) > 1 else None
 
         attributes = {
             "mode": mode,
@@ -714,8 +775,20 @@ class PumpSteerSensor(SensorEntity):
             "duration_minutes": duration_minutes,
             "peak_price": round(peak_price, 3),
             "block_detected": block_detected,
+            "blocks_detected": blocks_detected,
+            "block_1_start": block_1[1].isoformat() if block_1 else None,
+            "block_1_end": block_1[2].isoformat() if block_1 else None,
+            "block_1_peak": round(block_1[0].peak, 3) if block_1 else None,
+            "block_1_area": round(block_1[0].area, 3) if block_1 else None,
+            "block_1_duration_minutes": block_1[0].duration_minutes if block_1 else 0,
+            "block_2_start": block_2[1].isoformat() if block_2 else None,
+            "block_2_end": block_2[2].isoformat() if block_2 else None,
+            "block_2_peak": round(block_2[0].peak, 3) if block_2 else None,
+            "block_2_area": round(block_2[0].area, 3) if block_2 else None,
+            "block_2_duration_minutes": block_2[0].duration_minutes if block_2 else 0,
             "in_price_block": pi_data["in_price_block"],
             "block_state": pi_data["block_state"],
+            "active_block_index": active_block_index,
             "comfort_push": round(pi_data["comfort_push"], 3),
             "temp_error": round(pi_data["temp_error"], 3),
             "comfort_pi_kp": COMFORT_PI_KP,
