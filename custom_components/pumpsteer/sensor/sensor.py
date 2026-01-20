@@ -742,6 +742,8 @@ class PumpSteerSensor(SensorEntity):
         brake_offset_c: float = 0.0,
         brake_target_c: float = 0.0,
         is_winter_brake: bool = False,
+        ramp_up_c_per_15min: float = 0.0,
+        ramp_down_c_per_15min: float = 0.0,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
@@ -871,6 +873,8 @@ class PumpSteerSensor(SensorEntity):
             "brake_offset_c": round(brake_offset_c, 2),
             "brake_target_c": round(brake_target_c, 2),
             "is_winter_brake": is_winter_brake,
+            "ramp_up_c_per_15min": round(ramp_up_c_per_15min, 2),
+            "ramp_down_c_per_15min": round(ramp_down_c_per_15min, 2),
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
@@ -983,14 +987,22 @@ class PumpSteerSensor(SensorEntity):
         target_brake_offset_c = (
             price_pressure * WINTER_BRAKE_TEMP_OFFSET if is_winter else 0.0
         )
+        aggressiveness = sensor_data["aggressiveness"]
+        aggressiveness_clamped = max(1.0, min(aggressiveness, 5.0))
+        ramp_factor = aggressiveness_clamped / 3.0
+        ramp_up_c_per_15min = 3.0 * ramp_factor
+        ramp_down_c_per_15min = 2.0 * ramp_factor
+        dt_minutes = price_interval_minutes if price_interval_minutes > 0 else 60
+        step_up = ramp_up_c_per_15min * (dt_minutes / 15.0)
+        step_down = ramp_down_c_per_15min * (dt_minutes / 15.0)
         previous_brake_offset = (
             self._last_brake_offset if self._last_brake_offset is not None else 0.0
         )
-        brake_offset_c, _ = apply_rate_limit(
-            target_brake_offset_c,
-            previous_brake_offset,
-            PRICE_BRAKE_MAX_DELTA_PER_STEP * WINTER_BRAKE_TEMP_OFFSET,
-        )
+        brake_offset_c = previous_brake_offset
+        if target_brake_offset_c > brake_offset_c:
+            brake_offset_c = min(brake_offset_c + step_up, target_brake_offset_c)
+        elif target_brake_offset_c < brake_offset_c:
+            brake_offset_c = max(brake_offset_c - step_down, target_brake_offset_c)
         self._last_brake_offset = brake_offset_c
         await self._persist_brake_offset(brake_offset_c)
         control_outdoor_temperature = fake_temp + brake_offset_c
@@ -1033,6 +1045,8 @@ class PumpSteerSensor(SensorEntity):
             brake_offset_c=brake_offset_c,
             brake_target_c=target_brake_offset_c,
             is_winter_brake=is_winter_brake,
+            ramp_up_c_per_15min=ramp_up_c_per_15min,
+            ramp_down_c_per_15min=ramp_down_c_per_15min,
         )
         self._update_diagnostics(
             prices,
