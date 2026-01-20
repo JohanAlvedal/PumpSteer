@@ -43,6 +43,7 @@ from ..const import (
     PRICE_BRAKE_PRE_MINUTES,
     PRICE_BRAKE_POST_MINUTES,
     PRICE_BLOCK_AREA_SCALE,
+    HEATING_THRESHOLD,
 )
 from ..pi_controller import (
     apply_rate_limit,
@@ -280,12 +281,30 @@ class PumpSteerSensor(SensorEntity):
             area_scale=PRICE_BLOCK_AREA_SCALE,
             now_offset_minutes=0.0,
         )
+
+        temp_delta = sensor_data["indoor_temp"] - sensor_data["target_temp"]
+        too_cold_to_brake = temp_delta < HEATING_THRESHOLD
+        desired_brake_level = price_brake["brake_level"]
+        brake_blocked_reason = "allowed"
+
+        if desired_brake_level <= 0.0:
+            brake_blocked_reason = "no_price_block"
+        elif too_cold_to_brake:
+            desired_brake_level = 0.0
+            brake_blocked_reason = "too_cold"
+
         price_output, rate_limited = apply_rate_limit(
-            price_brake["brake_level"],
+            desired_brake_level,
             self._last_price_brake_level,
             PRICE_BRAKE_MAX_DELTA_PER_STEP,
         )
         self._last_price_brake_level = price_output
+        if (
+            brake_blocked_reason == "allowed"
+            and rate_limited
+            and price_output < desired_brake_level
+        ):
+            brake_blocked_reason = "rate_limited"
 
         temp_error = sensor_data["target_temp"] - sensor_data["indoor_temp"]
         if abs(temp_error) < COMFORT_DEADBAND:
@@ -317,6 +336,7 @@ class PumpSteerSensor(SensorEntity):
             "comfort_saturated_low": comfort_low,
             "temp_error": temp_error,
             "dt_minutes": dt_minutes,
+            "brake_blocked_reason": brake_blocked_reason,
         }
 
     def _apply_control_bias(
@@ -636,6 +656,7 @@ class PumpSteerSensor(SensorEntity):
             "final_adjust": round(final_adjust, 3),
             "price_rate_limited": pi_data["price_rate_limited"],
             "rate_limited": pi_data["price_rate_limited"],
+            "brake_blocked_reason": pi_data["brake_blocked_reason"],
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
@@ -724,6 +745,12 @@ class PumpSteerSensor(SensorEntity):
             price_category,
             current_slot_index,
         )
+        if (
+            mode == "neutral"
+            and pi_data["price_brake_level"] > 0.0
+            and pi_data["brake_blocked_reason"] in {"allowed", "rate_limited"}
+        ):
+            mode = "braking_by_price"
         adjusted_temp, final_adjust = self._apply_control_bias(
             fake_temp, sensor_data, pi_data
         )
