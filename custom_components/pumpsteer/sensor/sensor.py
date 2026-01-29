@@ -97,6 +97,56 @@ def safe_get_current_price_and_category(
     return current_price, price_category
 
 
+def filter_short_price_peaks(
+    categories: List[str],
+    interval_minutes: int,
+    min_duration_minutes: int = 30,
+    peak_levels: Tuple[str, ...] = ("expensive", "very_expensive", "extreme"),
+) -> List[str]:
+    """Replace short price peaks with a neighboring non-peak category."""
+    if not categories or interval_minutes <= 0:
+        return list(categories)
+
+    min_slots = max(1, math.ceil(min_duration_minutes / interval_minutes))
+    if min_slots <= 1:
+        return list(categories)
+
+    def is_peak(category: str) -> bool:
+        return any(level in category for level in peak_levels)
+
+    result = list(categories)
+    index = 0
+    total = len(categories)
+
+    while index < total:
+        if not is_peak(categories[index]):
+            index += 1
+            continue
+
+        start = index
+        while index < total and is_peak(categories[index]):
+            index += 1
+        end = index - 1
+        run_len = end - start + 1
+
+        if run_len < min_slots:
+            replacement = None
+            left_index = start - 1
+            right_index = end + 1
+
+            if left_index >= 0 and not is_peak(categories[left_index]):
+                replacement = categories[left_index]
+            elif right_index < total and not is_peak(categories[right_index]):
+                replacement = categories[right_index]
+            else:
+                replacement = "normal"
+
+            for replace_index in range(start, end + 1):
+                result[replace_index] = replacement
+
+    return result
+
+
 class PumpSteerSensor(Entity):
     """PumpSteer sensor for heat pump control"""
 
@@ -390,20 +440,20 @@ class PumpSteerSensor(Entity):
 
     async def _get_price_data(
         self, config: Dict[str, Any], current_time: datetime
-    ) -> Tuple[List[float], float, str, List[str], int, int]:
+    ) -> Tuple[List[float], float, str, List[str], int, int, int]:
         """Fetch price data and classify prices"""
         entity_id = config.get("electricity_price_entity")
 
         if not entity_id:
             _LOGGER.error("No electricity price entity configured")
-            return [], 0.0, "unknown", [], 60, 0
+            return [], 0.0, "unknown", [], 60, 0, 0
 
         prices_raw = get_attr(self.hass, entity_id, "today") or get_attr(
             self.hass, entity_id, "raw_today"
         )
         if not prices_raw:
             _LOGGER.warning("Could not retrieve electricity prices from %s", entity_id)
-            return [], 0.0, "unknown", [], 60, 0
+            return [], 0.0, "unknown", [], 60, 0, 0
 
         def extract_price_value(item: Any) -> Optional[float]:
             if item is None:
@@ -439,7 +489,7 @@ class PumpSteerSensor(Entity):
 
         if not prices:
             _LOGGER.warning("No valid prices found after conversion")
-            return [], 0.0, "unknown", [], 60, 0
+            return [], 0.0, "unknown", [], 60, 0, 0
 
         price_interval_minutes = detect_price_interval_minutes(prices)
         current_slot_index = compute_price_slot_index(
@@ -463,17 +513,28 @@ class PumpSteerSensor(Entity):
                 trailing_hours=72,
             )
 
+        filtered_categories = filter_short_price_peaks(
+            categories,
+            price_interval_minutes,
+        )
+        filtered_count = sum(
+            1
+            for original, filtered in zip(categories, filtered_categories)
+            if original != filtered
+        )
+
         current_price, price_category = safe_get_current_price_and_category(
-            prices, categories, current_slot_index, mode
+            prices, filtered_categories, current_slot_index, mode
         )
 
         return (
             prices,
             current_price,
             price_category,
-            categories,
+            filtered_categories,
             price_interval_minutes,
             current_slot_index,
+            filtered_count,
         )
 
     def _build_attributes(
@@ -488,6 +549,8 @@ class PumpSteerSensor(Entity):
         now_hour: int,
         price_interval_minutes: int,
         current_slot_index: int,
+        peak_filter_minutes: int,
+        price_categories_filtered_count: int,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
@@ -556,6 +619,8 @@ class PumpSteerSensor(Entity):
             "current_hour": now_hour,
             "current_price_slot_index": current_slot_index,
             "price_interval_minutes": price_interval_minutes,
+            "peak_filter_minutes": peak_filter_minutes,
+            "price_categories_filtered_count": price_categories_filtered_count,
             "data_quality": {
                 "prices_count": len(prices),
                 "categories_count": len(categories),
@@ -580,6 +645,7 @@ class PumpSteerSensor(Entity):
                 categories,
                 price_interval_minutes,
                 current_slot_index,
+                filtered_count,
             ) = await self._get_price_data(config, update_time)
             self._last_current_price = current_price
             self._last_price_category = price_category
@@ -622,6 +688,8 @@ class PumpSteerSensor(Entity):
                 now_hour,
                 price_interval_minutes,
                 current_slot_index,
+                30,
+                filtered_count,
             )
 
             if self.ml_collector:
