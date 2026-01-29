@@ -529,9 +529,7 @@ class PumpSteerSensor(Entity):
                 sensor_data["summer_threshold"] - sensor_data["outdoor_temp"], 2
             ),
             "next_3_hours_prices": next_3_hours_prices,
-            "saving_potential_sek_per_kwh": round(max_price - current_price, 3),
             "decision_reason": decision_reason,
-            "price_categories_all_hours": categories,
             "current_hour": now_hour,
             "current_price_slot_index": current_slot_index,
             "price_interval_minutes": price_interval_minutes,
