@@ -11,7 +11,6 @@ from typing import Dict, Any, Optional, List
 import json
 import logging
 import statistics
-import numpy as np
 
 
 from homeassistant.core import HomeAssistant
@@ -31,6 +30,65 @@ from .ml_settings import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _reset_learning_state(collector: "PumpSteerMLCollector") -> None:
+    collector.learning_sessions = []
+    collector.learning_summary = {}
+    collector.model_coefficients = None
+
+
+def _least_squares_coefficients(
+    x_values: List[List[float]], y_values: List[float]
+) -> List[float]:
+    if not x_values or not y_values or len(x_values) != len(y_values):
+        return []
+
+    features = []
+    for row in x_values:
+        if len(row) != 3:
+            return []
+        features.append([row[0], row[1], row[2], 1.0])
+
+    size = 4
+    xtx = [[0.0 for _ in range(size)] for _ in range(size)]
+    xty = [0.0 for _ in range(size)]
+
+    for feature_row, y_value in zip(features, y_values):
+        for i in range(size):
+            xty[i] += feature_row[i] * y_value
+            for j in range(size):
+                xtx[i][j] += feature_row[i] * feature_row[j]
+
+    solution = _solve_linear_system(xtx, xty)
+    return solution or []
+
+
+def _solve_linear_system(
+    matrix: List[List[float]], vector: List[float]
+) -> Optional[List[float]]:
+    size = len(vector)
+    augmented = [row[:] + [vector[i]] for i, row in enumerate(matrix)]
+
+    for col in range(size):
+        pivot_row = max(range(col, size), key=lambda r: abs(augmented[r][col]))
+        if abs(augmented[pivot_row][col]) < 1e-12:
+            return None
+        if pivot_row != col:
+            augmented[col], augmented[pivot_row] = augmented[pivot_row], augmented[col]
+
+        pivot = augmented[col][col]
+        for j in range(col, size + 1):
+            augmented[col][j] /= pivot
+
+        for row in range(size):
+            if row == col:
+                continue
+            factor = augmented[row][col]
+            for j in range(col, size + 1):
+                augmented[row][j] -= factor * augmented[col][j]
+
+    return [augmented[i][size] for i in range(size)]
 
 
 class PumpSteerMLCollector:
@@ -67,8 +125,18 @@ class PumpSteerMLCollector:
             _LOGGER.debug("ML: No previous data found.")
             return
 
-        with open(self.data_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(self.data_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as err:
+            _LOGGER.error("ML: Failed to decode JSON data: %s", err)
+            self._handle_corrupt_data_file()
+            self._reset_learning_data()
+            return
+        except OSError as err:
+            _LOGGER.error("ML: Failed to read data file: %s", err)
+            self._reset_learning_data()
+            return
 
         self.learning_sessions = data.get("sessions", [])
         self.learning_summary = data.get("learning_summary", {})
@@ -81,6 +149,21 @@ class PumpSteerMLCollector:
                 file_version,
                 ML_DATA_VERSION,
             )
+
+    def _handle_corrupt_data_file(self) -> None:
+        corrupt_path = Path(f"{self.data_file}.corrupt")
+        try:
+            Path(self.data_file).rename(corrupt_path)
+            _LOGGER.warning(
+                "ML: Renamed corrupt data file to %s", corrupt_path
+            )
+        except OSError as err:
+            _LOGGER.warning(
+                "ML: Failed to rename corrupt data file: %s", err
+            )
+
+    def _reset_learning_data(self) -> None:
+        _reset_learning_state(self)
 
     async def async_save_data(self) -> None:
         await self.hass.async_add_executor_job(self._save_data_sync)
@@ -96,9 +179,12 @@ class PumpSteerMLCollector:
             "model_coefficients": self.model_coefficients,
         }
 
-        Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
-        with open(self.data_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        try:
+            Path(self.data_file).parent.mkdir(parents=True, exist_ok=True)
+            with open(self.data_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except OSError as err:
+            _LOGGER.error("ML: Failed to save learning data: %s", err)
 
     def start_session(self, initial_data: Dict[str, Any]) -> None:
         """Start a new learning session"""
@@ -297,9 +383,12 @@ class PumpSteerMLCollector:
             x.append([aggr, inertia, dur])
             y.append(drift)
 
-        a = np.column_stack((np.array(x), np.ones(len(x))))
-        coeff, *_ = np.linalg.lstsq(a, np.array(y), rcond=None)
-        self.model_coefficients = coeff.tolist()
+        coeff = _least_squares_coefficients(x, y)
+        if not coeff:
+            _LOGGER.warning("ML: Regression failed; skipping coefficient update.")
+            return
+
+        self.model_coefficients = coeff
 
         self.learning_summary = {
             "total_sessions": len(valid_summaries),

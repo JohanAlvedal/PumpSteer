@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple, List
 
@@ -404,15 +405,37 @@ class PumpSteerSensor(Entity):
             _LOGGER.warning("Could not retrieve electricity prices from %s", entity_id)
             return [], 0.0, "unknown", [], 60, 0
 
-        try:
-            prices = [
-                float(p)
-                for p in prices_raw
-                if isinstance(p, (float, int)) and p is not None
-            ]
-        except (ValueError, TypeError) as e:
-            _LOGGER.error("Error converting prices to float: %s", e)
-            return [], 0.0, "unknown", [], 60, 0
+        def extract_price_value(item: Any) -> Optional[float]:
+            if item is None:
+                return None
+
+            if isinstance(item, dict):
+                if "value" in item:
+                    return extract_price_value(item.get("value"))
+                if "price" in item:
+                    return extract_price_value(item.get("price"))
+                return None
+
+            if isinstance(item, (float, int)):
+                return float(item)
+
+            if isinstance(item, str):
+                stripped = item.strip()
+                if not stripped or stripped.lower() in ("unknown", "unavailable"):
+                    return None
+                try:
+                    return float(stripped)
+                except ValueError:
+                    return None
+
+            return None
+
+        prices = []
+        for item in prices_raw:
+            value = extract_price_value(item)
+            if value is None or not math.isfinite(value):
+                continue
+            prices.append(value)
 
         if not prices:
             _LOGGER.warning("No valid prices found after conversion")
@@ -544,67 +567,75 @@ class PumpSteerSensor(Entity):
 
     async def async_update(self) -> None:
         """Update sensor data"""
+        try:
+            update_time = dt_util.now()
+            now_hour = update_time.hour
 
-        update_time = dt_util.now()
-        now_hour = update_time.hour
+            config = {**self._config_entry.data, **self._config_entry.options}
+            sensor_data = self._get_sensor_data(config)
+            (
+                prices,
+                current_price,
+                price_category,
+                categories,
+                price_interval_minutes,
+                current_slot_index,
+            ) = await self._get_price_data(config, update_time)
+            self._last_current_price = current_price
+            self._last_price_category = price_category
 
-        config = {**self._config_entry.data, **self._config_entry.options}
-        sensor_data = self._get_sensor_data(config)
-        (
-            prices,
-            current_price,
-            price_category,
-            categories,
-            price_interval_minutes,
-            current_slot_index,
-        ) = await self._get_price_data(config, update_time)
-        self._last_current_price = current_price
-        self._last_price_category = price_category
+            missing = self._validate_required_data(sensor_data, prices)
+            if missing:
+                self._state = STATE_UNAVAILABLE
+                self._attributes = {
+                    "Status": f"Missing: {', '.join(missing)}",
+                    "Last Updated": update_time.isoformat(),
+                    "Current Hour": now_hour,
+                }
+                return
 
-        missing = self._validate_required_data(sensor_data, prices)
-        if missing:
+            holiday = is_holiday_mode_active(
+                self.hass,
+                HARDCODED_ENTITIES["holiday_mode_boolean_entity"],
+                HARDCODED_ENTITIES["holiday_start_datetime_entity"],
+                HARDCODED_ENTITIES["holiday_end_datetime_entity"],
+            )
+
+            if holiday:
+                sensor_data["target_temp"] = HOLIDAY_TEMP
+
+            fake_temp, mode = self._calculate_output_temperature(
+                sensor_data,
+                price_category,
+                current_slot_index,
+            )
+            self._state = round(fake_temp, 1)
+
+            self._attributes = self._build_attributes(
+                sensor_data,
+                prices,
+                current_price,
+                price_category,
+                mode,
+                holiday,
+                categories,
+                now_hour,
+                price_interval_minutes,
+                current_slot_index,
+            )
+
+            if self.ml_collector:
+                self._collect_ml_data(sensor_data, mode, fake_temp)
+
+            self._last_update_time = update_time
+        except Exception as err:
+            _LOGGER.exception("PumpSteer sensor update failed: %s", err)
             self._state = STATE_UNAVAILABLE
             self._attributes = {
-                "Status": f"Missing: {', '.join(missing)}",
-                "Last Updated": update_time.isoformat(),
-                "Current Hour": now_hour,
+                "status": "error",
+                "last_error": str(err),
+                "last_updated": dt_util.now().isoformat(),
             }
-            return
-
-        holiday = is_holiday_mode_active(
-            self.hass,
-            HARDCODED_ENTITIES["holiday_mode_boolean_entity"],
-            HARDCODED_ENTITIES["holiday_start_datetime_entity"],
-            HARDCODED_ENTITIES["holiday_end_datetime_entity"],
-        )
-
-        if holiday:
-            sensor_data["target_temp"] = HOLIDAY_TEMP
-
-        fake_temp, mode = self._calculate_output_temperature(
-            sensor_data,
-            price_category,
-            current_slot_index,
-        )
-        self._state = round(fake_temp, 1)
-
-        self._attributes = self._build_attributes(
-            sensor_data,
-            prices,
-            current_price,
-            price_category,
-            mode,
-            holiday,
-            categories,
-            now_hour,
-            price_interval_minutes,
-            current_slot_index,
-        )
-
-        if self.ml_collector:
-            self._collect_ml_data(sensor_data, mode, fake_temp)
-
-        self._last_update_time = update_time
 
 
 async def async_setup_entry(

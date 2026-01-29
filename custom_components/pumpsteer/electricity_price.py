@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-import numpy as np
+import statistics
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
 from homeassistant.core import HomeAssistant
@@ -63,6 +63,34 @@ def validate_price_list(
     return True
 
 
+def _percentile(values: List[float], percentile: float) -> float:
+    """
+    Compute the percentile using linear interpolation between closest ranks.
+    """
+    if not values:
+        return 0.0
+
+    sorted_values = sorted(values)
+    if len(sorted_values) == 1:
+        return float(sorted_values[0])
+
+    if percentile <= 0:
+        return float(sorted_values[0])
+    if percentile >= 100:
+        return float(sorted_values[-1])
+
+    k = (len(sorted_values) - 1) * (percentile / 100)
+    lower_index = int(k)
+    upper_index = min(lower_index + 1, len(sorted_values) - 1)
+    lower_value = sorted_values[lower_index]
+    upper_value = sorted_values[upper_index]
+    if lower_index == upper_index:
+        return float(lower_value)
+
+    weight = k - lower_index
+    return float(lower_value + (upper_value - lower_value) * weight)
+
+
 def classify_prices(
     price_list: List[float], percentiles: List[float] = None
 ) -> List[str]:
@@ -85,31 +113,28 @@ def classify_prices(
     if len(percentiles) != 4:
         raise ValueError("Exactly 4 percentiles required for 5-category classification")
 
-    price_array = np.array(price_list)
+    positive_prices = [price for price in price_list if price >= 0]
 
-    positive_prices = price_array[price_array >= 0]
-
-    if len(positive_prices) > 0:
-        thresholds = np.percentile(positive_prices, percentiles)
+    if positive_prices:
+        thresholds = [
+            _percentile(positive_prices, percentile) for percentile in percentiles
+        ]
     else:
         # If all prices are negative, all are classified as 'negative_price'
         return ["negative_price"] * len(price_list)
 
-    categories_positive = np.select(
-        [
-            positive_prices < thresholds[0],
-            positive_prices < thresholds[1],
-            positive_prices < thresholds[2],
-            positive_prices < thresholds[3],
-        ],
-        [
-            "very_cheap",
-            "cheap",
-            "normal",
-            "expensive",
-        ],
-        default="very_expensive",
-    )
+    categories_positive = []
+    for price in positive_prices:
+        if price < thresholds[0]:
+            categories_positive.append("very_cheap")
+        elif price < thresholds[1]:
+            categories_positive.append("cheap")
+        elif price < thresholds[2]:
+            categories_positive.append("normal")
+        elif price < thresholds[3]:
+            categories_positive.append("expensive")
+        else:
+            categories_positive.append("very_expensive")
 
     final_categories = []
     positive_index = 0
@@ -179,24 +204,34 @@ async def async_hybrid_classify_with_history(
     end_time = dt_now()
     start_time = end_time - timedelta(hours=trailing_hours)
 
-    recorder = get_instance(hass)
+    try:
+        recorder = get_instance(hass)
 
-    def get_price_history():
-        return get_significant_states(hass, start_time, end_time, [price_entity_id])
+        def get_price_history():
+            return get_significant_states(
+                hass, start_time, end_time, [price_entity_id]
+            )
 
-    history = await recorder.async_add_executor_job(get_price_history)
+        history = await recorder.async_add_executor_job(get_price_history)
 
-    states = history.get(price_entity_id, [])
-    trailing_prices = []
+        states = history.get(price_entity_id, [])
+        trailing_prices = []
 
-    # Process historical states to extract valid numeric prices
-    for s in states:
-        try:
-            if s.state not in ("unknown", "unavailable"):
-                trailing_prices.append(float(s.state))
-        except (ValueError, TypeError):
-            _LOGGER.debug("Skipping invalid state value from history: %s", s.state)
-            continue
+        # Process historical states to extract valid numeric prices
+        for s in states:
+            try:
+                if s.state not in ("unknown", "unavailable"):
+                    trailing_prices.append(float(s.state))
+            except (ValueError, TypeError):
+                _LOGGER.debug("Skipping invalid state value from history: %s", s.state)
+                continue
+    except Exception as err:
+        _LOGGER.warning(
+            "Failed to retrieve history for %s; falling back to percentile classification: %s",
+            price_entity_id,
+            err,
+        )
+        return classify_prices(price_list)
 
     # Calculate the average price from the retrieved historical data
     if not trailing_prices:
@@ -256,11 +291,11 @@ def get_price_statistics(price_list: List[float]) -> Dict[str, float]:
         }
 
     return {
-        "average": round(np.mean(positive_prices), 3),
-        "median": round(np.median(positive_prices), 3),
+        "average": round(statistics.mean(positive_prices), 3),
+        "median": round(statistics.median(positive_prices), 3),
         "min": round(min(price_list), 3),  # Keep original min, as it can be negative
         "max": round(max(price_list), 3),
-        "std": round(np.std(positive_prices), 3),
+        "std": round(statistics.pstdev(positive_prices), 3),
     }
 
 

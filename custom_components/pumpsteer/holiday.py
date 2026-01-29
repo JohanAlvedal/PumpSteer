@@ -2,7 +2,7 @@ from datetime import datetime
 import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.util.dt import parse_datetime
-from homeassistant.const import STATE_ON
+from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from .settings import HOLIDAY_TEMP
 
 _LOGGER = logging.getLogger(__name__)
@@ -67,10 +67,29 @@ def is_holiday_mode_active(
         )
         return False
 
+    if holiday_start_state.state in (
+        STATE_UNKNOWN,
+        STATE_UNAVAILABLE,
+        "",
+        None,
+    ) or holiday_end_state.state in (
+        STATE_UNKNOWN,
+        STATE_UNAVAILABLE,
+        "",
+        None,
+    ):
+        _LOGGER.warning(
+            "[PumpSteer - Holiday] Holiday datetime states are invalid. "
+            "Start state: '%s', End state: '%s'",
+            holiday_start_state.state,
+            holiday_end_state.state,
+        )
+        return False
+
     try:
         holiday_start_time = parse_datetime(holiday_start_state.state)
         holiday_end_time = parse_datetime(holiday_end_state.state)
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         _LOGGER.warning(
             "[PumpSteer - Holiday] Error parsing holiday datetime states. "
             "Start state: '%s', End state: '%s', Error: %s",
@@ -80,8 +99,6 @@ def is_holiday_mode_active(
         )
         return False
 
-    current_time = datetime.now(holiday_start_time.tzinfo)
-
     if holiday_start_time is None or holiday_end_time is None:
         _LOGGER.warning(
             "[PumpSteer - Holiday] Could not parse holiday datetime states. "
@@ -90,6 +107,8 @@ def is_holiday_mode_active(
             holiday_end_state.state,
         )
         return False
+
+    current_time = datetime.now(holiday_start_time.tzinfo)
 
     if holiday_start_time <= current_time <= holiday_end_time:
         _LOGGER.debug(
