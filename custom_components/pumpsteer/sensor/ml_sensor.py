@@ -145,7 +145,8 @@ class PumpSteerMLSensor(Entity):
 
     def _determine_state(self, insights: Dict[str, Any]) -> str:
         """Decide what the main state string should be"""
-        summary = insights.get("summary", {}) or {}
+        summary = insights.get("summary", {})
+        summary = summary if isinstance(summary, dict) else {}
         total = summary.get("total_sessions", 0) or 0
         coeffs = summary.get("coefficients")
 
@@ -165,17 +166,19 @@ class PumpSteerMLSensor(Entity):
     ) -> Dict[str, Any]:
         """Build a clear and concise attribute dictionary"""
         summary = insights.get("summary", {})
+        summary = summary if isinstance(summary, dict) else {}
+        summary_stats = summary.get("summary", {}) if isinstance(summary, dict) else {}
         recs = insights.get("recommendations", [])
 
         attributes = {
             "total_sessions": summary.get("total_sessions"),
-            "avg_duration": summary.get("avg_duration"),
-            "avg_drift": summary.get("avg_drift"),
-            "avg_inertia": summary.get("avg_inertia"),
-            "avg_aggressiveness": summary.get("avg_aggressiveness"),
+            "avg_duration": summary_stats.get("avg_duration"),
+            "avg_drift": summary_stats.get("avg_drift"),
+            "avg_inertia": summary_stats.get("avg_inertia"),
+            "avg_aggressiveness": summary_stats.get("avg_aggressiveness"),
             "coefficients": summary.get("coefficients"),
             "recommendations": recs or ["Collecting data…"],
-            "last_learning_update": summary.get("updated"),
+            "last_learning_update": summary_stats.get("updated"),
             # control system info
             "auto_tune_active": control_data.get("autotune_active"),
             "inertia": control_data.get("inertia"),
