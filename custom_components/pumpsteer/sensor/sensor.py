@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any, Tuple, List
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -35,6 +36,7 @@ from ..utils import (
     compute_price_slot_index,
     get_price_window_for_hours,
 )
+from ..brake_ramp_controller import BrakeRampController
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -147,7 +149,7 @@ def filter_short_price_peaks(
     return result
 
 
-class PumpSteerSensor(Entity):
+class PumpSteerSensor(RestoreEntity, Entity):
     """PumpSteer sensor for heat pump control"""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
@@ -160,6 +162,12 @@ class PumpSteerSensor(Entity):
         self._attributes = {}
         self._name = "PumpSteer"
         self._last_update_time = None
+        self._brake_controller = BrakeRampController()
+        self._last_brake_result = self._brake_controller.update(
+            now_ts=0.0,
+            brake_request=False,
+            near_brake=False,
+        )
 
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
@@ -237,6 +245,26 @@ class PumpSteerSensor(Entity):
 
     async def async_added_to_hass(self) -> None:
         """Called when the entity is added to Home Assistant"""
+        last_state = await self.async_get_last_state()
+        if last_state:
+            restored_phase = last_state.attributes.get("brake_phase", "idle")
+            restored_offset = safe_float(last_state.attributes.get("brake_offset_c")) or 0.0
+            restored_target = (
+                safe_float(last_state.attributes.get("brake_target_offset_c")) or 0.0
+            )
+            restored_change_ts = safe_float(
+                last_state.attributes.get("brake_last_phase_change_ts")
+            )
+            restored_hold_ts = safe_float(last_state.attributes.get("brake_hold_started_ts"))
+
+            self._brake_controller = BrakeRampController(
+                initial_phase=restored_phase,
+                initial_offset_c=restored_offset,
+                initial_target_offset_c=restored_target,
+                last_phase_change_ts=restored_change_ts,
+                hold_started_ts=restored_hold_ts,
+            )
+
         if self.ml_collector and hasattr(self.ml_collector, "async_load_data"):
             await self.ml_collector.async_load_data()
             _LOGGER.debug("ML data loaded successfully")
@@ -549,8 +577,10 @@ class PumpSteerSensor(Entity):
         now_hour: int,
         price_interval_minutes: int,
         current_slot_index: int,
-        peak_filter_minutes: int,
-        price_categories_filtered_count: int,
+        peak_filter_minutes: int = 30,
+        price_categories_filtered_count: int = 0,
+        brake_request: bool = False,
+        near_brake: bool = False,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
@@ -626,6 +656,15 @@ class PumpSteerSensor(Entity):
                 "categories_count": len(categories),
                 "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
             },
+            "brake_phase": self._last_brake_result.phase,
+            "brake_offset_c": self._last_brake_result.offset_c,
+            "brake_target_offset_c": self._last_brake_result.target_offset_c,
+            "brake_request": brake_request,
+            "near_brake": near_brake,
+            "seconds_in_brake_phase": self._last_brake_result.seconds_in_phase,
+            "brake_reason_code": self._last_brake_result.reason_code,
+            "brake_last_phase_change_ts": self._brake_controller.last_phase_change_ts,
+            "brake_hold_started_ts": self._brake_controller.snapshot().hold_started_ts,
         }
 
         return attributes
@@ -675,7 +714,20 @@ class PumpSteerSensor(Entity):
                 price_category,
                 current_slot_index,
             )
-            self._state = round(fake_temp, 1)
+
+            brake_request = mode == "braking_by_price"
+            near_brake = False
+            now_ts = update_time.timestamp()
+            self._last_brake_result = self._brake_controller.update(
+                now_ts=now_ts,
+                brake_request=brake_request,
+                near_brake=near_brake,
+                hold_offset_c=6.0,
+                max_delta_per_step_c=0.2,
+                min_hold_s=300,
+            )
+            controlled_temp = fake_temp + self._last_brake_result.offset_c
+            self._state = round(controlled_temp, 1)
 
             self._attributes = self._build_attributes(
                 sensor_data,
@@ -690,6 +742,8 @@ class PumpSteerSensor(Entity):
                 current_slot_index,
                 30,
                 filtered_count,
+                brake_request,
+                near_brake,
             )
 
             if self.ml_collector:

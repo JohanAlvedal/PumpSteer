@@ -46,6 +46,17 @@ class Entity:
 entity.Entity = Entity
 sys.modules["homeassistant.helpers.entity"] = entity
 
+restore_state_mod = types.ModuleType("homeassistant.helpers.restore_state")
+
+
+class RestoreEntity:
+    async def async_get_last_state(self):
+        return None
+
+
+restore_state_mod.RestoreEntity = RestoreEntity
+sys.modules["homeassistant.helpers.restore_state"] = restore_state_mod
+
 const = types.ModuleType("homeassistant.const")
 const.STATE_UNAVAILABLE = "unavailable"
 const.STATE_UNKNOWN = "unknown"
