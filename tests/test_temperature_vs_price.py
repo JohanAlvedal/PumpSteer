@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from custom_components.pumpsteer.sensor import sensor
@@ -64,53 +65,85 @@ def base_sensor_data(**kwargs):
 def test_heating_not_blocked_by_expensive_price():
     s = create_sensor()
     data = base_sensor_data(indoor_temp=19.0, target_temp=21.0)
-    fake_temp, mode = s._calculate_output_temperature(data, "very_expensive", 0)
-    assert mode == "heating"
+    fake_temp, mode, debug = s._calculate_output_temperature(
+        data,
+        "very_expensive",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
+    assert mode == "pid"
+    assert debug["brake_requested"] is False
     assert fake_temp < data["outdoor_temp"]
 
 
 def test_price_brake_when_neutral():
     s = create_sensor()
     data = base_sensor_data()
-    fake_temp, mode = s._calculate_output_temperature(data, "expensive", 0)
-    assert mode == "braking_by_price"
+    fake_temp, mode, debug = s._calculate_output_temperature(
+        data,
+        "expensive",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
+    assert mode == "brake_ramp_in"
+    assert debug["brake_reason"] == "price"
     expected = (
         data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
         if data["outdoor_temp"] < WINTER_BRAKE_THRESHOLD
         else BRAKE_FAKE_TEMP
     )
-    assert fake_temp == expected
+    assert data["outdoor_temp"] < fake_temp < expected
 
 
 def test_extreme_price_brake_when_neutral():
     s = create_sensor()
     data = base_sensor_data()
-    fake_temp, mode = s._calculate_output_temperature(data, "extreme", 0)
-    assert mode == "braking_by_price"
+    fake_temp, mode, _ = s._calculate_output_temperature(
+        data,
+        "extreme",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
+    assert mode == "brake_ramp_in"
     expected = (
         data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
         if data["outdoor_temp"] < WINTER_BRAKE_THRESHOLD
         else BRAKE_FAKE_TEMP
     )
-    assert fake_temp == expected
+    assert data["outdoor_temp"] < fake_temp < expected
 
 
 def test_very_cheap_price_overshoots_target():
     s = create_sensor()
     data = base_sensor_data()
     original_overshoot = sensor.CHEAP_PRICE_OVERSHOOT
-    sensor.CHEAP_PRICE_OVERSHOOT = 0.6  # Ensure overshoot is active for the test
-    fake_temp, mode = s._calculate_output_temperature(data, "very_cheap", 0)
+    sensor.CHEAP_PRICE_OVERSHOOT = 0.6
+    fake_temp, mode, _ = s._calculate_output_temperature(
+        data,
+        "very_cheap",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
     sensor.CHEAP_PRICE_OVERSHOOT = original_overshoot
-    assert mode == "neutral"
-    assert fake_temp == data["outdoor_temp"]
+    assert mode == "pid"
+    assert fake_temp < data["outdoor_temp"]
 
 
 def test_cheap_price_neutral_behavior():
     s = create_sensor()
     data = base_sensor_data()
-    fake_temp, mode = s._calculate_output_temperature(data, "cheap", 0)
-    assert mode == "neutral"
+    fake_temp, mode, _ = s._calculate_output_temperature(
+        data,
+        "cheap",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
+    assert mode == "pid"
     assert fake_temp == data["outdoor_temp"]
 
 
@@ -123,9 +156,15 @@ def test_precool_triggered_by_forecast():
     data = base_sensor_data(
         outdoor_temp_forecast_entity="input_text.hourly_forecast_temperatures"
     )
-    fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
-    assert mode == "precool"
-    assert fake_temp == BRAKE_FAKE_TEMP
+    fake_temp, mode, _ = s._calculate_output_temperature(
+        data,
+        "normal",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
+    assert mode == "brake_ramp_in"
+    assert data["outdoor_temp"] < fake_temp <= BRAKE_FAKE_TEMP
 
 
 def test_precool_triggered_by_long_term_forecast():
@@ -137,9 +176,15 @@ def test_precool_triggered_by_long_term_forecast():
     data = base_sensor_data(
         outdoor_temp_forecast_entity="input_text.hourly_forecast_temperatures"
     )
-    fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
-    assert mode == "precool"
-    assert fake_temp == BRAKE_FAKE_TEMP
+    fake_temp, mode, _ = s._calculate_output_temperature(
+        data,
+        "normal",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
+    assert mode == "brake_ramp_in"
+    assert data["outdoor_temp"] < fake_temp <= BRAKE_FAKE_TEMP
 
 
 def test_heating_compensation_factor_applied():
@@ -156,25 +201,27 @@ def test_heating_compensation_factor_applied():
 
 
 def test_fake_temp_constraint_applied():
-    """Test that fake_temp is constrained to not exceed BRAKE_FAKE_TEMP"""
     s = create_sensor()
-    # Create a scenario that might produce high fake_temp values
-    # Use very high indoor temperature and neutral target to trigger braking mode
     data = base_sensor_data(
-        indoor_temp=30.0,  # Very high indoor temp
-        target_temp=20.0,  # Much lower target
-        outdoor_temp=5.0,  # Cold outdoor temp
-        aggressiveness=5.0,  # Maximum aggressiveness
+        indoor_temp=30.0,
+        target_temp=20.0,
+        outdoor_temp=5.0,
+        aggressiveness=5.0,
     )
-    fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
+    fake_temp, mode, _ = s._calculate_output_temperature(
+        data,
+        "normal",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
 
-    expected = data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
     assert fake_temp <= BRAKE_FAKE_TEMP
-    assert fake_temp == expected
+    assert mode == "brake_ramp_in"
+    assert data["outdoor_temp"] < fake_temp
 
 
 def test_brake_temp_uses_offset_below_five_degrees():
-    """Ensure braking only adds offset to outdoor temp when it's below 5 °C"""
     s = create_sensor()
     data = base_sensor_data(
         indoor_temp=23.0,
@@ -183,14 +230,19 @@ def test_brake_temp_uses_offset_below_five_degrees():
         aggressiveness=1.0,
     )
 
-    fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
+    fake_temp, mode, _ = s._calculate_output_temperature(
+        data,
+        "normal",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
 
-    assert mode == "braking_by_temp"
-    assert fake_temp == data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
+    assert mode == "brake_ramp_in"
+    assert data["outdoor_temp"] < fake_temp < data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
 
 
 def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
-    """Ensure braking uses the global cap when outdoor temp is 5 °C or warmer"""
     s = create_sensor()
     data = base_sensor_data(
         indoor_temp=23.0,
@@ -199,54 +251,79 @@ def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
         aggressiveness=1.0,
     )
 
-    fake_temp, mode = s._calculate_output_temperature(data, "normal", 0)
+    fake_temp, mode, _ = s._calculate_output_temperature(
+        data,
+        "normal",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
 
-    assert mode == "braking_by_temp"
-    assert fake_temp == BRAKE_FAKE_TEMP
+    assert mode == "brake_ramp_in"
+    assert data["outdoor_temp"] < fake_temp <= BRAKE_FAKE_TEMP
 
 
 def test_price_brake_consistent_across_temperatures():
-    """Test that braking_by_price always uses BRAKING_MODE_TEMP regardless of outdoor temperature"""
     s = create_sensor()
 
-    # Test various outdoor temperatures (all below summer threshold to avoid summer_mode)
     outdoor_temps = [-10.0, 0.0, 5.0, 10.0, 15.0, 17.0]
 
     for outdoor_temp in outdoor_temps:
         data = base_sensor_data(outdoor_temp=outdoor_temp)
-        fake_temp, mode = s._calculate_output_temperature(data, "expensive", 0)
-
-        assert mode == "braking_by_price", (
-            f"Mode should be braking_by_price for outdoor_temp {outdoor_temp}"
+        fake_temp, mode, _ = s._calculate_output_temperature(
+            data,
+            "expensive",
+            0,
+            datetime(2026, 1, 1, 0, 0),
+            {},
         )
+
+        assert mode == "brake_ramp_in", f"Mode should ramp in for outdoor_temp {outdoor_temp}"
         expected = (
             outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
             if outdoor_temp < WINTER_BRAKE_THRESHOLD
             else BRAKE_FAKE_TEMP
         )
-        assert fake_temp == expected, (
-            f"fake_temp should be {expected} for outdoor_temp {outdoor_temp}, got {fake_temp}"
-        )
+        assert outdoor_temp < fake_temp < expected
 
 
 def test_price_brake_different_categories():
-    """Test that all expensive price categories trigger consistent braking behavior"""
     s = create_sensor()
     data = base_sensor_data()
 
     expensive_categories = ["expensive", "very_expensive", "extreme"]
 
     for category in expensive_categories:
-        fake_temp, mode = s._calculate_output_temperature(data, category, 0)
-
-        assert mode == "braking_by_price", (
-            f"Mode should be braking_by_price for {category}"
+        fake_temp, mode, _ = s._calculate_output_temperature(
+            data,
+            category,
+            0,
+            datetime(2026, 1, 1, 0, 0),
+            {},
         )
+
+        assert mode == "brake_ramp_in", f"Mode should ramp in for {category}"
         expected = (
             data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
             if data["outdoor_temp"] < WINTER_BRAKE_THRESHOLD
             else BRAKE_FAKE_TEMP
         )
-        assert fake_temp == expected, (
-            f"fake_temp should be {expected} for {category}, got {fake_temp}"
-        )
+        assert data["outdoor_temp"] < fake_temp < expected
+
+
+def test_brake_ramp_reaches_full_brake_over_time():
+    s = create_sensor()
+    data = base_sensor_data()
+    start = datetime(2026, 1, 1, 0, 0)
+    _, mode_start, dbg_start = s._calculate_output_temperature(data, "expensive", 0, start, {})
+    _, mode_end, dbg_end = s._calculate_output_temperature(
+        data,
+        "expensive",
+        0,
+        start + timedelta(minutes=15),
+        {},
+    )
+    assert mode_start == "brake_ramp_in"
+    assert dbg_start["brake_factor"] < 1.0
+    assert mode_end == "full_brake"
+    assert dbg_end["brake_factor"] == 1.0
