@@ -24,6 +24,19 @@ from ..settings import (
     WINTER_BRAKE_THRESHOLD,
     CHEAP_PRICE_OVERSHOOT,
     PRECOOL_MARGIN,
+    PID_KP,
+    PID_KI,
+    PID_KD,
+    PID_INTEGRAL_CLAMP,
+    PID_OUTPUT_CLAMP,
+    PID_INTEGRATOR_ON_BRAKE,
+    PID_DECAY_PER_MINUTE_ON_BRAKE,
+    BRAKE_RAMP_IN_MINUTES,
+    BRAKE_RAMP_OUT_MINUTES,
+    MIN_BRAKE_STRENGTH,
+    MAX_BRAKE_STRENGTH,
+    MIN_FAKE_TEMP,
+    MAX_FAKE_TEMP,
 )
 from ..utils import (
     safe_float,
@@ -160,6 +173,13 @@ class PumpSteerSensor(Entity):
         self._attributes = {}
         self._name = "PumpSteer"
         self._last_update_time = None
+        self._pid_integral = 0.0
+        self._pid_last_error = 0.0
+        self._pid_last_update_time = None
+        self._brake_factor = 0.0
+        self._brake_last_update_time = None
+        self._last_brake_requested = False
+        self._last_brake_reason = "none"
 
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
@@ -311,7 +331,9 @@ class PumpSteerSensor(Entity):
         sensor_data: Dict[str, Any],
         price_category: str,
         current_slot_index: int,
-    ) -> Tuple[float, str]:
+        update_time: datetime,
+        config: Dict[str, Any],
+    ) -> Tuple[float, str, Dict[str, Any]]:
         """Calculate output temperature based on current conditions"""
         indoor_temp = sensor_data["indoor_temp"]
         outdoor_temp = sensor_data["outdoor_temp"]
@@ -329,13 +351,47 @@ class PumpSteerSensor(Entity):
         if temp_forecast_csv and should_precool(
             temp_forecast_csv, summer_threshold + PRECOOL_MARGIN
         ):
-            _LOGGER.info(
-                "Activating summer precool mode due to forecasted high temperatures"
+            brake_temp = min(
+                max(
+                    outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
+                    if outdoor_temp < WINTER_BRAKE_THRESHOLD
+                    else BRAKE_FAKE_TEMP,
+                    MIN_FAKE_TEMP,
+                ),
+                MAX_FAKE_TEMP,
             )
-            return BRAKE_FAKE_TEMP, "precool"
+            fake_temp, brake_mode, brake_factor = self._apply_brake_ramp(
+                outdoor_temp=outdoor_temp,
+                brake_requested=True,
+                brake_target_temp=brake_temp,
+                update_time=update_time,
+                config=config,
+            )
+            return (
+                fake_temp,
+                brake_mode,
+                {
+                    "brake_factor": brake_factor,
+                    "brake_requested": True,
+                    "brake_reason": "precool",
+                    "pid_output": 0.0,
+                    "pid_error": 0.0,
+                    "pid_integral": self._pid_integral,
+                    "pid_derivative": 0.0,
+                },
+            )
 
         if outdoor_temp >= summer_threshold:
-            return outdoor_temp, "summer_mode"
+            self._pid_last_update_time = update_time
+            return outdoor_temp, "summer_mode", {
+                "brake_factor": 0.0,
+                "brake_requested": False,
+                "brake_reason": "none",
+                "pid_output": 0.0,
+                "pid_error": 0.0,
+                "pid_integral": self._pid_integral,
+                "pid_derivative": 0.0,
+            }
 
         # Allow slight overshoot only when prices are very cheap
         target_temp_for_logic = target_temp
@@ -350,17 +406,22 @@ class PumpSteerSensor(Entity):
         )
 
         temp_diff = indoor_temp - target_temp_for_logic
+        temp_deficit = target_temp_for_logic - indoor_temp
         price_is_high = (
             "expensive" in price_category
             or "very_expensive" in price_category
             or "extreme" in price_category
         )
 
-        if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
-            fake_temp = outdoor_temp
-            mode = "neutral"
-        else:
-            fake_temp, mode = calculate_temperature_output(
+        normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
+        price_brake_window = (
+            NEUTRAL_TEMP_THRESHOLD + 0.05 + (0.45 * normalized_aggressiveness)
+        )
+        allow_price_brake = price_is_high and temp_deficit <= price_brake_window
+
+        temp_mode = "neutral"
+        if abs(temp_diff) > NEUTRAL_TEMP_THRESHOLD:
+            _, temp_mode = calculate_temperature_output(
                 indoor_temp,
                 target_temp_for_logic,
                 outdoor_temp,
@@ -368,38 +429,183 @@ class PumpSteerSensor(Entity):
                 brake_temp,
             )
 
-            temp_deficit = target_temp_for_logic - indoor_temp
-            normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
-            price_brake_window = (
-                NEUTRAL_TEMP_THRESHOLD + 0.05 + (0.45 * normalized_aggressiveness)
+        brake_requested = temp_mode == "braking_by_temp" or allow_price_brake
+        brake_reason = (
+            "temperature"
+            if temp_mode == "braking_by_temp"
+            else "price"
+            if allow_price_brake
+            else "none"
+        )
+
+        pid_output, pid_error, pid_derivative = self._calculate_pid_output(
+            target_temp=target_temp_for_logic,
+            indoor_temp=indoor_temp,
+            aggressiveness=aggressiveness,
+            update_time=update_time,
+            braking_active=brake_requested,
+            config=config,
+        )
+        pid_fake_temp = min(max(outdoor_temp + pid_output, MIN_FAKE_TEMP), MAX_FAKE_TEMP)
+
+        fake_temp, mode, brake_factor = self._apply_brake_ramp(
+            outdoor_temp=pid_fake_temp,
+            brake_requested=brake_requested,
+            brake_target_temp=brake_temp,
+            update_time=update_time,
+            config=config,
+        )
+        self._last_brake_reason = brake_reason
+
+        return (
+            fake_temp,
+            mode,
+            {
+                "brake_factor": brake_factor,
+                "brake_requested": brake_requested,
+                "brake_reason": brake_reason,
+                "pid_output": pid_output,
+                "pid_error": pid_error,
+                "pid_integral": self._pid_integral,
+                "pid_derivative": pid_derivative,
+            },
+        )
+
+    def _get_runtime_value(
+        self, config: Dict[str, Any], key: str, default: float, min_v: float, max_v: float
+    ) -> float:
+        raw = config.get(key, default)
+        value = safe_float(raw)
+        if value is None:
+            return default
+        return min(max(value, min_v), max_v)
+
+    def _calculate_pid_output(
+        self,
+        target_temp: float,
+        indoor_temp: float,
+        aggressiveness: float,
+        update_time: datetime,
+        braking_active: bool,
+        config: Dict[str, Any],
+    ) -> Tuple[float, float, float]:
+        """Calculate PID-like output as fake outdoor temperature offset."""
+        kp = self._get_runtime_value(config, "pid_kp", PID_KP, 0.0, 20.0)
+        ki = self._get_runtime_value(config, "pid_ki", PID_KI, 0.0, 2.0)
+        kd = self._get_runtime_value(config, "pid_kd", PID_KD, 0.0, 2.0)
+        integral_clamp = self._get_runtime_value(
+            config, "pid_integral_clamp", PID_INTEGRAL_CLAMP, 0.0, 30.0
+        )
+        output_clamp = self._get_runtime_value(
+            config, "pid_output_clamp", PID_OUTPUT_CLAMP, 0.0, 30.0
+        )
+        brake_behavior = config.get(
+            "pid_integrator_on_brake", PID_INTEGRATOR_ON_BRAKE
+        ).lower()
+        if brake_behavior not in {"freeze", "decay", "reset"}:
+            brake_behavior = PID_INTEGRATOR_ON_BRAKE
+
+        error = target_temp - indoor_temp
+        if self._pid_last_update_time is None:
+            dt_seconds = 60.0
+        else:
+            dt_seconds = max(
+                (update_time - self._pid_last_update_time).total_seconds(),
+                1.0,
             )
 
-            if (
-                mode == "heating"
-                and price_is_high
-                and temp_deficit <= price_brake_window
-            ):
-                _LOGGER.info(
-                    "Price braking active during heating: deficit %.2f °C within %.2f °C window (agg %.2f)",
-                    temp_deficit,
-                    price_brake_window,
-                    aggressiveness,
+        derivative = (error - self._pid_last_error) / dt_seconds
+
+        if braking_active:
+            if brake_behavior == "reset":
+                self._pid_integral = 0.0
+            elif brake_behavior == "decay":
+                decay_per_minute = self._get_runtime_value(
+                    config,
+                    "pid_decay_per_minute_on_brake",
+                    PID_DECAY_PER_MINUTE_ON_BRAKE,
+                    0.5,
+                    1.0,
                 )
-                # Use dynamically computed brake_temp here instead of fixed BRAKING_MODE_TEMP
-                return brake_temp, "braking_by_price"
+                self._pid_integral *= decay_per_minute ** (dt_seconds / 60.0)
+        else:
+            self._pid_integral += error * (dt_seconds / 60.0)
+            self._pid_integral = min(max(self._pid_integral, -integral_clamp), integral_clamp)
 
-        if mode not in ["braking_by_temp", "heating"] and price_is_high:
-            price_brake_temp = brake_temp
-            _LOGGER.info(
-                "Blocking heating at slot %s due to %s price (setting fake temp to %s °C)",
-                current_slot_index,
-                price_category,
-                price_brake_temp,
+        control_signal = (kp * error) + (ki * self._pid_integral) + (kd * derivative)
+        normalized_aggressiveness = min(max(aggressiveness / 5.0, 0.0), 1.0)
+        scaled_signal = control_signal * (0.6 + 0.4 * normalized_aggressiveness)
+
+        # Positive temperature error means the house is cold and fake outdoor temp
+        # should go down to request more heat.
+        offset = -scaled_signal
+        offset = min(max(offset, -output_clamp), output_clamp)
+
+        self._pid_last_error = error
+        self._pid_last_update_time = update_time
+
+        return offset, error, derivative
+
+    def _apply_brake_ramp(
+        self,
+        outdoor_temp: float,
+        brake_requested: bool,
+        brake_target_temp: float,
+        update_time: datetime,
+        config: Dict[str, Any],
+    ) -> Tuple[float, str, float]:
+        """Apply smooth ramp in/out for brake effect and blend with base control."""
+        ramp_in_minutes = self._get_runtime_value(
+            config, "brake_ramp_in_minutes", BRAKE_RAMP_IN_MINUTES, 0.1, 120.0
+        )
+        ramp_out_minutes = self._get_runtime_value(
+            config, "brake_ramp_out_minutes", BRAKE_RAMP_OUT_MINUTES, 0.1, 120.0
+        )
+        min_strength = self._get_runtime_value(
+            config, "min_brake_strength", MIN_BRAKE_STRENGTH, 0.0, 1.0
+        )
+        max_strength = self._get_runtime_value(
+            config, "max_brake_strength", MAX_BRAKE_STRENGTH, 0.0, 1.0
+        )
+        max_strength = max(max_strength, min_strength)
+
+        if self._brake_last_update_time is None:
+            dt_seconds = 60.0
+        else:
+            dt_seconds = max(
+                (update_time - self._brake_last_update_time).total_seconds(),
+                1.0,
             )
-            return price_brake_temp, "braking_by_price"
 
-        fake_temp = min(fake_temp, BRAKE_FAKE_TEMP)
-        return fake_temp, mode
+        up_rate = 1.0 / (ramp_in_minutes * 60.0)
+        down_rate = 1.0 / (ramp_out_minutes * 60.0)
+
+        if brake_requested:
+            self._brake_factor += dt_seconds * up_rate
+        else:
+            self._brake_factor -= dt_seconds * down_rate
+
+        self._brake_factor = min(max(self._brake_factor, 0.0), 1.0)
+        self._brake_last_update_time = update_time
+        self._last_brake_requested = brake_requested
+
+        if self._brake_factor <= 0.0:
+            effective_strength = 0.0
+            mode = "pid"
+        else:
+            effective_strength = min_strength + (
+                (max_strength - min_strength) * self._brake_factor
+            )
+            if brake_requested and self._brake_factor < 1.0:
+                mode = "brake_ramp_in"
+            elif brake_requested:
+                mode = "full_brake"
+            else:
+                mode = "brake_ramp_out"
+
+        fake_temp = outdoor_temp + ((brake_target_temp - outdoor_temp) * effective_strength)
+        fake_temp = min(max(fake_temp, MIN_FAKE_TEMP), MAX_FAKE_TEMP)
+        return fake_temp, mode, self._brake_factor
 
     def _collect_ml_data(
         self, sensor_data: Dict[str, Any], mode: str, fake_temp: float
@@ -549,8 +755,9 @@ class PumpSteerSensor(Entity):
         now_hour: int,
         price_interval_minutes: int,
         current_slot_index: int,
-        peak_filter_minutes: int,
-        price_categories_filtered_count: int,
+        peak_filter_minutes: int = 30,
+        price_categories_filtered_count: int = 0,
+        control_debug: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor"""
         max_price = max(prices) if prices else 1.0
@@ -627,6 +834,8 @@ class PumpSteerSensor(Entity):
                 "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
             },
         }
+        if control_debug:
+            attributes["control_debug"] = control_debug
 
         return attributes
 
@@ -670,10 +879,12 @@ class PumpSteerSensor(Entity):
             if holiday:
                 sensor_data["target_temp"] = HOLIDAY_TEMP
 
-            fake_temp, mode = self._calculate_output_temperature(
+            fake_temp, mode, control_debug = self._calculate_output_temperature(
                 sensor_data,
                 price_category,
                 current_slot_index,
+                update_time,
+                config,
             )
             self._state = round(fake_temp, 1)
 
@@ -690,6 +901,7 @@ class PumpSteerSensor(Entity):
                 current_slot_index,
                 30,
                 filtered_count,
+                control_debug,
             )
 
             if self.ml_collector:

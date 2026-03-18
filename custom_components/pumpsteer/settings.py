@@ -24,6 +24,17 @@ WINTER_BRAKE_THRESHOLD: Final[float] = (
 CHEAP_PRICE_OVERSHOOT: Final[float] = (
     1.5  # °C to overshoot target when prices are very cheap
 )
+PID_KP: Final[float] = 2.4
+PID_KI: Final[float] = 0.035
+PID_KD: Final[float] = 0.0
+PID_INTEGRAL_CLAMP: Final[float] = 6.0
+PID_OUTPUT_CLAMP: Final[float] = 12.0
+PID_INTEGRATOR_ON_BRAKE: Final[str] = "freeze"  # freeze, decay, reset
+PID_DECAY_PER_MINUTE_ON_BRAKE: Final[float] = 0.98
+BRAKE_RAMP_IN_MINUTES: Final[float] = 15.0
+BRAKE_RAMP_OUT_MINUTES: Final[float] = 15.0
+MIN_BRAKE_STRENGTH: Final[float] = 0.0
+MAX_BRAKE_STRENGTH: Final[float] = 1.0
 HEATING_COMPENSATION_FACTOR: Final[float] = (
     0.2  # Factor for lowering fake temp per °C deficit and aggressiveness unit
 )

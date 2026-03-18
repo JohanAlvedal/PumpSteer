@@ -63,6 +63,149 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "electricity_price_entity",
                         default=current_data.get("electricity_price_entity"),
                     ): selector({"entity": {"domain": "sensor"}}),
+                    vol.Optional(
+                        "pid_kp",
+                        default=current_data.get("pid_kp", 2.4),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 20.0,
+                                "step": 0.1,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "pid_ki",
+                        default=current_data.get("pid_ki", 0.035),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 2.0,
+                                "step": 0.001,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "pid_kd",
+                        default=current_data.get("pid_kd", 0.0),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 2.0,
+                                "step": 0.001,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "pid_integral_clamp",
+                        default=current_data.get("pid_integral_clamp", 6.0),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 30.0,
+                                "step": 0.1,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "pid_output_clamp",
+                        default=current_data.get("pid_output_clamp", 12.0),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 30.0,
+                                "step": 0.1,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "pid_integrator_on_brake",
+                        default=current_data.get("pid_integrator_on_brake", "freeze"),
+                    ): selector(
+                        {
+                            "select": {
+                                "options": ["freeze", "decay", "reset"],
+                                "mode": "dropdown",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "pid_decay_per_minute_on_brake",
+                        default=current_data.get(
+                            "pid_decay_per_minute_on_brake", 0.98
+                        ),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.5,
+                                "max": 1.0,
+                                "step": 0.01,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "brake_ramp_in_minutes",
+                        default=current_data.get("brake_ramp_in_minutes", 15.0),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.1,
+                                "max": 120.0,
+                                "step": 0.1,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "brake_ramp_out_minutes",
+                        default=current_data.get("brake_ramp_out_minutes", 15.0),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.1,
+                                "max": 120.0,
+                                "step": 0.1,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "min_brake_strength",
+                        default=current_data.get("min_brake_strength", 0.0),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 1.0,
+                                "step": 0.01,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "max_brake_strength",
+                        default=current_data.get("max_brake_strength", 1.0),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 1.0,
+                                "step": 0.01,
+                                "mode": "box",
+                            }
+                        }
+                    ),
                 }
             ),
             errors=errors,
