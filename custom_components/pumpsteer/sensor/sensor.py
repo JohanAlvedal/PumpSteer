@@ -349,7 +349,7 @@ class PumpSteerSensor(Entity):
         if temp_forecast_csv and should_precool(
             temp_forecast_csv, summer_threshold + PRECOOL_MARGIN
         ):
-            self._reset_pid_state(update_time)
+            self._reset_pi_state(update_time)
             brake_temp = min(
                 max(
                     outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
@@ -387,7 +387,7 @@ class PumpSteerSensor(Entity):
             )
 
         if outdoor_temp >= summer_threshold:
-            self._reset_pid_state(update_time)
+            self._reset_pi_state(update_time)
             return outdoor_temp, "summer_mode", {
                 "brake_mode": "summer_mode",
                 "brake_factor": 0.0,
@@ -567,7 +567,7 @@ class PumpSteerSensor(Entity):
 
         return smoothed_offset, result.error, result.derivative, result.feedforward
 
-    def _reset_pid_state(self, update_time: datetime) -> None:
+    def _reset_pi_state(self, update_time: datetime) -> None:
         """Reset PI controller and smoothing states."""
         self._pi_controller.reset(update_time)
         self._offset_smoother.reset(update_time, 0.0)
