@@ -46,7 +46,7 @@ class PIController:
         kp: float,
         ki: float,
         kd: float,
-        feedforward_gain: float,
+        feedforward_bias: float,
         integral_clamp: float,
         output_clamp: float,
         min_fake_temp: float,
@@ -71,7 +71,7 @@ class PIController:
 
         normalized_aggressiveness = min(max(aggressiveness / 5.0, 0.0), 1.0)
         scale = 0.6 + 0.4 * normalized_aggressiveness
-        feedforward = -(error * feedforward_gain * normalized_aggressiveness)
+        feedforward = feedforward_bias
 
         def calculate_offset(integral_value: float) -> Tuple[float, float]:
             control_signal = (kp * error) + (ki * integral_value) + (kd * derivative)

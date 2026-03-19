@@ -146,7 +146,7 @@ def test_cheap_price_neutral_behavior():
         {},
     )
     assert mode == "pid"
-    assert fake_temp == data["outdoor_temp"]
+    assert fake_temp < data["outdoor_temp"]
 
 
 def test_precool_triggered_by_forecast():
@@ -453,5 +453,28 @@ def test_aggressiveness_scaling_changes_pid_output_strength():
 def test_unified_pi_controller_architecture_is_active():
     s = create_sensor()
     assert hasattr(s, "_pi_controller")
-    assert hasattr(s, "_offset_smoother")
     assert not hasattr(s, "_pid_integral")
+
+
+def test_price_feedforward_affects_output_without_temp_error():
+    s = create_sensor()
+    data = base_sensor_data(indoor_temp=21.0, target_temp=21.0)
+    t0 = datetime(2026, 1, 1, 0, 0)
+    fake_cheap, _, _ = s._calculate_output_temperature(data, "very_cheap", 0, t0, {})
+    fake_expensive, _, _ = s._calculate_output_temperature(
+        data,
+        "very_expensive",
+        0,
+        t0 + timedelta(minutes=1),
+        {},
+    )
+    assert fake_cheap < data["outdoor_temp"]
+    assert fake_expensive > data["outdoor_temp"]
+
+
+def test_forecast_feedforward_is_continuous_not_binary_only():
+    s = create_sensor()
+    warm_bias = s._calculate_forecast_feedforward("15,17,19,21,22,23", 10.0, 18.0)
+    cold_bias = s._calculate_forecast_feedforward("10,9,8,7,6,5", 10.0, 18.0)
+    assert warm_bias > 0.0
+    assert cold_bias < 0.0
