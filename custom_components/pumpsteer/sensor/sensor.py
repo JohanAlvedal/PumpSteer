@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
 from ..holiday import is_holiday_mode_active
-from ..temp_control_logic import calculate_temperature_output
+from ..control import PIController
 from ..electricity_price import async_hybrid_classify_with_history, classify_prices
 from ..settings import (
     DEFAULT_HOUSE_INERTIA,
@@ -173,13 +173,9 @@ class PumpSteerSensor(Entity):
         self._attributes = {}
         self._name = "PumpSteer"
         self._last_update_time = None
-        self._pid_integral = 0.0
-        self._pid_last_error = 0.0
-        self._pid_last_update_time = None
+        self._pi_controller = PIController()
         self._brake_factor = 0.0
         self._brake_last_update_time = None
-        self._last_brake_requested = False
-        self._last_brake_reason = "none"
 
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
@@ -348,9 +344,16 @@ class PumpSteerSensor(Entity):
         if outdoor_temp_forecast_entity:
             temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
 
+        forecast_bias = self._calculate_forecast_feedforward(
+            temp_forecast_csv=temp_forecast_csv,
+            outdoor_temp=outdoor_temp,
+            summer_threshold=summer_threshold,
+        )
+
         if temp_forecast_csv and should_precool(
             temp_forecast_csv, summer_threshold + PRECOOL_MARGIN
         ):
+            self._reset_pi_state(update_time)
             brake_temp = min(
                 max(
                     outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
@@ -361,7 +364,7 @@ class PumpSteerSensor(Entity):
                 MAX_FAKE_TEMP,
             )
             fake_temp, brake_mode, brake_factor = self._apply_brake_ramp(
-                outdoor_temp=outdoor_temp,
+                base_fake_temp=outdoor_temp,
                 brake_requested=True,
                 brake_target_temp=brake_temp,
                 update_time=update_time,
@@ -369,28 +372,40 @@ class PumpSteerSensor(Entity):
             )
             return (
                 fake_temp,
-                brake_mode,
+                "precool",
                 {
+                    "brake_mode": brake_mode,
                     "brake_factor": brake_factor,
                     "brake_requested": True,
                     "brake_reason": "precool",
                     "pid_output": 0.0,
                     "pid_error": 0.0,
-                    "pid_integral": self._pid_integral,
+                    "pid_integral": self._pi_controller.integral,
                     "pid_derivative": 0.0,
+                    "pi_output": 0.0,
+                    "pi_error": 0.0,
+                    "pi_integral": self._pi_controller.integral,
+                    "pi_derivative": 0.0,
+                    "pi_feedforward": forecast_bias,
                 },
             )
 
         if outdoor_temp >= summer_threshold:
-            self._pid_last_update_time = update_time
+            self._reset_pi_state(update_time)
             return outdoor_temp, "summer_mode", {
+                "brake_mode": "summer_mode",
                 "brake_factor": 0.0,
                 "brake_requested": False,
                 "brake_reason": "none",
                 "pid_output": 0.0,
                 "pid_error": 0.0,
-                "pid_integral": self._pid_integral,
+                "pid_integral": self._pi_controller.integral,
                 "pid_derivative": 0.0,
+                "pi_output": 0.0,
+                "pi_error": 0.0,
+                "pi_integral": self._pi_controller.integral,
+                "pi_derivative": 0.0,
+                "pi_feedforward": forecast_bias,
             }
 
         # Allow slight overshoot only when prices are very cheap
@@ -419,55 +434,55 @@ class PumpSteerSensor(Entity):
         )
         allow_price_brake = price_is_high and temp_deficit <= price_brake_window
 
-        temp_mode = "neutral"
-        if abs(temp_diff) > NEUTRAL_TEMP_THRESHOLD:
-            _, temp_mode = calculate_temperature_output(
-                indoor_temp,
-                target_temp_for_logic,
-                outdoor_temp,
-                aggressiveness,
-                brake_temp,
-            )
-
-        brake_requested = temp_mode == "braking_by_temp" or allow_price_brake
+        temp_is_warm = temp_diff > NEUTRAL_TEMP_THRESHOLD
+        brake_requested = temp_is_warm or allow_price_brake
         brake_reason = (
             "temperature"
-            if temp_mode == "braking_by_temp"
+            if temp_is_warm
             else "price"
             if allow_price_brake
             else "none"
         )
 
-        pid_output, pid_error, pid_derivative = self._calculate_pid_output(
+        pi_output, pi_error, pi_derivative, pi_feedforward = self._calculate_pi_output(
             target_temp=target_temp_for_logic,
             indoor_temp=indoor_temp,
+            outdoor_temp=outdoor_temp,
             aggressiveness=aggressiveness,
             update_time=update_time,
             braking_active=brake_requested,
+            price_category=price_category,
+            forecast_bias=forecast_bias,
             config=config,
         )
-        pid_fake_temp = min(max(outdoor_temp + pid_output, MIN_FAKE_TEMP), MAX_FAKE_TEMP)
+        pi_fake_temp = min(max(outdoor_temp + pi_output, MIN_FAKE_TEMP), MAX_FAKE_TEMP)
 
         fake_temp, mode, brake_factor = self._apply_brake_ramp(
-            outdoor_temp=pid_fake_temp,
+            base_fake_temp=pi_fake_temp,
             brake_requested=brake_requested,
             brake_target_temp=brake_temp,
             update_time=update_time,
             config=config,
         )
-        self._last_brake_reason = brake_reason
 
         return (
             fake_temp,
             mode,
             {
+                "brake_mode": mode,
                 "brake_factor": brake_factor,
                 "brake_requested": brake_requested,
                 "brake_reason": brake_reason,
-                "pid_output": pid_output,
-                "pid_error": pid_error,
-                "pid_integral": self._pid_integral,
-                "pid_derivative": pid_derivative,
+                # Keep PID keys for backward compatibility.
+                "pid_output": pi_output,
+                "pid_error": pi_error,
+                "pid_integral": self._pi_controller.integral,
+                "pid_derivative": pi_derivative,
+                "pi_output": pi_output,
+                "pi_error": pi_error,
+                "pi_integral": self._pi_controller.integral,
+                "pi_derivative": pi_derivative,
+                "pi_feedforward": pi_feedforward,
             },
         )
 
@@ -480,16 +495,19 @@ class PumpSteerSensor(Entity):
             return default
         return min(max(value, min_v), max_v)
 
-    def _calculate_pid_output(
+    def _calculate_pi_output(
         self,
         target_temp: float,
         indoor_temp: float,
+        outdoor_temp: float,
         aggressiveness: float,
         update_time: datetime,
         braking_active: bool,
+        price_category: str,
+        forecast_bias: float,
         config: Dict[str, Any],
-    ) -> Tuple[float, float, float]:
-        """Calculate PID-like output as fake outdoor temperature offset."""
+    ) -> Tuple[float, float, float, float]:
+        """Calculate PI-based output as fake outdoor temperature offset."""
         kp = self._get_runtime_value(config, "pid_kp", PID_KP, 0.0, 20.0)
         ki = self._get_runtime_value(config, "pid_ki", PID_KI, 0.0, 2.0)
         kd = self._get_runtime_value(config, "pid_kd", PID_KD, 0.0, 2.0)
@@ -499,62 +517,110 @@ class PumpSteerSensor(Entity):
         output_clamp = self._get_runtime_value(
             config, "pid_output_clamp", PID_OUTPUT_CLAMP, 0.0, 30.0
         )
+        price_feedforward_gain = self._get_runtime_value(
+            config, "pi_price_feedforward_gain", 1.0, 0.0, 10.0
+        )
+        forecast_feedforward_gain = self._get_runtime_value(
+            config, "pi_forecast_feedforward_gain", 1.0, 0.0, 10.0
+        )
         brake_behavior = config.get(
             "pid_integrator_on_brake", PID_INTEGRATOR_ON_BRAKE
         ).lower()
         if brake_behavior not in {"freeze", "decay", "reset"}:
             brake_behavior = PID_INTEGRATOR_ON_BRAKE
 
-        error = target_temp - indoor_temp
-        if self._pid_last_update_time is None:
-            dt_seconds = 60.0
-        else:
-            dt_seconds = max(
-                (update_time - self._pid_last_update_time).total_seconds(),
-                1.0,
-            )
+        decay_per_minute = self._get_runtime_value(
+            config,
+            "pid_decay_per_minute_on_brake",
+            PID_DECAY_PER_MINUTE_ON_BRAKE,
+            0.5,
+            1.0,
+        )
 
-        derivative = (error - self._pid_last_error) / dt_seconds
+        price_bias = self._price_feedforward_from_category(price_category)
+        feedforward_bias = (price_bias * price_feedforward_gain) + (
+            forecast_bias * forecast_feedforward_gain
+        )
 
-        if braking_active:
-            if brake_behavior == "reset":
-                self._pid_integral = 0.0
-            elif brake_behavior == "decay":
-                decay_per_minute = self._get_runtime_value(
-                    config,
-                    "pid_decay_per_minute_on_brake",
-                    PID_DECAY_PER_MINUTE_ON_BRAKE,
-                    0.5,
-                    1.0,
-                )
-                self._pid_integral *= decay_per_minute ** (dt_seconds / 60.0)
-        else:
-            self._pid_integral += error * (dt_seconds / 60.0)
-            self._pid_integral = min(max(self._pid_integral, -integral_clamp), integral_clamp)
+        result = self._pi_controller.compute(
+            target_temp=target_temp,
+            indoor_temp=indoor_temp,
+            outdoor_temp=outdoor_temp,
+            aggressiveness=aggressiveness,
+            update_time=update_time,
+            braking_active=braking_active,
+            kp=kp,
+            ki=ki,
+            kd=kd,
+            feedforward_bias=feedforward_bias,
+            integral_clamp=integral_clamp,
+            output_clamp=output_clamp,
+            min_fake_temp=MIN_FAKE_TEMP,
+            max_fake_temp=MAX_FAKE_TEMP,
+            brake_behavior=brake_behavior,
+            decay_per_minute_on_brake=decay_per_minute,
+        )
+        dynamic_min_offset = MIN_FAKE_TEMP - outdoor_temp
+        dynamic_max_offset = MAX_FAKE_TEMP - outdoor_temp
+        offset = min(max(result.offset, dynamic_min_offset), dynamic_max_offset)
 
-        control_signal = (kp * error) + (ki * self._pid_integral) + (kd * derivative)
-        normalized_aggressiveness = min(max(aggressiveness / 5.0, 0.0), 1.0)
-        scaled_signal = control_signal * (0.6 + 0.4 * normalized_aggressiveness)
+        return offset, result.error, result.derivative, result.feedforward
 
-        # Positive temperature error means the house is cold and fake outdoor temp
-        # should go down to request more heat.
-        offset = -scaled_signal
-        offset = min(max(offset, -output_clamp), output_clamp)
+    def _reset_pi_state(self, update_time: datetime) -> None:
+        """Reset PI controller state."""
+        self._pi_controller.reset(update_time)
 
-        self._pid_last_error = error
-        self._pid_last_update_time = update_time
+    def _price_feedforward_from_category(self, price_category: str) -> float:
+        """Map price category to a feedforward temperature bias."""
+        lowered = (price_category or "").lower()
+        if "extreme" in lowered:
+            return 1.8
+        if "very_expensive" in lowered:
+            return 1.2
+        if "expensive" in lowered:
+            return 0.6
+        if "very_cheap" in lowered:
+            return -1.0
+        if "cheap" in lowered:
+            return -0.4
+        return 0.0
 
-        return offset, error, derivative
+    def _calculate_forecast_feedforward(
+        self,
+        temp_forecast_csv: Optional[str],
+        outdoor_temp: float,
+        summer_threshold: float,
+    ) -> float:
+        """Calculate forecast-driven feedforward from trend and warm bias."""
+        if not temp_forecast_csv:
+            return 0.0
+
+        values = []
+        for token in temp_forecast_csv.split(","):
+            parsed = safe_float(token)
+            if parsed is None:
+                continue
+            values.append(parsed)
+
+        if len(values) < 2:
+            return 0.0
+
+        horizon = values[: min(6, len(values))]
+        trend = horizon[-1] - horizon[0]
+        warm_bias = (sum(horizon) / len(horizon)) - summer_threshold
+        outdoor_pull = (sum(horizon) / len(horizon)) - outdoor_temp
+        raw = (0.20 * trend) + (0.15 * warm_bias) + (0.10 * outdoor_pull)
+        return min(max(raw, -2.0), 2.0)
 
     def _apply_brake_ramp(
         self,
-        outdoor_temp: float,
+        base_fake_temp: float,
         brake_requested: bool,
         brake_target_temp: float,
         update_time: datetime,
         config: Dict[str, Any],
     ) -> Tuple[float, str, float]:
-        """Apply smooth ramp in/out for brake effect and blend with base control."""
+        """Apply bounded brake modifier with smooth ramp in/out."""
         ramp_in_minutes = self._get_runtime_value(
             config, "brake_ramp_in_minutes", BRAKE_RAMP_IN_MINUTES, 0.1, 120.0
         )
@@ -568,6 +634,9 @@ class PumpSteerSensor(Entity):
             config, "max_brake_strength", MAX_BRAKE_STRENGTH, 0.0, 1.0
         )
         max_strength = max(max_strength, min_strength)
+        max_brake_delta = self._get_runtime_value(
+            config, "brake_max_modifier_c", 1.5, 0.0, 10.0
+        )
 
         if self._brake_last_update_time is None:
             dt_seconds = 60.0
@@ -587,7 +656,6 @@ class PumpSteerSensor(Entity):
 
         self._brake_factor = min(max(self._brake_factor, 0.0), 1.0)
         self._brake_last_update_time = update_time
-        self._last_brake_requested = brake_requested
 
         if self._brake_factor <= 0.0:
             effective_strength = 0.0
@@ -603,7 +671,9 @@ class PumpSteerSensor(Entity):
             else:
                 mode = "brake_ramp_out"
 
-        fake_temp = outdoor_temp + ((brake_target_temp - outdoor_temp) * effective_strength)
+        brake_delta = (brake_target_temp - base_fake_temp) * effective_strength
+        brake_delta = min(max(brake_delta, -max_brake_delta), max_brake_delta)
+        fake_temp = base_fake_temp + brake_delta
         fake_temp = min(max(fake_temp, MIN_FAKE_TEMP), MAX_FAKE_TEMP)
         return fake_temp, mode, self._brake_factor
 

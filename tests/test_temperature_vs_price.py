@@ -7,6 +7,8 @@ from custom_components.pumpsteer.temp_control_logic import calculate_temperature
 from custom_components.pumpsteer.settings import (
     BRAKE_FAKE_TEMP,
     HEATING_COMPENSATION_FACTOR,
+    MAX_FAKE_TEMP,
+    MIN_FAKE_TEMP,
     WINTER_BRAKE_TEMP_OFFSET,
     WINTER_BRAKE_THRESHOLD,
     PRECOOL_MARGIN,
@@ -144,7 +146,7 @@ def test_cheap_price_neutral_behavior():
         {},
     )
     assert mode == "pid"
-    assert fake_temp == data["outdoor_temp"]
+    assert fake_temp < data["outdoor_temp"]
 
 
 def test_precool_triggered_by_forecast():
@@ -163,7 +165,7 @@ def test_precool_triggered_by_forecast():
         datetime(2026, 1, 1, 0, 0),
         {},
     )
-    assert mode == "brake_ramp_in"
+    assert mode == "precool"
     assert data["outdoor_temp"] < fake_temp <= BRAKE_FAKE_TEMP
 
 
@@ -183,7 +185,7 @@ def test_precool_triggered_by_long_term_forecast():
         datetime(2026, 1, 1, 0, 0),
         {},
     )
-    assert mode == "brake_ramp_in"
+    assert mode == "precool"
     assert data["outdoor_temp"] < fake_temp <= BRAKE_FAKE_TEMP
 
 
@@ -327,3 +329,152 @@ def test_brake_ramp_reaches_full_brake_over_time():
     assert dbg_start["brake_factor"] < 1.0
     assert mode_end == "full_brake"
     assert dbg_end["brake_factor"] == 1.0
+
+
+def test_summer_mode_resets_pid_state():
+    s = create_sensor()
+    t0 = datetime(2026, 1, 1, 0, 0)
+
+    # First tick in winter mode builds integral state.
+    winter_data = base_sensor_data(indoor_temp=19.0, target_temp=21.0, outdoor_temp=5.0)
+    _, winter_mode, winter_debug = s._calculate_output_temperature(
+        winter_data,
+        "normal",
+        0,
+        t0,
+        {},
+    )
+    assert winter_mode == "pid"
+    assert winter_debug["pid_integral"] > 0.0
+
+    # Entering summer mode must flush PID memory.
+    summer_data = base_sensor_data(outdoor_temp=20.0, summer_threshold=18.0)
+    _, summer_mode, summer_debug = s._calculate_output_temperature(
+        summer_data,
+        "normal",
+        0,
+        t0 + timedelta(minutes=5),
+        {},
+    )
+    assert summer_mode == "summer_mode"
+    assert summer_debug["pid_integral"] == 0.0
+
+    # Leaving summer mode should start from clean integral state.
+    back_to_winter = base_sensor_data(indoor_temp=20.0, target_temp=21.0, outdoor_temp=5.0)
+    _, _, back_debug = s._calculate_output_temperature(
+        back_to_winter,
+        "normal",
+        0,
+        t0 + timedelta(minutes=10),
+        {},
+    )
+    assert round(back_debug["pid_integral"], 6) == 5.0
+
+
+def test_brake_ramp_out_mode_after_request_removed():
+    s = create_sensor()
+    data = base_sensor_data()
+    start = datetime(2026, 1, 1, 0, 0)
+
+    # Ramp in to full brake.
+    s._calculate_output_temperature(data, "expensive", 0, start, {})
+    _, mode_full, dbg_full = s._calculate_output_temperature(
+        data,
+        "expensive",
+        0,
+        start + timedelta(minutes=15),
+        {},
+    )
+    assert mode_full == "full_brake"
+    assert dbg_full["brake_factor"] == 1.0
+
+    # Remove brake request -> should ramp out first.
+    _, mode_out, dbg_out = s._calculate_output_temperature(
+        data,
+        "normal",
+        0,
+        start + timedelta(minutes=16),
+        {},
+    )
+    assert mode_out == "brake_ramp_out"
+    assert 0.0 < dbg_out["brake_factor"] < 1.0
+
+
+def test_dynamic_fake_temp_saturation_limits_pid_offset():
+    s = create_sensor()
+    t0 = datetime(2026, 1, 1, 0, 0)
+    data = base_sensor_data(
+        indoor_temp=10.0,
+        target_temp=35.0,
+        outdoor_temp=MIN_FAKE_TEMP + 0.2,
+        aggressiveness=5.0,
+        summer_threshold=30.0,
+    )
+    fake_temp, mode, debug = s._calculate_output_temperature(
+        data,
+        "normal",
+        0,
+        t0,
+        {"pid_output_clamp": 12.0},
+    )
+    assert mode == "pid"
+    assert fake_temp == MIN_FAKE_TEMP
+    assert round(debug["pid_output"], 6) == round(MIN_FAKE_TEMP - data["outdoor_temp"], 6)
+
+
+def test_aggressiveness_scaling_changes_pid_output_strength():
+    t0 = datetime(2026, 1, 1, 0, 0)
+    data_low = base_sensor_data(indoor_temp=20.0, target_temp=21.0, aggressiveness=0.0)
+    data_high = base_sensor_data(indoor_temp=20.0, target_temp=21.0, aggressiveness=5.0)
+
+    s_low = create_sensor()
+    s_high = create_sensor()
+    fake_low, mode_low, debug_low = s_low._calculate_output_temperature(
+        data_low,
+        "normal",
+        0,
+        t0,
+        {},
+    )
+    fake_high, mode_high, debug_high = s_high._calculate_output_temperature(
+        data_high,
+        "normal",
+        0,
+        t0,
+        {},
+    )
+
+    assert mode_low == "pid"
+    assert mode_high == "pid"
+    assert debug_high["pid_output"] < debug_low["pid_output"]
+    assert fake_high < fake_low
+
+
+def test_unified_pi_controller_architecture_is_active():
+    s = create_sensor()
+    assert hasattr(s, "_pi_controller")
+    assert not hasattr(s, "_pid_integral")
+
+
+def test_price_feedforward_affects_output_without_temp_error():
+    s = create_sensor()
+    data = base_sensor_data(indoor_temp=21.0, target_temp=21.0)
+    t0 = datetime(2026, 1, 1, 0, 0)
+    fake_cheap, _, _ = s._calculate_output_temperature(data, "very_cheap", 0, t0, {})
+    fake_expensive, _, _ = s._calculate_output_temperature(
+        data,
+        "very_expensive",
+        0,
+        t0 + timedelta(minutes=1),
+        {},
+    )
+    assert fake_cheap < data["outdoor_temp"]
+    assert fake_expensive > data["outdoor_temp"]
+
+
+def test_forecast_feedforward_is_continuous_not_binary_only():
+    s = create_sensor()
+    warm_bias = s._calculate_forecast_feedforward("15,17,19,21,22,23", 10.0, 18.0)
+    cold_bias = s._calculate_forecast_feedforward("10,9,8,7,6,5", 10.0, 18.0)
+    assert warm_bias > 0.0
+    assert cold_bias < 0.0
