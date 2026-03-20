@@ -2,8 +2,8 @@ import logging
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.helpers.selector import selector
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -12,36 +12,34 @@ DOMAIN = "pumpsteer"
 HARDCODED_ENTITIES = {
     "target_temp_entity": "input_number.indoor_target_temperature",
     "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
     "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
     "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
 }
 
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for pumpsteer"""
+    """Handle options flow for PumpSteer."""
 
     async def async_step_init(self, user_input=None):
-        """Manage the options flow"""
+        """Manage the options flow."""
         errors = {}
 
         entry = self.config_entry
+        current_data = {**entry.data, **entry.options}
 
         if user_input is not None:
             combined_data = {**user_input, **HARDCODED_ENTITIES}
-            errors = await self._validate_entities(combined_data)
+            errors = self._validate_entities(combined_data)
+            errors.update(self._validate_numeric_ranges(user_input))
 
             if not errors:
-                updated_data = entry.data.copy()
-                updated_data.update(combined_data)
-
-                self.hass.config_entries.async_update_entry(entry, data=updated_data)
-
+                updated_options = dict(entry.options)
+                updated_options.update(combined_data)
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    options=updated_options,
+                )
                 return self.async_create_entry(title="", data={})
-
-        current_data = entry.data
 
         return self.async_show_form(
             step_id="init",
@@ -66,153 +64,54 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         "pid_kp",
                         default=current_data.get("pid_kp", 2.4),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 20.0,
-                                "step": 0.1,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.0, "max": 20.0, "step": 0.1, "mode": "box"}}),
                     vol.Optional(
                         "pid_ki",
                         default=current_data.get("pid_ki", 0.035),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 2.0,
-                                "step": 0.001,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.0, "max": 2.0, "step": 0.001, "mode": "box"}}),
                     vol.Optional(
                         "pid_kd",
                         default=current_data.get("pid_kd", 0.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 2.0,
-                                "step": 0.001,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.0, "max": 2.0, "step": 0.001, "mode": "box"}}),
                     vol.Optional(
                         "pid_integral_clamp",
                         default=current_data.get("pid_integral_clamp", 6.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 30.0,
-                                "step": 0.1,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.0, "max": 30.0, "step": 0.1, "mode": "box"}}),
                     vol.Optional(
                         "pid_output_clamp",
                         default=current_data.get("pid_output_clamp", 12.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 30.0,
-                                "step": 0.1,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.0, "max": 30.0, "step": 0.1, "mode": "box"}}),
                     vol.Optional(
                         "pid_integrator_on_brake",
                         default=current_data.get("pid_integrator_on_brake", "freeze"),
-                    ): selector(
-                        {
-                            "select": {
-                                "options": ["freeze", "decay", "reset"],
-                                "mode": "dropdown",
-                            }
-                        }
-                    ),
+                    ): selector({"select": {"options": ["freeze", "decay", "reset"], "mode": "dropdown"}}),
                     vol.Optional(
                         "pid_decay_per_minute_on_brake",
-                        default=current_data.get(
-                            "pid_decay_per_minute_on_brake", 0.98
-                        ),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.5,
-                                "max": 1.0,
-                                "step": 0.01,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                        default=current_data.get("pid_decay_per_minute_on_brake", 0.98),
+                    ): selector({"number": {"min": 0.5, "max": 1.0, "step": 0.01, "mode": "box"}}),
                     vol.Optional(
                         "brake_ramp_in_minutes",
                         default=current_data.get("brake_ramp_in_minutes", 15.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.1,
-                                "max": 120.0,
-                                "step": 0.1,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.1, "max": 120.0, "step": 0.1, "mode": "box"}}),
                     vol.Optional(
                         "brake_ramp_out_minutes",
                         default=current_data.get("brake_ramp_out_minutes", 15.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.1,
-                                "max": 120.0,
-                                "step": 0.1,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.1, "max": 120.0, "step": 0.1, "mode": "box"}}),
                     vol.Optional(
                         "min_brake_strength",
                         default=current_data.get("min_brake_strength", 0.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 1.0,
-                                "step": 0.01,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.0, "max": 1.0, "step": 0.01, "mode": "box"}}),
                     vol.Optional(
                         "max_brake_strength",
                         default=current_data.get("max_brake_strength", 1.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 1.0,
-                                "step": 0.01,
-                                "mode": "box",
-                            }
-                        }
-                    ),
+                    ): selector({"number": {"min": 0.0, "max": 1.0, "step": 0.01, "mode": "box"}}),
                 }
             ),
             errors=errors,
         )
 
-    async def _validate_entities(self, user_input):
-        """Validate that entities exist and are available"""
+    def _validate_entities(self, user_input):
+        """Validate that entities exist."""
         errors = {}
 
         user_configurable_entities = {
@@ -221,57 +120,31 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             "electricity_price_entity": "Electricity price sensor",
         }
 
-        hardcoded_entities = {
-            "hourly_forecast_temperatures_entity": "Temperature forecast input_text",
-            "target_temp_entity": "Target temperature input_number",
-            "summer_threshold_entity": "Summer threshold input_number",
-            "holiday_mode_boolean_entity": "Holiday mode boolean",
-            "holiday_start_datetime_entity": "Holiday start datetime",
-            "holiday_end_datetime_entity": "Holiday end datetime",
-            "auto_tune_inertia_entity": "Autotune inertia boolean",
-        }
-
         for field, description in user_configurable_entities.items():
             entity_id = user_input.get(field)
             if not entity_id:
-                errors[field] = f"Required: {description}"
+                errors[field] = "required"
                 continue
-
-            if not await self._entity_exists(entity_id):
-                errors[field] = f"Entity not found: {entity_id}"
-            elif not await self._entity_available(entity_id):
-                errors[field] = f"Entity unavailable: {entity_id}"
-
-        for field, description in hardcoded_entities.items():
-            entity_id = user_input.get(field)
-            if entity_id:
-                if not await self._entity_exists(entity_id):
-                    _LOGGER.warning(
-                        "Hardcoded entity not found: %s (%s) - Check package configuration",
-                        entity_id,
-                        description,
-                    )
-                elif not await self._entity_available(entity_id):
-                    _LOGGER.warning(
-                        "Hardcoded entity unavailable: %s (%s) - Check package configuration",
-                        entity_id,
-                        description,
-                    )
+            if not self._entity_exists(entity_id):
+                errors[field] = "entity_not_found"
 
         return errors
 
-    async def _entity_exists(self, entity_id: str) -> bool:
-        """Check if entity exists"""
+    def _validate_numeric_ranges(self, user_input):
+        """Validate logical numeric relationships."""
+        errors = {}
+        min_brake = float(user_input.get("min_brake_strength", 0.0))
+        max_brake = float(user_input.get("max_brake_strength", 1.0))
+        if min_brake > max_brake:
+            errors["min_brake_strength"] = "invalid_range"
+            errors["max_brake_strength"] = "invalid_range"
+        return errors
+
+    def _entity_exists(self, entity_id: str) -> bool:
         return self.hass.states.get(entity_id) is not None
 
-    async def _entity_available(self, entity_id: str) -> bool:
-        """Check if entity is available"""
+    def _entity_available(self, entity_id: str) -> bool:
         entity = self.hass.states.get(entity_id)
         if not entity:
             return False
-        return entity.state not in [
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
-            "unavailable",
-            "unknown",
-        ]
+        return entity.state not in {STATE_UNAVAILABLE, STATE_UNKNOWN, "unavailable", "unknown"}
