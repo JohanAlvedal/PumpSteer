@@ -372,15 +372,24 @@ class PumpSteerSensor(Entity):
                     "brake_factor": brake_factor,
                     "brake_requested": True,
                     "brake_reason": "precool",
+                    "control_target_temperature": target_temp,
+                    "display_target_temperature": target_temp,
+                    "control_error_c": 0.0,
                     "pid_output": 0.0,
                     "pid_error": 0.0,
                     "pid_integral": self._pi_controller.integral,
                     "pid_derivative": 0.0,
                     "pi_output": 0.0,
+                    "pi_output_raw": 0.0,
                     "pi_error": 0.0,
                     "pi_integral": self._pi_controller.integral,
                     "pi_derivative": 0.0,
+                    "price_feedforward_c": 0.0,
+                    "forecast_feedforward_c": forecast_bias,
+                    "feedforward_total_c": forecast_bias,
                     "pi_feedforward": forecast_bias,
+                    "brake_delta_c": fake_temp - outdoor_temp,
+                    "final_fake_temp_c": fake_temp,
                 },
             )
 
@@ -391,15 +400,24 @@ class PumpSteerSensor(Entity):
                 "brake_factor": 0.0,
                 "brake_requested": False,
                 "brake_reason": "none",
+                "control_target_temperature": target_temp,
+                "display_target_temperature": target_temp,
+                "control_error_c": 0.0,
                 "pid_output": 0.0,
                 "pid_error": 0.0,
                 "pid_integral": self._pi_controller.integral,
                 "pid_derivative": 0.0,
                 "pi_output": 0.0,
+                "pi_output_raw": 0.0,
                 "pi_error": 0.0,
                 "pi_integral": self._pi_controller.integral,
                 "pi_derivative": 0.0,
+                "price_feedforward_c": 0.0,
+                "forecast_feedforward_c": forecast_bias,
+                "feedforward_total_c": forecast_bias,
                 "pi_feedforward": forecast_bias,
+                "brake_delta_c": 0.0,
+                "final_fake_temp_c": outdoor_temp,
             }
 
         target_temp_for_logic = target_temp
@@ -439,7 +457,15 @@ class PumpSteerSensor(Entity):
             else "none"
         )
 
-        pi_output, pi_error, pi_derivative, pi_feedforward = self._calculate_pi_output(
+        (
+            pi_output,
+            pi_output_raw,
+            pi_error,
+            pi_derivative,
+            pi_feedforward,
+            price_feedforward_c,
+            forecast_feedforward_c,
+        ) = self._calculate_pi_output(
             target_temp=target_temp_for_logic,
             indoor_temp=indoor_temp,
             outdoor_temp=outdoor_temp,
@@ -470,16 +496,25 @@ class PumpSteerSensor(Entity):
                 "brake_reason": brake_reason,
                 "control_target_temp": target_temp_for_logic,
                 "display_target_temp": target_temp,
+                "control_target_temperature": target_temp_for_logic,
+                "display_target_temperature": target_temp,
+                "control_error_c": pi_error,
                 # Keep PID keys for backward compatibility.
                 "pid_output": pi_output,
                 "pid_error": pi_error,
                 "pid_integral": self._pi_controller.integral,
                 "pid_derivative": pi_derivative,
                 "pi_output": pi_output,
+                "pi_output_raw": pi_output_raw,
                 "pi_error": pi_error,
                 "pi_integral": self._pi_controller.integral,
                 "pi_derivative": pi_derivative,
+                "price_feedforward_c": price_feedforward_c,
+                "forecast_feedforward_c": forecast_feedforward_c,
+                "feedforward_total_c": pi_feedforward,
                 "pi_feedforward": pi_feedforward,
+                "brake_delta_c": fake_temp - pi_fake_temp,
+                "final_fake_temp_c": fake_temp,
             },
         )
 
@@ -509,7 +544,7 @@ class PumpSteerSensor(Entity):
         price_category: str,
         forecast_bias: float,
         config: Dict[str, Any],
-    ) -> Tuple[float, float, float, float]:
+    ) -> Tuple[float, float, float, float, float, float, float]:
         """Calculate PI-based output as fake outdoor temperature offset."""
         kp = self._get_runtime_value(config, "pid_kp", PID_KP, 0.0, 20.0)
         ki = self._get_runtime_value(config, "pid_ki", PID_KI, 0.0, 2.0)
@@ -567,7 +602,15 @@ class PumpSteerSensor(Entity):
         dynamic_max_offset = MAX_FAKE_TEMP - outdoor_temp
         offset = min(max(result.offset, dynamic_min_offset), dynamic_max_offset)
 
-        return offset, result.error, result.derivative, result.feedforward
+        return (
+            offset,
+            result.offset,
+            result.error,
+            result.derivative,
+            result.feedforward,
+            price_bias * price_feedforward_gain,
+            forecast_bias * forecast_feedforward_gain,
+        )
 
     def _reset_pi_state(self, update_time: datetime) -> None:
         """Reset PI controller state."""
@@ -836,8 +879,9 @@ class PumpSteerSensor(Entity):
         current_price: float,
         price_category: str,
         mode: str,
-        categories: List[str],
-        now_hour: int,
+        holiday_or_categories: Any,
+        categories_or_now_hour: Any,
+        now_hour: Any,
         price_interval_minutes: int,
         current_slot_index: int,
         peak_filter_minutes: int = 30,
@@ -845,6 +889,21 @@ class PumpSteerSensor(Entity):
         control_debug: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor."""
+        # Backward compatibility for older internal callers/tests that passed
+        # a legacy "holiday" positional value before categories.
+        if isinstance(holiday_or_categories, bool):
+            categories = (
+                categories_or_now_hour
+                if isinstance(categories_or_now_hour, list)
+                else []
+            )
+        else:
+            categories = holiday_or_categories if isinstance(holiday_or_categories, list) else []
+            now_hour = categories_or_now_hour
+
+        if not isinstance(now_hour, int):
+            now_hour = dt_util.now().hour
+
         max_price = max(prices) if prices else 1.0
         min_price = min(prices) if prices else 0.0
 
@@ -860,26 +919,24 @@ class PumpSteerSensor(Entity):
         )
 
         decision_triggers = {
-            "braking_by_price": "price",
-            "braking_by_temp": "temperature",
             "heating": "temperature",
             "pid": "pi control",
             "full_brake": "brake overlay",
             "brake_ramp_in": "brake overlay",
             "brake_ramp_out": "brake overlay",
-            "cooling": "temperature",
             "summer_mode": "summer",
-            "neutral": "neutral",
             "precool": "pre-cool (warm forecast)",
             "error": "error in calculation",
         }
 
         if (
-            mode in {"pid", "brake_ramp_out"}
+            mode in {"heating", "pid", "brake_ramp_out"}
             and control_debug
             and control_debug.get("pi_error", 0.0) > 0.0
             and "very_cheap" in price_category
         ):
+            decision_reason = f"{mode} - Triggered by very cheap price"
+        elif mode == "heating" and "very_cheap" in price_category:
             decision_reason = f"{mode} - Triggered by very cheap price"
         else:
             decision_reason = (
@@ -904,7 +961,12 @@ class PumpSteerSensor(Entity):
             "inertia": sensor_data["inertia"],
             "target_temperature": sensor_data["target_temp"],
             "control_target_temperature": (
-                control_debug.get("control_target_temp")
+                control_debug.get("control_target_temperature")
+                if control_debug
+                else sensor_data["target_temp"]
+            ),
+            "display_target_temperature": (
+                control_debug.get("display_target_temperature")
                 if control_debug
                 else sensor_data["target_temp"]
             ),
@@ -917,11 +979,60 @@ class PumpSteerSensor(Entity):
             "temp_error_c": round(
                 sensor_data["indoor_temp"]
                 - (
-                    control_debug.get("control_target_temp")
+                    control_debug.get("control_target_temperature")
                     if control_debug
                     else sensor_data["target_temp"]
                 ),
                 2,
+            ),
+            "control_error_c": round(
+                (
+                    control_debug.get("control_error_c")
+                    if control_debug
+                    else sensor_data["indoor_temp"] - sensor_data["target_temp"]
+                ),
+                2,
+            ),
+            "pi_output_raw": (
+                round(control_debug.get("pi_output_raw"), 3)
+                if control_debug and control_debug.get("pi_output_raw") is not None
+                else None
+            ),
+            "price_feedforward_c": (
+                round(control_debug.get("price_feedforward_c"), 3)
+                if control_debug and control_debug.get("price_feedforward_c") is not None
+                else None
+            ),
+            "forecast_feedforward_c": (
+                round(control_debug.get("forecast_feedforward_c"), 3)
+                if control_debug and control_debug.get("forecast_feedforward_c") is not None
+                else None
+            ),
+            "feedforward_total_c": (
+                round(control_debug.get("feedforward_total_c"), 3)
+                if control_debug and control_debug.get("feedforward_total_c") is not None
+                else None
+            ),
+            "brake_requested": (
+                control_debug.get("brake_requested") if control_debug else False
+            ),
+            "brake_reason": (
+                control_debug.get("brake_reason") if control_debug else "none"
+            ),
+            "brake_factor": (
+                round(control_debug.get("brake_factor"), 3)
+                if control_debug and control_debug.get("brake_factor") is not None
+                else 0.0
+            ),
+            "brake_delta_c": (
+                round(control_debug.get("brake_delta_c"), 3)
+                if control_debug and control_debug.get("brake_delta_c") is not None
+                else 0.0
+            ),
+            "final_fake_temp_c": (
+                round(control_debug.get("final_fake_temp_c"), 3)
+                if control_debug and control_debug.get("final_fake_temp_c") is not None
+                else self._state
             ),
             "to_summer_threshold_c": round(
                 sensor_data["summer_threshold"] - sensor_data["outdoor_temp"], 2
@@ -990,6 +1101,7 @@ class PumpSteerSensor(Entity):
                 current_price,
                 price_category,
                 mode,
+                False,
                 categories,
                 now_hour,
                 price_interval_minutes,
