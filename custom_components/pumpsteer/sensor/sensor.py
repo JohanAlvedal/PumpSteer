@@ -403,7 +403,10 @@ class PumpSteerSensor(Entity):
             }
 
         target_temp_for_logic = target_temp
-        if "very_cheap" in price_category:
+        price_feedforward_gain = self._get_runtime_value(
+            config, "pi_price_feedforward_gain", 1.0, 0.0, 10.0
+        )
+        if "very_cheap" in price_category and price_feedforward_gain <= 0.0:
             target_temp_for_logic += CHEAP_PRICE_OVERSHOOT
 
         brake_temp = (
@@ -465,6 +468,8 @@ class PumpSteerSensor(Entity):
                 "brake_factor": brake_factor,
                 "brake_requested": brake_requested,
                 "brake_reason": brake_reason,
+                "control_target_temp": target_temp_for_logic,
+                "display_target_temp": target_temp,
                 # Keep PID keys for backward compatibility.
                 "pid_output": pi_output,
                 "pid_error": pi_error,
@@ -676,11 +681,23 @@ class PumpSteerSensor(Entity):
         return fake_temp, mode, self._brake_factor
 
     def _collect_ml_data(
-        self, sensor_data: Dict[str, Any], mode: str, fake_temp: float
+        self,
+        sensor_data: Dict[str, Any],
+        mode: str,
+        fake_temp: float,
+        control_debug: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Collect data for machine learning."""
         if not self.ml_collector:
             return
+
+        control_debug = control_debug or {}
+        pi_error = safe_float(control_debug.get("pi_error")) or 0.0
+        heating_active = (
+            mode in {"pid", "brake_ramp_out"}
+            and pi_error > 0.05
+            and fake_temp < (sensor_data.get("outdoor_temp") or fake_temp)
+        )
 
         ml_data = {
             "indoor_temp": sensor_data.get("indoor_temp"),
@@ -691,7 +708,7 @@ class PumpSteerSensor(Entity):
             "inertia": sensor_data.get("inertia"),
             "mode": mode,
             "fake_outdoor_temp": fake_temp,
-            "heating_active": mode == "heating",
+            "heating_active": heating_active,
             "heat_demand": None,
             "house_inertia": sensor_data.get("inertia"),
             "price_category": self._last_price_category,
@@ -705,10 +722,11 @@ class PumpSteerSensor(Entity):
 
         self.ml_collector.update_session(ml_data)
 
-        if self._ml_session_start_mode != mode and mode in [
-            "neutral",
-            "summer_mode",
-        ]:
+        session_should_end = mode in {"summer_mode", "precool"}
+        session_should_end = session_should_end or (
+            mode in {"full_brake", "brake_ramp_in"} and not heating_active
+        )
+        if self._ml_session_start_mode != mode and session_should_end:
             self.ml_collector.end_session("mode_change", ml_data)
             self._ml_session_started = False
 
@@ -845,6 +863,10 @@ class PumpSteerSensor(Entity):
             "braking_by_price": "price",
             "braking_by_temp": "temperature",
             "heating": "temperature",
+            "pid": "pi control",
+            "full_brake": "brake overlay",
+            "brake_ramp_in": "brake overlay",
+            "brake_ramp_out": "brake overlay",
             "cooling": "temperature",
             "summer_mode": "summer",
             "neutral": "neutral",
@@ -852,7 +874,12 @@ class PumpSteerSensor(Entity):
             "error": "error in calculation",
         }
 
-        if mode == "heating" and "very_cheap" in price_category:
+        if (
+            mode in {"pid", "brake_ramp_out"}
+            and control_debug
+            and control_debug.get("pi_error", 0.0) > 0.0
+            and "very_cheap" in price_category
+        ):
             decision_reason = f"{mode} - Triggered by very cheap price"
         else:
             decision_reason = (
@@ -876,6 +903,11 @@ class PumpSteerSensor(Entity):
             "aggressiveness": sensor_data["aggressiveness"],
             "inertia": sensor_data["inertia"],
             "target_temperature": sensor_data["target_temp"],
+            "control_target_temperature": (
+                control_debug.get("control_target_temp")
+                if control_debug
+                else sensor_data["target_temp"]
+            ),
             "indoor_temperature": sensor_data["indoor_temp"],
             "outdoor_temperature": sensor_data["outdoor_temp"],
             "summer_threshold": sensor_data["summer_threshold"],
@@ -883,7 +915,13 @@ class PumpSteerSensor(Entity):
             "price_factor_percent": round(price_factor * 100, 1),
             "last_updated": dt_util.now().isoformat(),
             "temp_error_c": round(
-                sensor_data["indoor_temp"] - sensor_data["target_temp"], 2
+                sensor_data["indoor_temp"]
+                - (
+                    control_debug.get("control_target_temp")
+                    if control_debug
+                    else sensor_data["target_temp"]
+                ),
+                2,
             ),
             "to_summer_threshold_c": round(
                 sensor_data["summer_threshold"] - sensor_data["outdoor_temp"], 2
@@ -962,7 +1000,7 @@ class PumpSteerSensor(Entity):
             )
 
             if self.ml_collector:
-                self._collect_ml_data(sensor_data, mode, fake_temp)
+                self._collect_ml_data(sensor_data, mode, fake_temp, control_debug)
 
             self._last_update_time = update_time
         except Exception as err:
