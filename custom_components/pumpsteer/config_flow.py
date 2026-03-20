@@ -2,9 +2,9 @@ import logging
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
 from homeassistant.helpers.selector import selector
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 
 from .options_flow import PumpSteerOptionsFlowHandler
 
@@ -12,34 +12,33 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
 
-# Hardcoded entities that are always present in the package file
+# Hardcoded entities that are expected to exist in the package setup
 HARDCODED_ENTITIES = {
     "target_temp_entity": "input_number.indoor_target_temperature",
     "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
     "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
     "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
 }
 
 
 class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for pumpsteer"""
+    """Handle a config flow for PumpSteer."""
 
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step of the config flow"""
+        """Handle the initial setup step."""
         errors = {}
 
         if user_input is not None:
             combined_data = {**user_input, **HARDCODED_ENTITIES}
-
             errors = await self._validate_entities(combined_data)
 
             if not errors:
-                return self.async_create_entry(title="PumpSteer", data=combined_data)
+                return self.async_create_entry(
+                    title="PumpSteer",
+                    data=combined_data,
+                )
 
         return self.async_show_form(
             step_id="user",
@@ -60,80 +59,88 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _validate_entities(self, user_input):
-        """Validate that all required entities exist and are available"""
+        """Validate required entities."""
         errors = {}
 
-        # Only the entities that the user actually selects
-        user_selected_entities = [
-            "indoor_temp_entity",
-            "real_outdoor_entity",
-            "electricity_price_entity",
-        ]
+        user_selected_entities = {
+            "indoor_temp_entity": "Indoor temperature sensor",
+            "real_outdoor_entity": "Outdoor temperature sensor",
+            "electricity_price_entity": "Electricity price sensor",
+        }
 
-        # Hardcoded entities that should always exist
         hardcoded_entities = {
             "hourly_forecast_temperatures_entity": "Temperature forecast input_text",
             "target_temp_entity": "Target temperature input_number",
             "summer_threshold_entity": "Summer threshold input_number",
-            "holiday_mode_boolean_entity": "Holiday mode boolean",
-            "holiday_start_datetime_entity": "Holiday start datetime",
-            "holiday_end_datetime_entity": "Holiday end datetime",
             "auto_tune_inertia_entity": "Autotune inertia boolean",
         }
 
-        # Check user-selected entities (block if missing)
-        for field in user_selected_entities:
+        # User-selected entities must exist and be available during setup
+        for field, description in user_selected_entities.items():
             entity_id = user_input.get(field)
+
             if not entity_id:
-                errors[field] = f"Required: {field}"
+                errors[field] = "required"
                 continue
 
-            if not await self._entity_exists(entity_id):
-                errors[field] = "required"
-            elif not await self._entity_available(entity_id):
+            if not self._entity_exists(entity_id):
+                _LOGGER.error(
+                    "Required entity not found: %s (%s)",
+                    entity_id,
+                    description,
+                )
+                errors[field] = "entity_not_found"
+                continue
+
+            if not self._entity_available(entity_id):
+                _LOGGER.error(
+                    "Required entity is unavailable during setup: %s (%s)",
+                    entity_id,
+                    description,
+                )
                 errors[field] = "entity_unavailable"
 
-        # Check hardcoded entities (warn only, do not block)
+        # Hardcoded entities should exist, but only warn if missing or unavailable
         for field, description in hardcoded_entities.items():
             entity_id = user_input.get(field)
-            if entity_id:
-                if not await self._entity_exists(entity_id):
-                    _LOGGER.warning(
-                        "Hardcoded entity not found: %s (%s) - This should be created by the package",
-                        entity_id,
-                        description,
-                    )
-                elif not await self._entity_available(entity_id):
-                    _LOGGER.warning(
-                        "Hardcoded entity unavailable: %s (%s) - Check package configuration",
-                        entity_id,
-                        description,
-                    )
+
+            if not entity_id:
+                continue
+
+            if not self._entity_exists(entity_id):
+                _LOGGER.warning(
+                    "Hardcoded entity not found: %s (%s) - This should be created by the package",
+                    entity_id,
+                    description,
+                )
+            elif not self._entity_available(entity_id):
+                _LOGGER.warning(
+                    "Hardcoded entity unavailable: %s (%s) - Check package configuration",
+                    entity_id,
+                    description,
+                )
 
         return errors
 
-    async def _entity_exists(self, entity_id: str) -> bool:
-        """Check if entity exists in Home Assistant"""
+    def _entity_exists(self, entity_id: str) -> bool:
+        """Return True if the entity exists."""
         return self.hass.states.get(entity_id) is not None
 
-    async def _entity_available(self, entity_id: str) -> bool:
-        """Check if entity is available (not unavailable or unknown)"""
+    def _entity_available(self, entity_id: str) -> bool:
+        """Return True if the entity exists and has a valid state."""
         entity = self.hass.states.get(entity_id)
-        if not entity:
+        if entity is None:
             return False
-        return entity.state not in [
+
+        return entity.state not in {
             STATE_UNAVAILABLE,
             STATE_UNKNOWN,
             "unavailable",
             "unknown",
-        ]
-
-    def is_matching(self, other_flow: vol.Self) -> bool:
-        """Return True if other_flow is matching this flow"""
-        raise NotImplementedError
+        }
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """Get the options flow for this handler"""
-        return PumpSteerOptionsFlowHandler()
+        """Return the options flow handler."""
+        return PumpSteerOptionsFlowHandler(config_entry)
