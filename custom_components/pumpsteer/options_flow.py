@@ -90,6 +90,14 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         default=current_data.get("pid_decay_per_minute_on_brake", 0.98),
                     ): selector({"number": {"min": 0.5, "max": 1.0, "step": 0.01, "mode": "box"}}),
                     vol.Optional(
+                        "pi_price_feedforward_gain",
+                        default=current_data.get("pi_price_feedforward_gain", 1.0),
+                    ): selector({"number": {"min": 0.0, "max": 10.0, "step": 0.1, "mode": "box"}}),
+                    vol.Optional(
+                        "pi_forecast_feedforward_gain",
+                        default=current_data.get("pi_forecast_feedforward_gain", 1.0),
+                    ): selector({"number": {"min": 0.0, "max": 10.0, "step": 0.1, "mode": "box"}}),
+                    vol.Optional(
                         "brake_ramp_in_minutes",
                         default=current_data.get("brake_ramp_in_minutes", 15.0),
                     ): selector({"number": {"min": 0.1, "max": 120.0, "step": 0.1, "mode": "box"}}),

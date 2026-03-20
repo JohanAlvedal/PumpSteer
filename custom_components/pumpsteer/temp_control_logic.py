@@ -1,3 +1,10 @@
+"""Deprecated legacy control module.
+
+This module is kept for backwards compatibility and reference only.
+It is not part of the active PumpSteer control pipeline, which is handled
+by the PI/brake ramp flow in ``sensor/sensor.py``.
+"""
+
 import logging
 
 from .settings import (
