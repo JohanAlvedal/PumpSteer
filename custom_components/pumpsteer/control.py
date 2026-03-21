@@ -69,8 +69,9 @@ class PIController:
             integral_candidate += error * (dt_seconds / 60.0)
             integral_candidate = min(max(integral_candidate, -integral_clamp), integral_clamp)
 
-        normalized_aggressiveness = min(max(aggressiveness / 5.0, 0.0), 1.0)
-        scale = 0.6 + 0.4 * normalized_aggressiveness
+        # Aggressiveness is handled by brake comfort windows, not PI gain scaling.
+        # Keep PI gain semantics stable so comfort regulation remains predictable.
+        scale = 1.0
         feedforward = feedforward_bias
 
         def calculate_offset(integral_value: float) -> Tuple[float, float]:
