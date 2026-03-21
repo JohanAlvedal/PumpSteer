@@ -433,8 +433,6 @@ class PumpSteerSensor(Entity):
             else BRAKE_FAKE_TEMP
         )
 
-        temp_diff = indoor_temp - target_temp_for_logic
-        temp_deficit = target_temp_for_logic - indoor_temp
         price_is_high = (
             "expensive" in price_category
             or "very_expensive" in price_category
@@ -442,20 +440,14 @@ class PumpSteerSensor(Entity):
         )
 
         normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
-        price_brake_window = (
-            NEUTRAL_TEMP_THRESHOLD + 0.05 + (0.45 * normalized_aggressiveness)
+        accepted_comfort_drop = normalized_aggressiveness * 1.0
+        comfort_floor = target_temp_for_logic - accepted_comfort_drop
+        allow_price_brake = (
+            aggressiveness > 0.0 and price_is_high and indoor_temp > comfort_floor
         )
-        allow_price_brake = price_is_high and temp_deficit <= price_brake_window
-
-        temp_is_warm = temp_diff > NEUTRAL_TEMP_THRESHOLD
-        brake_requested = temp_is_warm or allow_price_brake
-        brake_reason = (
-            "temperature"
-            if temp_is_warm
-            else "price"
-            if allow_price_brake
-            else "none"
-        )
+        brake_requested = allow_price_brake
+        brake_reason = "price" if allow_price_brake else "none"
+        pi_should_freeze = brake_requested or self._brake_factor > 0.0
 
         (
             pi_output,
@@ -471,7 +463,7 @@ class PumpSteerSensor(Entity):
             outdoor_temp=outdoor_temp,
             aggressiveness=aggressiveness,
             update_time=update_time,
-            braking_active=brake_requested,
+            braking_active=pi_should_freeze,
             price_category=price_category,
             forecast_bias=forecast_bias,
             config=config,
@@ -499,6 +491,7 @@ class PumpSteerSensor(Entity):
                 "control_target_temperature": target_temp_for_logic,
                 "display_target_temperature": target_temp,
                 "control_error_c": pi_error,
+                "comfort_floor_c": comfort_floor,
                 # Keep PID keys for backward compatibility.
                 "pid_output": pi_output,
                 "pid_error": pi_error,
@@ -509,6 +502,7 @@ class PumpSteerSensor(Entity):
                 "pi_error": pi_error,
                 "pi_integral": self._pi_controller.integral,
                 "pi_derivative": pi_derivative,
+                "heating_demand_c": -pi_output,
                 "price_feedforward_c": price_feedforward_c,
                 "forecast_feedforward_c": forecast_feedforward_c,
                 "feedforward_total_c": pi_feedforward,
@@ -579,6 +573,10 @@ class PumpSteerSensor(Entity):
         feedforward_bias = (price_bias * price_feedforward_gain) + (
             forecast_bias * forecast_feedforward_gain
         )
+        if indoor_temp < target_temp and feedforward_bias > 0.0:
+            # Comfort has priority: do not let positive feedforward reduce heating
+            # demand while the house is colder than target.
+            feedforward_bias = 0.0
 
         result = self._pi_controller.compute(
             target_temp=target_temp,

@@ -218,9 +218,8 @@ def test_fake_temp_constraint_applied():
         {},
     )
 
-    assert fake_temp <= BRAKE_FAKE_TEMP
-    assert mode == "brake_ramp_in"
-    assert data["outdoor_temp"] < fake_temp
+    assert mode == "pid"
+    assert fake_temp > data["outdoor_temp"]
 
 
 def test_brake_temp_uses_offset_below_five_degrees():
@@ -240,8 +239,8 @@ def test_brake_temp_uses_offset_below_five_degrees():
         {},
     )
 
-    assert mode == "brake_ramp_in"
-    assert data["outdoor_temp"] < fake_temp < data["outdoor_temp"] + WINTER_BRAKE_TEMP_OFFSET
+    assert mode == "pid"
+    assert fake_temp > data["outdoor_temp"]
 
 
 def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
@@ -261,8 +260,8 @@ def test_brake_temp_caps_to_brake_fake_temp_above_five_degrees():
         {},
     )
 
-    assert mode == "brake_ramp_in"
-    assert data["outdoor_temp"] < fake_temp <= BRAKE_FAKE_TEMP
+    assert mode == "pid"
+    assert fake_temp > data["outdoor_temp"]
 
 
 def test_price_brake_consistent_across_temperatures():
@@ -422,7 +421,7 @@ def test_dynamic_fake_temp_saturation_limits_pid_offset():
     assert round(debug["pid_output"], 6) == round(MIN_FAKE_TEMP - data["outdoor_temp"], 6)
 
 
-def test_aggressiveness_scaling_changes_pid_output_strength():
+def test_aggressiveness_does_not_scale_pi_output_strength():
     t0 = datetime(2026, 1, 1, 0, 0)
     data_low = base_sensor_data(indoor_temp=20.0, target_temp=21.0, aggressiveness=0.0)
     data_high = base_sensor_data(indoor_temp=20.0, target_temp=21.0, aggressiveness=5.0)
@@ -446,8 +445,23 @@ def test_aggressiveness_scaling_changes_pid_output_strength():
 
     assert mode_low == "pid"
     assert mode_high == "pid"
-    assert debug_high["pid_output"] < debug_low["pid_output"]
-    assert fake_high < fake_low
+    assert debug_high["pid_output"] == debug_low["pid_output"]
+    assert fake_high == fake_low
+
+
+def test_aggressiveness_zero_disables_price_brake():
+    s = create_sensor()
+    data = base_sensor_data(aggressiveness=0.0)
+    fake_temp, mode, debug = s._calculate_output_temperature(
+        data,
+        "very_expensive",
+        0,
+        datetime(2026, 1, 1, 0, 0),
+        {},
+    )
+    assert mode == "pid"
+    assert debug["brake_requested"] is False
+    assert fake_temp > data["outdoor_temp"]
 
 
 def test_unified_pi_controller_architecture_is_active():
