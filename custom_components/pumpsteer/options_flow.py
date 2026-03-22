@@ -20,6 +20,10 @@ HARDCODED_ENTITIES = {
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for PumpSteer."""
 
+    def __init__(self, config_entry):
+        """Initialize options flow with the current config entry."""
+        self.config_entry = config_entry
+
     async def async_step_init(self, user_input=None):
         """Manage the options flow."""
         errors = {}
@@ -145,8 +149,11 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
     def _validate_numeric_ranges(self, user_input):
         """Validate logical numeric relationships."""
         errors = {}
-        min_brake = float(user_input.get("min_brake_strength", 0.0))
-        max_brake = float(user_input.get("max_brake_strength", 1.0))
+        try:
+            min_brake = float(user_input.get("min_brake_strength", 0.0))
+            max_brake = float(user_input.get("max_brake_strength", 1.0))
+        except (TypeError, ValueError):
+            return {"base": "invalid_numeric"}
         if min_brake > max_brake:
             errors["min_brake_strength"] = "invalid_range"
             errors["max_brake_strength"] = "invalid_range"

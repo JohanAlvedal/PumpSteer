@@ -23,6 +23,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return await hass.config_entries.async_unload_platforms(entry, ["sensor"])
 
 
-async def async_get_options_flow():
-    """Return the options flow handler"""
-    return PumpSteerOptionsFlowHandler()
+async def async_get_options_flow(config_entry: ConfigEntry):
+    """Return the options flow handler."""
+    return PumpSteerOptionsFlowHandler(config_entry)
