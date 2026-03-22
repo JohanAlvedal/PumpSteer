@@ -78,6 +78,14 @@ DEFAULT_SUMMER_THRESHOLD = 18.0
 DEFAULT_AGGRESSIVENESS = 3.0
 
 
+def is_ml_experimental_enabled(config_entry: ConfigEntry) -> bool:
+    """Return True when experimental ML is explicitly enabled."""
+    config_data = getattr(config_entry, "data", {}) or {}
+    config_options = getattr(config_entry, "options", {}) or {}
+    config = {**config_data, **config_options}
+    return bool(config.get("experimental_ml_enabled", False))
+
+
 def safe_get_current_price_and_category(
     prices: List[float], categories: List[str], slot_index: int, mode: str = "unknown"
 ) -> Tuple[float, str]:
@@ -192,7 +200,8 @@ class PumpSteerSensor(Entity):
         self._last_current_price = None
         self._owns_ml_collector = False
 
-        if ML_AVAILABLE:
+        ml_enabled = is_ml_experimental_enabled(config_entry)
+        if ML_AVAILABLE and ml_enabled:
             domain_data = hass.data.setdefault(DOMAIN, {})
             collectors = domain_data.setdefault("ml_collectors", {})
             self.ml_collector = collectors.get(config_entry.entry_id)
@@ -204,7 +213,7 @@ class PumpSteerSensor(Entity):
                 self._owns_ml_collector = False
             _LOGGER.info("PumpSteer: ML system enabled")
         else:
-            _LOGGER.info("PumpSteer: Running without ML features")
+            _LOGGER.info("PumpSteer: Running without ML features (experimental ML disabled)")
 
         config_entry.add_update_listener(self.async_options_update_listener)
         _LOGGER.debug("PumpSteerSensor: Initialization complete")

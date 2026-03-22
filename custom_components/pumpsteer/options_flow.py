@@ -113,6 +113,10 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "max_brake_strength",
                         default=current_data.get("max_brake_strength", 1.0),
                     ): selector({"number": {"min": 0.0, "max": 1.0, "step": 0.01, "mode": "box"}}),
+                    vol.Optional(
+                        "experimental_ml_enabled",
+                        default=current_data.get("experimental_ml_enabled", False),
+                    ): selector({"boolean": {}}),
                 }
             ),
             errors=errors,
