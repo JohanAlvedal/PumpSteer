@@ -1167,4 +1167,4 @@ async def async_setup_entry(
 ) -> None:
     """Set up the PumpSteer sensor entity."""
     sensor = PumpSteerSensor(hass, config_entry)
-    async_add_entities([sensor], update_before_add=True)ß
+    async_add_entities([sensor], update_before_add=True)
