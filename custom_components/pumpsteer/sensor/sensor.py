@@ -384,6 +384,8 @@ class PumpSteerSensor(Entity):
                     "pi_error": 0.0,
                     "pi_integral": self._pi_controller.integral,
                     "pi_derivative": 0.0,
+                    "heating_demand_c": 0.0,
+                    "heating_demand_raw_c": 0.0,
                     "price_feedforward_c": 0.0,
                     "forecast_feedforward_c": forecast_bias,
                     "feedforward_total_c": forecast_bias,
@@ -412,6 +414,8 @@ class PumpSteerSensor(Entity):
                 "pi_error": 0.0,
                 "pi_integral": self._pi_controller.integral,
                 "pi_derivative": 0.0,
+                "heating_demand_c": 0.0,
+                "heating_demand_raw_c": 0.0,
                 "price_feedforward_c": 0.0,
                 "forecast_feedforward_c": forecast_bias,
                 "feedforward_total_c": forecast_bias,
@@ -450,11 +454,11 @@ class PumpSteerSensor(Entity):
         pi_should_freeze = brake_requested or self._brake_factor > 0.0
 
         (
-            pi_output,
-            pi_output_raw,
+            heating_demand_c,
+            heating_demand_raw_c,
             pi_error,
             pi_derivative,
-            pi_feedforward,
+            feedforward_total_c,
             price_feedforward_c,
             forecast_feedforward_c,
         ) = self._calculate_pi_output(
@@ -468,7 +472,12 @@ class PumpSteerSensor(Entity):
             forecast_bias=forecast_bias,
             config=config,
         )
-        pi_fake_temp = min(max(outdoor_temp + pi_output, MIN_FAKE_TEMP), MAX_FAKE_TEMP)
+
+        # Higher heating demand should lower the fake outdoor temperature.
+        pi_fake_temp = min(
+            max(outdoor_temp - heating_demand_c, MIN_FAKE_TEMP),
+            MAX_FAKE_TEMP,
+        )
 
         fake_temp, mode, brake_factor = self._apply_brake_ramp(
             base_fake_temp=pi_fake_temp,
@@ -493,20 +502,22 @@ class PumpSteerSensor(Entity):
                 "control_error_c": pi_error,
                 "comfort_floor_c": comfort_floor,
                 # Keep PID keys for backward compatibility.
-                "pid_output": pi_output,
+                # Negative output still means more heating for old dashboards.
+                "pid_output": -heating_demand_c,
                 "pid_error": pi_error,
                 "pid_integral": self._pi_controller.integral,
                 "pid_derivative": pi_derivative,
-                "pi_output": pi_output,
-                "pi_output_raw": pi_output_raw,
+                "pi_output": -heating_demand_c,
+                "pi_output_raw": -heating_demand_raw_c,
                 "pi_error": pi_error,
                 "pi_integral": self._pi_controller.integral,
                 "pi_derivative": pi_derivative,
-                "heating_demand_c": -pi_output,
+                "heating_demand_c": heating_demand_c,
+                "heating_demand_raw_c": heating_demand_raw_c,
                 "price_feedforward_c": price_feedforward_c,
                 "forecast_feedforward_c": forecast_feedforward_c,
-                "feedforward_total_c": pi_feedforward,
-                "pi_feedforward": pi_feedforward,
+                "feedforward_total_c": feedforward_total_c,
+                "pi_feedforward": feedforward_total_c,
                 "brake_delta_c": fake_temp - pi_fake_temp,
                 "final_fake_temp_c": fake_temp,
             },
@@ -539,7 +550,7 @@ class PumpSteerSensor(Entity):
         forecast_bias: float,
         config: Dict[str, Any],
     ) -> Tuple[float, float, float, float, float, float, float]:
-        """Calculate PI-based output as fake outdoor temperature offset."""
+        """Calculate heating demand from PI and external feedforward."""
         kp = self._get_runtime_value(config, "pid_kp", PID_KP, 0.0, 20.0)
         ki = self._get_runtime_value(config, "pid_ki", PID_KI, 0.0, 2.0)
         kd = self._get_runtime_value(config, "pid_kd", PID_KD, 0.0, 2.0)
@@ -573,6 +584,7 @@ class PumpSteerSensor(Entity):
         feedforward_bias = (price_bias * price_feedforward_gain) + (
             forecast_bias * forecast_feedforward_gain
         )
+
         if indoor_temp < target_temp and feedforward_bias > 0.0:
             # Comfort has priority: do not let positive feedforward reduce heating
             # demand while the house is colder than target.
@@ -588,7 +600,8 @@ class PumpSteerSensor(Entity):
             kp=kp,
             ki=ki,
             kd=kd,
-            feedforward_bias=feedforward_bias,
+            # Keep PI pure. Feedforward is applied outside the controller.
+            feedforward_bias=0.0,
             integral_clamp=integral_clamp,
             output_clamp=output_clamp,
             min_fake_temp=MIN_FAKE_TEMP,
@@ -596,16 +609,30 @@ class PumpSteerSensor(Entity):
             brake_behavior=brake_behavior,
             decay_per_minute_on_brake=decay_per_minute,
         )
-        dynamic_min_offset = MIN_FAKE_TEMP - outdoor_temp
-        dynamic_max_offset = MAX_FAKE_TEMP - outdoor_temp
-        offset = min(max(result.offset, dynamic_min_offset), dynamic_max_offset)
+
+        # Convert legacy PI offset sign convention into positive heating demand.
+        # Old behavior:
+        #   negative offset => more heating
+        # New interpretation:
+        #   positive heating demand => more heating
+        pi_heating_demand_raw = -result.offset
+
+        heating_demand = pi_heating_demand_raw + feedforward_bias
+
+        # Clamp final heating demand so fake outdoor temperature remains valid.
+        dynamic_min_heating_demand = outdoor_temp - MAX_FAKE_TEMP
+        dynamic_max_heating_demand = outdoor_temp - MIN_FAKE_TEMP
+        heating_demand = min(
+            max(heating_demand, dynamic_min_heating_demand),
+            dynamic_max_heating_demand,
+        )
 
         return (
-            offset,
-            result.offset,
+            heating_demand,
+            pi_heating_demand_raw,
             result.error,
             result.derivative,
-            result.feedforward,
+            feedforward_bias,
             price_bias * price_feedforward_gain,
             forecast_bias * forecast_feedforward_gain,
         )
@@ -750,7 +777,7 @@ class PumpSteerSensor(Entity):
             "mode": mode,
             "fake_outdoor_temp": fake_temp,
             "heating_active": heating_active,
-            "heat_demand": None,
+            "heat_demand": control_debug.get("heating_demand_c") if control_debug else None,
             "house_inertia": sensor_data.get("inertia"),
             "price_category": self._last_price_category,
             "timestamp": dt_util.now().isoformat(),
@@ -887,8 +914,6 @@ class PumpSteerSensor(Entity):
         control_debug: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build attribute dictionary for the sensor."""
-        # Backward compatibility for older internal callers/tests that passed
-        # a legacy "holiday" positional value before categories.
         if isinstance(holiday_or_categories, bool):
             categories = (
                 categories_or_now_hour
@@ -896,7 +921,9 @@ class PumpSteerSensor(Entity):
                 else []
             )
         else:
-            categories = holiday_or_categories if isinstance(holiday_or_categories, list) else []
+            categories = (
+                holiday_or_categories if isinstance(holiday_or_categories, list) else []
+            )
             now_hour = categories_or_now_hour
 
         if not isinstance(now_hour, int):
@@ -994,6 +1021,16 @@ class PumpSteerSensor(Entity):
             "pi_output_raw": (
                 round(control_debug.get("pi_output_raw"), 3)
                 if control_debug and control_debug.get("pi_output_raw") is not None
+                else None
+            ),
+            "heating_demand_c": (
+                round(control_debug.get("heating_demand_c"), 3)
+                if control_debug and control_debug.get("heating_demand_c") is not None
+                else None
+            ),
+            "heating_demand_raw_c": (
+                round(control_debug.get("heating_demand_raw_c"), 3)
+                if control_debug and control_debug.get("heating_demand_raw_c") is not None
                 else None
             ),
             "price_feedforward_c": (
@@ -1130,4 +1167,4 @@ async def async_setup_entry(
 ) -> None:
     """Set up the PumpSteer sensor entity."""
     sensor = PumpSteerSensor(hass, config_entry)
-    async_add_entities([sensor], update_before_add=True)
+    async_add_entities([sensor], update_before_add=True)ß
