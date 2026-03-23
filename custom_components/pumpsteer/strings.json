@@ -2,35 +2,44 @@
   "config": {
     "step": {
       "user": {
-        "title": "config.step.user.title",
+        "title": "PumpSteer setup",
         "data": {
-          "indoor_temp_entity": "config.step.user.data.indoor_temp_entity",
-          "real_outdoor_entity": "config.step.user.data.real_outdoor_entity",
-          "electricity_price_entity": "config.step.user.data.electricity_price_entity"
+          "indoor_temp_entity": "Indoor temperature sensor",
+          "real_outdoor_entity": "Outdoor temperature sensor",
+          "electricity_price_entity": "Electricity price sensor"
         }
       }
     },
     "error": {
-      "required": "config.error.required",
-      "entity_not_found": "config.error.entity_not_found",
-      "entity_unavailable": "config.error.entity_unavailable"
+      "required": "This field is required",
+      "entity_not_found": "Entity not found",
+      "entity_unavailable": "Entity unavailable",
+      "unknown": "An unknown error occurred"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "options.step.init.title",
+        "title": "PumpSteer settings",
         "data": {
-          "indoor_temp_entity": "options.step.init.data.indoor_temp_entity",
-          "real_outdoor_entity": "options.step.init.data.real_outdoor_entity",
-          "electricity_price_entity": "options.step.init.data.electricity_price_entity"
+          "indoor_temp_entity": "Indoor temperature sensor",
+          "real_outdoor_entity": "Outdoor temperature sensor",
+          "electricity_price_entity": "Electricity price sensor",
+          "pid_kp": "PI proportional gain (Kp)",
+          "pid_ki": "PI integral gain (Ki)",
+          "pid_kd": "PI derivative gain (Kd)",
+          "pid_integral_clamp": "PI integral clamp",
+          "pid_output_clamp": "PI output clamp",
+          "brake_delta_c": "Brake strength (°C above outdoor)",
+          "brake_hold_minutes": "Brake hold time (minutes)"
         }
       }
     },
     "error": {
-      "required": "options.error.required",
-      "entity_not_found": "options.error.entity_not_found",
-      "entity_unavailable": "options.error.entity_unavailable"
+      "required": "This field is required",
+      "entity_not_found": "Entity not found",
+      "entity_unavailable": "Entity unavailable",
+      "unknown": "An unknown error occurred"
     }
   }
 }
