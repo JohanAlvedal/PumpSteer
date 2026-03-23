@@ -28,8 +28,6 @@ from ..settings import (
     MAX_FAKE_TEMP,
     PRECOOL_LOOKAHEAD,
     PRECOOL_MARGIN,
-    WINTER_BRAKE_TEMP_OFFSET,
-    WINTER_BRAKE_THRESHOLD,
     PID_KP,
     PID_KI,
     PID_KD,
