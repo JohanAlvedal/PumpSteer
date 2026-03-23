@@ -1,16 +1,14 @@
 """
-PumpSteer – Testsvit mot nuvarande arkitektur (PI-kontroller + state machine).
+PumpSteer – Komplett testsvit mot nuvarande arkitektur.
 
-Kör med:
-    pytest tests/ -v
+Fixar för de 10 failande testerna:
+  - Borttagna anrop till _build_attributes (finns ej längre)
+  - safe_float hanterar nu NaN/inf korrekt (fix i utils.py)
+  - Holiday parsing fungerar med uppdaterad ha_test_stubs
+  - get_price_window_for_hours använder rätt parameternamn (current_slot)
+  - Inga referenser till BRAKE_FAKE_TEMP eller HEATING_COMPENSATION_FACTOR
 
-Täcker:
-    - Prisklassificering (classify_price, compute_thresholds, filter_short_peaks)
-    - safe_float med edge cases (nan, inf, unavailable)
-    - Comfort floor per aggressiveness-nivå
-    - PIController: uppvärmning, fryst integral vid bromsning, reset
-    - Safe mode: sensor unavailable när sensorer/prisdata saknas
-    - Holiday sentinel-år
+Kör med: pytest tests/ -v
 """
 import sys
 from pathlib import Path
@@ -19,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import ha_test_stubs  # noqa: F401 — måste importeras innan HA-moduler
+import ha_test_stubs  # noqa: F401 — måste importeras före alla HA-moduler
 
 from custom_components.pumpsteer.electricity_price import (
     classify_price,
@@ -30,7 +28,12 @@ from custom_components.pumpsteer.electricity_price import (
     PRICE_NORMAL,
     PRICE_EXPENSIVE,
 )
-from custom_components.pumpsteer.utils import safe_float
+from custom_components.pumpsteer.utils import (
+    safe_float,
+    get_price_window_for_hours,
+    detect_price_interval_minutes,
+    compute_price_slot_index,
+)
 from custom_components.pumpsteer.settings import (
     COMFORT_FLOOR_BY_AGGRESSIVENESS,
     BRAKE_DELTA_C,
@@ -43,9 +46,9 @@ from custom_components.pumpsteer.settings import (
 # ── Gemensamma test-hjälpklasser ──────────────────────────────────────────────
 
 class DummyState:
-    def __init__(self, state):
+    def __init__(self, state, attributes=None):
         self.state = state
-        self.attributes = {}
+        self.attributes = attributes or {}
 
 
 class DummyStates:
@@ -54,7 +57,11 @@ class DummyStates:
 
     def get(self, entity_id):
         v = self._m.get(entity_id)
-        return DummyState(v) if v is not None else None
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return DummyState(v.get("state", ""), v.get("attributes", {}))
+        return DummyState(v)
 
 
 class DummyHass:
@@ -104,10 +111,9 @@ def test_classify_price_list_length_preserved():
 
 def test_compute_thresholds_uses_history_when_sufficient():
     history = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    today   = [100.0, 200.0]   # ska ignoreras — history är tillräcklig
+    today   = [100.0, 200.0]
     p30, p80 = compute_price_thresholds(history, today)
     assert 0 < p30 < p80
-    # P80 ska inte vara i närheten av today-värdena
     assert p80 < 50.0
 
 
@@ -117,10 +123,18 @@ def test_compute_thresholds_falls_back_to_today():
 
 
 def test_compute_thresholds_empty_returns_zero():
-    """Ska inte krascha — returnerar (0.0, 0.0)."""
     p30, p80 = compute_price_thresholds([], [])
     assert p30 == 0.0
     assert p80 == 0.0
+
+
+def test_classify_all_identical_prices():
+    """Alla identiska priser ger P30=P80 → allt klassas cheap (price <= p30)."""
+    prices = [1.5] * 24
+    p30, p80 = compute_price_thresholds(prices, prices)
+    cats = classify_price_list(prices, p30, p80)
+    # price <= p30 → cheap (p30 == p80 == 1.5, price == 1.5)
+    assert all(c == PRICE_CHEAP for c in cats)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -150,14 +164,13 @@ def test_filter_all_expensive_unchanged():
 
 
 def test_filter_replaces_with_left_neighbor():
-    """En kort spike ska ersättas av sin vänstra granne."""
     cats   = [PRICE_CHEAP, PRICE_EXPENSIVE, PRICE_NORMAL]
     result = filter_short_peaks(cats, interval_minutes=60, min_duration_minutes=120)
     assert result[1] == PRICE_CHEAP
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 3. safe_float
+# 3. safe_float — inkl. NaN/inf fix
 # ═════════════════════════════════════════════════════════════════════════════
 
 def test_safe_float_normal():
@@ -185,23 +198,135 @@ def test_safe_float_above_max():
 
 
 def test_safe_float_nan():
+    """FIX: NaN ska returnera None, inte float('nan')."""
     assert safe_float(float("nan")) is None
 
 
 def test_safe_float_positive_inf():
+    """FIX: +Inf ska returnera None."""
     assert safe_float(float("inf")) is None
 
 
 def test_safe_float_negative_inf():
+    """FIX: -Inf ska returnera None."""
     assert safe_float(float("-inf")) is None
+
+
+def test_safe_float_nan_string():
+    """Strängen 'nan' ska returnera None."""
+    assert safe_float("nan") is None
 
 
 def test_safe_float_integer_input():
     assert safe_float(5) == 5.0
 
 
+def test_safe_float_zero():
+    assert safe_float(0.0) == 0.0
+
+
+def test_safe_float_negative():
+    assert safe_float(-15.5) == -15.5
+
+
 # ═════════════════════════════════════════════════════════════════════════════
-# 4. Comfort floor per aggressiveness
+# 4. get_price_window_for_hours — FIX: rätt parameternamn
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_get_price_window_basic():
+    """FIX: parametern heter current_slot, inte current_slot_index."""
+    prices = [1.0, 1.5, 2.0, 2.5, 3.0, 1.0]
+    result = get_price_window_for_hours(
+        prices=prices,
+        current_slot=0,          # ← korrekt parameternamn
+        hours=2,
+        price_interval_minutes=60,
+    )
+    assert result == [1.0, 1.5]
+
+
+def test_get_price_window_from_middle():
+    prices = [1.0, 1.5, 2.0, 2.5, 3.0]
+    result = get_price_window_for_hours(
+        prices=prices,
+        current_slot=2,
+        hours=2,
+        price_interval_minutes=60,
+    )
+    assert result == [2.0, 2.5]
+
+
+def test_get_price_window_empty_prices():
+    result = get_price_window_for_hours(
+        prices=[],
+        current_slot=0,
+        hours=3,
+        price_interval_minutes=60,
+    )
+    assert result == []
+
+
+def test_get_price_window_15min_intervals():
+    """Med 15-min intervall täcker 1 timme 4 slots."""
+    prices = list(range(96))  # 96 slots à 15 min = 24h
+    result = get_price_window_for_hours(
+        prices=prices,
+        current_slot=0,
+        hours=1,
+        price_interval_minutes=15,
+    )
+    assert len(result) == 4
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 5. detect_price_interval_minutes
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_detect_interval_24_hourly():
+    assert detect_price_interval_minutes([1.0] * 24) == 60
+
+
+def test_detect_interval_96_quarter_hourly():
+    assert detect_price_interval_minutes([1.0] * 96) == 15
+
+
+def test_detect_interval_empty():
+    assert detect_price_interval_minutes([]) == 60
+
+
+def test_detect_interval_48_half_hourly():
+    assert detect_price_interval_minutes([1.0] * 48) == 30
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 6. compute_price_slot_index
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_slot_index_midnight():
+    t = datetime(2025, 1, 1, 0, 0, tzinfo=timezone.utc)
+    assert compute_price_slot_index(t, price_interval_minutes=60, total_slots=24) == 0
+
+
+def test_slot_index_noon():
+    t = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
+    assert compute_price_slot_index(t, price_interval_minutes=60, total_slots=24) == 12
+
+
+def test_slot_index_last_slot_2359():
+    """23:59 med 15-min slots ska ge slot 95 (det sista av 96)."""
+    t = datetime(2025, 1, 1, 23, 59, tzinfo=timezone.utc)
+    assert compute_price_slot_index(t, price_interval_minutes=15, total_slots=96) == 95
+
+
+def test_slot_index_clamped_to_last():
+    """Slot-index ska aldrig överstiga total_slots-1."""
+    t = datetime(2025, 1, 1, 23, 59, tzinfo=timezone.utc)
+    result = compute_price_slot_index(t, price_interval_minutes=60, total_slots=5)
+    assert result <= 4
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 7. Comfort floor per aggressiveness
 # ═════════════════════════════════════════════════════════════════════════════
 
 def test_comfort_floor_list_has_six_entries():
@@ -222,7 +347,7 @@ def test_comfort_floor_increases_with_aggressiveness():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 5. PIController
+# 8. PIController
 # ═════════════════════════════════════════════════════════════════════════════
 
 def test_pi_heats_when_indoor_below_target():
@@ -233,7 +358,6 @@ def test_pi_heats_when_indoor_below_target():
         target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
         aggressiveness=1.0, update_time=t, kp=8.0, ki=0.0,
     )
-    # error = 2.0 → P = 16.0 → raw_output = -16.0 → clamped negativt
     assert result.offset < 0
     assert result.error == 2.0
 
@@ -265,8 +389,6 @@ def test_pi_integral_frozen_during_braking():
     from custom_components.pumpsteer.control import PIController
     pi = PIController()
     t  = now_utc()
-
-    # Bygg upp integral
     pi.compute(
         target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
         aggressiveness=1.0, update_time=t, kp=0.0, ki=1.0,
@@ -275,7 +397,6 @@ def test_pi_integral_frozen_during_braking():
     integral_before = pi._integral
     assert integral_before > 0.0
 
-    # Kör med braking_active=True och brake_behavior="freeze"
     pi.compute(
         target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
         aggressiveness=1.0, update_time=t + timedelta(minutes=10),
@@ -289,7 +410,6 @@ def test_pi_integral_decays_during_braking_with_decay_mode():
     from custom_components.pumpsteer.control import PIController
     pi = PIController()
     t  = now_utc()
-
     pi.compute(
         target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
         aggressiveness=1.0, update_time=t, kp=0.0, ki=1.0,
@@ -327,7 +447,6 @@ def test_pi_reset_clears_state():
         aggressiveness=1.0, update_time=t, ki=1.0,
     )
     assert pi._integral != 0.0
-
     pi.reset(t)
     assert pi._integral == 0.0
     assert pi._last_error == 0.0
@@ -335,79 +454,45 @@ def test_pi_reset_clears_state():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 6. Safe mode — sensor unavailable vid saknade data
+# 9. Safe mode + available-property
 # ═════════════════════════════════════════════════════════════════════════════
 
-def test_safe_mode_entered_when_no_prices():
-    """Om _get_prices returnerar tom lista ska sensorn gå i safe mode."""
+def test_safe_mode_with_outdoor_sets_passthrough():
     from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor, MODE_SAFE
-
-    hass = DummyHass({
-        "sensor.indoor":  "21.0",
-        "sensor.outdoor": "5.0",
-    })
-    entry = DummyConfigEntry()
-    entry.data = {
-        "indoor_temp_entity":       "sensor.indoor",
-        "real_outdoor_entity":      "sensor.outdoor",
-        "electricity_price_entity": "sensor.price",
-    }
-
-    s = PumpSteerSensor(hass, entry)
+    s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     t = now_utc()
-
-    # Simulera safe mode direkt via metoden
-    s._enter_safe_mode("Testorsak: ingen prisdata", outdoor=5.0, now=t)
-
-    assert s._state == 5.0                           # passthrough
+    s._enter_safe_mode("Testorsak", outdoor=5.0, now=t)
+    assert s._state == 5.0
     assert s._attributes["mode"] == MODE_SAFE
-    assert s.available is True                       # FIX 1: available = state is not None
+    assert s.available is True
     assert "Testorsak" in s._attributes["status"]
 
 
-def test_safe_mode_unavailable_when_no_outdoor():
-    """Om utesensorn saknas ska sensorn vara unavailable (state=None)."""
+def test_safe_mode_without_outdoor_sets_unavailable():
     from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor, MODE_SAFE
-
-    hass  = DummyHass()
-    entry = DummyConfigEntry()
-    s     = PumpSteerSensor(hass, entry)
-    t     = now_utc()
-
+    s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
+    t = now_utc()
     s._enter_safe_mode("Ingen utesensor", outdoor=None, now=t)
-
     assert s._state is None
-    assert s.available is False                      # FIX 1: None → not available
+    assert s.available is False
     assert s._attributes["mode"] == MODE_SAFE
 
 
 def test_safe_mode_resets_pi_and_brake():
-    """Safe mode ska nollställa PI-integralen och bromsen."""
     from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
-
-    hass  = DummyHass()
-    entry = DummyConfigEntry()
-    s     = PumpSteerSensor(hass, entry)
-    t     = now_utc()
-
-    # Simulera att broms och integral har byggts upp
+    s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
+    t = now_utc()
     s._brake_ramp = 0.8
     s._brake_last_t = t
     s._brake_last_expensive_t = t
-
     s._enter_safe_mode("Test", outdoor=5.0, now=t)
-
     assert s._brake_ramp == 0.0
     assert s._brake_last_t is None
     assert s._brake_last_expensive_t is None
     assert s._pi._integral == 0.0
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# 7. available-property (FIX 1)
-# ═════════════════════════════════════════════════════════════════════════════
-
-def test_available_false_when_state_is_none():
+def test_available_false_when_state_none():
     from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = None
@@ -421,15 +506,8 @@ def test_available_true_when_state_is_float():
     assert s.available is True
 
 
-def test_available_true_after_safe_mode_with_outdoor():
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
-    s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
-    s._enter_safe_mode("test", outdoor=3.0, now=now_utc())
-    assert s.available is True
-
-
 # ═════════════════════════════════════════════════════════════════════════════
-# 8. Holiday sentinel-år
+# 10. Holiday sentinel-år — FIX: korrekt parse_datetime i stubs
 # ═════════════════════════════════════════════════════════════════════════════
 
 def test_holiday_sentinel_1970_returns_none():
@@ -446,9 +524,26 @@ def test_holiday_unknown_state_returns_none():
     assert result is None
 
 
+def test_holiday_empty_state_returns_none():
+    from custom_components.pumpsteer.holiday import _get_datetime
+    hass = DummyHass({"input_datetime.pumpsteer_holiday_start": ""})
+    result = _get_datetime(hass, "input_datetime.pumpsteer_holiday_start")
+    assert result is None
+
+
 def test_holiday_valid_date_returns_datetime():
+    """FIX: fungerar nu med uppdaterad parse_datetime i ha_test_stubs."""
     from custom_components.pumpsteer.holiday import _get_datetime
     hass = DummyHass({"input_datetime.pumpsteer_holiday_start": "2025-07-01 10:00:00"})
     result = _get_datetime(hass, "input_datetime.pumpsteer_holiday_start")
     assert result is not None
     assert result.year == 2025
+    assert result.month == 7
+    assert result.day == 1
+
+
+def test_holiday_missing_entity_returns_none():
+    from custom_components.pumpsteer.holiday import _get_datetime
+    hass = DummyHass({})
+    result = _get_datetime(hass, "input_datetime.pumpsteer_holiday_start")
+    assert result is None
