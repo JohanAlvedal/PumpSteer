@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple, List
 
@@ -11,146 +12,132 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.util.dt as dt_util
 
-from ..holiday import is_holiday_mode_active
-from ..temp_control_logic import calculate_temperature_output
-from ..electricity_price import async_hybrid_classify_with_history, classify_prices
+from ..control import PIController
+from ..holiday import async_update_holiday
+from ..electricity_price import (
+    async_get_price_thresholds,
+    classify_price_list,
+    filter_short_peaks,
+    price_category_index,
+    PRICE_CHEAP,
+    PRICE_NORMAL,
+    PRICE_EXPENSIVE,
+)
 from ..settings import (
-    DEFAULT_HOUSE_INERTIA,
-    HOLIDAY_TEMP,
-    BRAKE_FAKE_TEMP,
-    AGGRESSIVENESS_SCALING_FACTOR,
+    MIN_FAKE_TEMP,
+    MAX_FAKE_TEMP,
+    PRECOOL_LOOKAHEAD,
+    PRECOOL_MARGIN,
     WINTER_BRAKE_TEMP_OFFSET,
     WINTER_BRAKE_THRESHOLD,
-    CHEAP_PRICE_OVERSHOOT,
-    PRECOOL_MARGIN,
+    PID_KP,
+    PID_KI,
+    PID_KD,
+    PID_INTEGRAL_CLAMP,
+    PID_OUTPUT_CLAMP,
+    COMFORT_FLOOR_BY_AGGRESSIVENESS,
+    RAMP_SCALE,
+    RAMP_MIN_MINUTES,
+    RAMP_MAX_MINUTES,
+    PREHEAT_BOOST_C,
+    PEAK_FILTER_MIN_DURATION_MINUTES,
+    PRICE_LOOKAHEAD_HOURS,
+    DEFAULT_SUMMER_THRESHOLD,
+    DEFAULT_AGGRESSIVENESS,
+    DEFAULT_HOUSE_INERTIA,
+    DEFAULT_TARGET_TEMP,
+    HOLIDAY_TEMP,
+    MIN_REASONABLE_TEMP,
+    BRAKE_DELTA_C,
+    BRAKE_HOLD_MINUTES,
 )
 from ..utils import (
     safe_float,
     get_state,
     get_attr,
     get_version,
-    should_precool,
     detect_price_interval_minutes,
     compute_price_slot_index,
     get_price_window_for_hours,
+    safe_parse_temperature_forecast,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-
-try:
-    from ..ml_adaptive import PumpSteerMLCollector
-
-    ML_AVAILABLE = True
-    _LOGGER.info("ML features available")
-except ImportError as e:
-    ML_AVAILABLE = False
-    _LOGGER.warning("ML features disabled: %s", e)
-
 DOMAIN = "pumpsteer"
-
 SW_VERSION = get_version()
 
-# Hardcoded entities
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-    "aggressiveness_entity": "input_number.pumpsteer_aggressiveness",
-    "house_inertia_entity": "input_number.house_inertia",
-    "price_model_entity": "input_select.pumpsteer_price_model",
+# ── Hardcoded HA entity IDs (created by the package) ──────────────────────────
+PACKAGE_ENTITIES = {
+    "target_temp":        "input_number.indoor_target_temperature",
+    "summer_threshold":   "input_number.pumpsteer_summer_threshold",
+    "aggressiveness":     "input_number.pumpsteer_aggressiveness",
+    "house_inertia":      "input_number.pumpsteer_house_inertia",
+    "forecast_temps":     "input_text.hourly_forecast_temperatures",
 }
 
-NEUTRAL_TEMP_THRESHOLD = 0.5
-DEFAULT_SUMMER_THRESHOLD = 18.0
-DEFAULT_AGGRESSIVENESS = 3.0
+# ── Operating modes ────────────────────────────────────────────────────────────
+MODE_SUMMER    = "summer_mode"
+MODE_PRECOOL   = "precool"
+MODE_PREHEAT   = "preheating"
+MODE_BRAKING   = "braking"
+MODE_PI        = "normal"
+MODE_HOLIDAY   = "holiday"
+MODE_ERROR     = "error"
 
 
-def safe_get_current_price_and_category(
-    prices: List[float], categories: List[str], slot_index: int, mode: str = "unknown"
-) -> Tuple[float, str]:
-    """Safely get current price and category for a given time slot"""
-    if not prices or slot_index >= len(prices) or slot_index < 0:
-        _LOGGER.warning(
-            "Invalid price data access: slot=%s, prices_len=%s",
-            slot_index,
-            len(prices) if prices else 0,
-        )
-        return 0.0, "unknown"
-
-    current_price = prices[slot_index]
-
-    if not categories or slot_index >= len(categories):
-        _LOGGER.warning(
-            "Invalid category data access: slot=%s, categories_len=%s",
-            slot_index,
-            len(categories) if categories else 0,
-        )
-        price_category = "unknown"
-    else:
-        price_category = f"{categories[slot_index]} ({mode})"
-
-    return current_price, price_category
+def is_ml_experimental_enabled(config_entry: ConfigEntry) -> bool:
+    cfg = {**getattr(config_entry, "data", {}), **getattr(config_entry, "options", {})}
+    return bool(cfg.get("experimental_ml_enabled", False))
 
 
 class PumpSteerSensor(Entity):
-    """PumpSteer sensor for heat pump control"""
+    """
+    PumpSteer — Ngenic-inspired heat pump controller.
+
+    State machine:
+        summer_mode  → outdoor >= summer_threshold, passthrough
+        precool      → forecast shows warm period coming, raise fake temp
+        holiday      → lower target, same PI/braking logic
+        preheating   → expensive period coming, boost heating now
+        braking      → expensive period active, PI disconnected
+        normal       → PI regulates fake temp toward target
+    """
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
-        """Initialize the PumpSteer sensor"""
         self.hass = hass
-        if not hasattr(self.hass, "data"):
-            self.hass.data = {}
         self._config_entry = config_entry
-        self._state = None
-        self._attributes = {}
-        self._name = "PumpSteer"
-        self._last_update_time = None
+        self._state: Optional[float] = None
+        self._attributes: Dict[str, Any] = {}
+        self._pi = PIController()
+        self._brake_ramp: float = 0.0          # 0.0 = no brake, 1.0 = full brake
+        self._brake_last_t: Optional[datetime] = None
+        self._brake_last_expensive_t: Optional[datetime] = None  # hold timer
+        self._ramp_in_minutes: float = 15.0    # updated each cycle from price data
+        self._ramp_out_minutes: float = 15.0
+        self._last_price_categories: List[str] = []
+        self._p30: float = 0.0
+        self._p80: float = 0.0
 
+        self._attr_unique_id = config_entry.entry_id
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
         self._attr_state_class = "measurement"
-        self._attr_unique_id = config_entry.entry_id
-
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, config_entry.entry_id)},
             name="PumpSteer",
-            manufacturer="Custom",
+            manufacturer="PumpSteer",
             model="Heat Pump Controller",
             sw_version=SW_VERSION,
         )
 
-        self.ml_collector = None
-        self._ml_session_started = False
-        self._ml_session_start_mode = None
-        self._last_price_category = "unknown"
-        self._last_current_price = None
-        self._owns_ml_collector = False
-
-        if ML_AVAILABLE:
-            domain_data = hass.data.setdefault(DOMAIN, {})
-            collectors = domain_data.setdefault("ml_collectors", {})
-            self.ml_collector = collectors.get(config_entry.entry_id)
-            if self.ml_collector is None:
-                self.ml_collector = PumpSteerMLCollector(hass)
-                collectors[config_entry.entry_id] = self.ml_collector
-                self._owns_ml_collector = True
-            else:
-                self._owns_ml_collector = False
-            _LOGGER.info("PumpSteer: ML system enabled")
-
-        else:
-            _LOGGER.info("PumpSteer: Running without ML features")
-
         config_entry.add_update_listener(self.async_options_update_listener)
-        _LOGGER.debug("PumpSteerSensor: Initialization complete")
+
+    # ── HA lifecycle ──────────────────────────────────────────────────────────
 
     @property
     def name(self) -> str:
-        return self._name
+        return "PumpSteer"
 
     @property
     def unique_id(self) -> str:
@@ -185,426 +172,509 @@ class PumpSteerSensor(Entity):
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Called when the entity is added to Home Assistant"""
-        if self.ml_collector and hasattr(self.ml_collector, "async_load_data"):
-            await self.ml_collector.async_load_data()
-            _LOGGER.debug("ML data loaded successfully")
-
         await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Handle entity removal from Home Assistant"""
-        if (
-            self._owns_ml_collector
-            and self.ml_collector
-            and hasattr(self.ml_collector, "async_shutdown")
-        ):
-            await self.ml_collector.async_shutdown()
-            collectors = self.hass.data.get(DOMAIN, {}).get("ml_collectors", {})
-            collectors.pop(self._config_entry.entry_id, None)
-        self.ml_collector = None
         await super().async_will_remove_from_hass()
 
-    async def async_options_update_listener(self, entry: ConfigEntry) -> None:
-        """Handle options update event"""
+    async def async_options_update_listener(
+        self, hass: HomeAssistant, entry: ConfigEntry
+    ) -> None:
         self._config_entry = entry
         await self.async_update()
 
-    def _get_sensor_data(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Fetch sensor data from Home Assistant"""
-        return {
-            "indoor_temp": safe_float(
-                get_state(self.hass, config.get("indoor_temp_entity"))
-            ),
-            "outdoor_temp": safe_float(
-                get_state(self.hass, config.get("real_outdoor_entity"))
-            ),
-            "target_temp": safe_float(
-                get_state(self.hass, HARDCODED_ENTITIES["target_temp_entity"])
-            ),
-            "summer_threshold": safe_float(
-                get_state(self.hass, HARDCODED_ENTITIES["summer_threshold_entity"])
-            )
-            or DEFAULT_SUMMER_THRESHOLD,
-            "aggressiveness": safe_float(
-                get_state(self.hass, HARDCODED_ENTITIES["aggressiveness_entity"])
-            )
-            or DEFAULT_AGGRESSIVENESS,
-            "inertia": safe_float(
-                get_state(self.hass, HARDCODED_ENTITIES["house_inertia_entity"])
-            )
-            or DEFAULT_HOUSE_INERTIA,
-            "outdoor_temp_forecast_entity": HARDCODED_ENTITIES[
-                "hourly_forecast_temperatures_entity"
-            ],
-        }
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
-    def _validate_required_data(
-        self, sensor_data: Dict[str, Any], prices: List[float]
-    ) -> Optional[List[str]]:
-        missing = []
+    def _cfg(self) -> Dict[str, Any]:
+        return {**self._config_entry.data, **self._config_entry.options}
 
-        if sensor_data["indoor_temp"] is None:
-            missing.append("Indoor temperature")
-        if sensor_data["outdoor_temp"] is None:
-            missing.append("Outdoor temperature")
-        if sensor_data["target_temp"] is None:
-            missing.append("Target temperature")
-        if not prices:
-            missing.append("Electricity prices")
+    def _read_entity(self, entity_id: str, default: Optional[float] = None) -> Optional[float]:
+        return safe_float(get_state(self.hass, entity_id)) if entity_id else default
 
-        return missing if missing else None
+    def _aggressiveness(self, cfg: Dict[str, Any]) -> int:
+        raw = cfg.get("aggressiveness") or self._read_entity(
+            PACKAGE_ENTITIES["aggressiveness"]
+        ) or DEFAULT_AGGRESSIVENESS
+        return max(0, min(5, int(round(float(raw)))))
 
-    def _calculate_output_temperature(
+    def _house_inertia(self, cfg: Dict[str, Any]) -> float:
+        raw = cfg.get("house_inertia") or self._read_entity(
+            PACKAGE_ENTITIES["house_inertia"]
+        ) or DEFAULT_HOUSE_INERTIA
+        return max(0.5, min(10.0, float(raw)))
+
+    def _comfort_floor(self, target: float, aggressiveness: int) -> float:
+        drop = COMFORT_FLOOR_BY_AGGRESSIVENESS[aggressiveness]
+        return target - drop
+
+    def _brake_temp(self, outdoor: float, delta_c: Optional[float] = None) -> float:
+        delta = delta_c if delta_c is not None else BRAKE_DELTA_C
+        return min(max(outdoor + delta, MIN_FAKE_TEMP), MAX_FAKE_TEMP)
+
+    def _compute_ramp_minutes(
         self,
-        sensor_data: Dict[str, Any],
-        price_category: str,
-        current_slot_index: int,
-    ) -> Tuple[float, str]:
-        """Calculate output temperature based on current conditions"""
-        indoor_temp = sensor_data["indoor_temp"]
-        outdoor_temp = sensor_data["outdoor_temp"]
-        target_temp = sensor_data["target_temp"]
-        summer_threshold = sensor_data["summer_threshold"]
-        aggressiveness = sensor_data["aggressiveness"]
-        outdoor_temp_forecast_entity = sensor_data["outdoor_temp_forecast_entity"]
+        current_cat: str,
+        next_cat: str,
+        house_inertia: float,
+    ) -> float:
+        """
+        Calculate ramp duration based on how big the price jump is
+        and how thermally sluggish the house is.
+        """
+        ci = price_category_index(current_cat)
+        ni = price_category_index(next_cat)
+        jump = max(0, ni - ci)
+        ramp = jump * house_inertia * RAMP_SCALE
+        return max(RAMP_MIN_MINUTES, min(RAMP_MAX_MINUTES, ramp))
 
-        temp_forecast_csv = None
+    def _next_period_category(
+        self,
+        categories: List[str],
+        current_slot: int,
+        interval_minutes: int,
+    ) -> Optional[str]:
+        """Return the price category of the next slot (if it exists)."""
+        next_slot = current_slot + 1
+        if next_slot < len(categories):
+            return categories[next_slot]
+        return None
 
-        # Fetch forecast if entity provided
-        if outdoor_temp_forecast_entity:
-            temp_forecast_csv = get_state(self.hass, outdoor_temp_forecast_entity)
+    def _minutes_until_expensive(
+        self,
+        categories: List[str],
+        current_slot: int,
+        interval_minutes: int,
+        now: datetime,
+    ) -> Optional[float]:
+        """
+        Return minutes until the next expensive slot starts.
+        Accounts for how far into the current slot we already are.
+        """
+        for i in range(1, len(categories) - current_slot):
+            if categories[current_slot + i] == PRICE_EXPENSIVE:
+                # Minutes remaining in current slot + full slots between
+                minutes_into_slot = now.minute % interval_minutes
+                minutes_left_in_slot = interval_minutes - minutes_into_slot
+                minutes_total = minutes_left_in_slot + (i - 1) * interval_minutes
+                return float(minutes_total)
+        return None
 
-        if temp_forecast_csv and should_precool(
-            temp_forecast_csv, summer_threshold + PRECOOL_MARGIN
-        ):
-            _LOGGER.info(
-                "Activating summer precool mode due to forecasted high temperatures"
-            )
-            return BRAKE_FAKE_TEMP, "precool"
+    def _upcoming_expensive(
+        self,
+        categories: List[str],
+        current_slot: int,
+        lookahead_slots: int,
+    ) -> bool:
+        """Return True if an expensive period starts within lookahead_slots."""
+        for i in range(current_slot + 1, min(len(categories), current_slot + lookahead_slots + 1)):
+            if categories[i] == PRICE_EXPENSIVE:
+                return True
+        return False
 
-        if outdoor_temp >= summer_threshold:
-            return outdoor_temp, "summer_mode"
+    def _forecast_temps(self) -> Optional[List[float]]:
+        raw = get_state(self.hass, PACKAGE_ENTITIES["forecast_temps"])
+        if not raw:
+            return None
+        return safe_parse_temperature_forecast(raw, max_hours=PRECOOL_LOOKAHEAD)
 
-        # Allow slight overshoot only when prices are very cheap
-        target_temp_for_logic = target_temp
-        if "very_cheap" in price_category:
-            target_temp_for_logic += CHEAP_PRICE_OVERSHOOT
+    def _should_precool(self, summer_threshold: float) -> bool:
+        temps = self._forecast_temps()
+        if not temps:
+            return False
+        return any(t >= summer_threshold + PRECOOL_MARGIN for t in temps)
 
-        # Dynamic braking temperature based on outdoor temp
-        brake_temp = (
-            outdoor_temp + WINTER_BRAKE_TEMP_OFFSET
-            if outdoor_temp < WINTER_BRAKE_THRESHOLD
-            else BRAKE_FAKE_TEMP
-        )
+    def _forecast_is_cold(self, summer_threshold: float, hours: int = 6) -> bool:
+        """Return True if the next `hours` are below summer_threshold (worth preheating)."""
+        temps = self._forecast_temps()
+        if not temps:
+            return True  # assume cold if no forecast
+        window = temps[:hours]
+        # At least half the forecast window must be below threshold
+        cold_hours = sum(1 for t in window if t < summer_threshold)
+        return cold_hours >= max(1, len(window) // 2)
 
-        temp_diff = indoor_temp - target_temp_for_logic
-        price_is_high = (
-            "expensive" in price_category
-            or "very_expensive" in price_category
-            or "extreme" in price_category
-        )
 
-        if abs(temp_diff) <= NEUTRAL_TEMP_THRESHOLD:
-            fake_temp = outdoor_temp
-            mode = "neutral"
+    # ── Brake ramp ────────────────────────────────────────────────────────────
+
+    def _update_brake_ramp(
+        self,
+        brake_requested: bool,
+        now: datetime,
+        ramp_in: float,
+        ramp_out: float,
+        hold_minutes: float = BRAKE_HOLD_MINUTES,
+    ) -> float:
+        """
+        Smoothly ramp brake factor between 0 and 1.
+        Includes a hold timer so the brake stays active for hold_minutes
+        after the last expensive slot — prevents rapid on/off cycling
+        over short cheap dips within an expensive block (15-min prices).
+        """
+        if self._brake_last_t is None:
+            dt_sec = 60.0
         else:
-            fake_temp, mode = calculate_temperature_output(
-                indoor_temp,
-                target_temp_for_logic,
-                outdoor_temp,
-                aggressiveness,
-                brake_temp,
+            dt_sec = max((now - self._brake_last_t).total_seconds(), 1.0)
+        self._brake_last_t = now
+
+        if brake_requested:
+            self._brake_last_expensive_t = now
+            rate = 1.0 / (ramp_in * 60.0)
+            self._brake_ramp += dt_sec * rate
+        else:
+            hold_active = (
+                self._brake_last_expensive_t is not None
+                and (now - self._brake_last_expensive_t).total_seconds() < hold_minutes * 60.0
             )
+            if not hold_active:
+                rate = 1.0 / (ramp_out * 60.0)
+                self._brake_ramp -= dt_sec * rate
 
-            temp_deficit = target_temp_for_logic - indoor_temp
-            normalized_aggressiveness = min(1.0, max(0.0, aggressiveness / 5.0))
-            price_brake_window = (
-                NEUTRAL_TEMP_THRESHOLD + 0.05 + (0.45 * normalized_aggressiveness)
-            )
+        self._brake_ramp = max(0.0, min(1.0, self._brake_ramp))
+        return self._brake_ramp
 
-            if (
-                mode == "heating"
-                and price_is_high
-                and temp_deficit <= price_brake_window
-            ):
-                _LOGGER.info(
-                    "Price braking active during heating: deficit %.2f °C within %.2f °C window (agg %.2f)",
-                    temp_deficit,
-                    price_brake_window,
-                    aggressiveness,
-                )
-                # Use dynamically computed brake_temp here instead of fixed BRAKING_MODE_TEMP
-                return brake_temp, "braking_by_price"
+    # ── PI output ─────────────────────────────────────────────────────────────
 
-        if mode not in ["braking_by_temp", "heating"] and price_is_high:
-            price_brake_temp = brake_temp
-            _LOGGER.info(
-                "Blocking heating at slot %s due to %s price (setting fake temp to %s °C)",
-                current_slot_index,
-                price_category,
-                price_brake_temp,
-            )
-            return price_brake_temp, "braking_by_price"
+    def _pi_output(
+        self,
+        target: float,
+        indoor: float,
+        outdoor: float,
+        now: datetime,
+        cfg: Dict[str, Any],
+        freeze_integral: bool = False,
+    ) -> float:
+        """
+        Run PI controller. Returns heating demand in °C
+        (positive = more heating = lower fake temp).
+        """
+        kp = float(cfg.get("pid_kp", PID_KP))
+        ki = float(cfg.get("pid_ki", PID_KI))
+        kd = float(cfg.get("pid_kd", PID_KD))
+        i_clamp = float(cfg.get("pid_integral_clamp", PID_INTEGRAL_CLAMP))
+        o_clamp = float(cfg.get("pid_output_clamp", PID_OUTPUT_CLAMP))
 
-        fake_temp = min(fake_temp, BRAKE_FAKE_TEMP)
-        return fake_temp, mode
+        result = self._pi.compute(
+            target_temp=target,
+            indoor_temp=indoor,
+            outdoor_temp=outdoor,
+            aggressiveness=1.0,
+            update_time=now,
+            braking_active=freeze_integral,
+            kp=kp, ki=ki, kd=kd,
+            feedforward_bias=0.0,
+            integral_clamp=i_clamp,
+            output_clamp=o_clamp,
+            min_fake_temp=MIN_FAKE_TEMP,
+            max_fake_temp=MAX_FAKE_TEMP,
+            brake_behavior="freeze",
+            decay_per_minute_on_brake=0.98,
+        )
+        # result.offset is negative when heating needed → flip to positive demand
+        return -result.offset
 
-    def _collect_ml_data(
-        self, sensor_data: Dict[str, Any], mode: str, fake_temp: float
-    ) -> None:
-        """Collect data for machine learning"""
-        if not self.ml_collector:
+    # ── Main state machine ────────────────────────────────────────────────────
+
+    async def async_update(self) -> None:
+        try:
+            await self._do_update()
+        except Exception as err:
+            _LOGGER.exception("PumpSteer update failed: %s", err)
+            self._state = STATE_UNAVAILABLE
+            self._attributes = {
+                "status": "error",
+                "last_error": str(err),
+                "last_updated": dt_util.now().isoformat(),
+            }
+
+    async def _do_update(self) -> None:
+        now = dt_util.now()
+        cfg = self._cfg()
+
+        # ── Read sensors ──────────────────────────────────────────────────────
+        indoor = safe_float(get_state(self.hass, cfg.get("indoor_temp_entity")))
+        outdoor = safe_float(get_state(self.hass, cfg.get("real_outdoor_entity")))
+        target = self._read_entity(PACKAGE_ENTITIES["target_temp"]) or DEFAULT_TARGET_TEMP
+        summer_threshold = self._read_entity(PACKAGE_ENTITIES["summer_threshold"]) or DEFAULT_SUMMER_THRESHOLD
+        aggressiveness = self._aggressiveness(cfg)
+        house_inertia = self._house_inertia(cfg)
+
+        if indoor is None or outdoor is None:
+            missing = []
+            if indoor is None:
+                missing.append("indoor temperature")
+            if outdoor is None:
+                missing.append("outdoor temperature")
+            self._state = STATE_UNAVAILABLE
+            self._attributes = {
+                "status": f"Missing: {', '.join(missing)}",
+                "last_updated": now.isoformat(),
+            }
             return
 
-        ml_data = {
-            "indoor_temp": sensor_data.get("indoor_temp"),
-            "outdoor_temp": sensor_data.get("outdoor_temp"),
-            "target_temp": sensor_data.get("target_temp"),
-            "price_now": self._last_current_price,
-            "aggressiveness": sensor_data.get("aggressiveness", 0),
-            "inertia": sensor_data.get("inertia"),
-            "mode": mode,
-            "fake_outdoor_temp": fake_temp,
-            "heating_active": mode == "heating",
-            "heat_demand": None,
-            "house_inertia": sensor_data.get("inertia"),
-            "price_category": self._last_price_category,
-            "timestamp": dt_util.now().isoformat(),
-        }
+        # ── Holiday mode ──────────────────────────────────────────────────────
+        holiday = await async_update_holiday(self.hass)
+        if holiday:
+            target = HOLIDAY_TEMP
 
-        if not self._ml_session_started:
-            self.ml_collector.start_session(ml_data)
-            self._ml_session_started = True
-            self._ml_session_start_mode = mode
+        # ── Fetch & classify prices ───────────────────────────────────────────
+        prices, categories, interval_minutes, current_slot = await self._get_prices(cfg, now)
 
-        self.ml_collector.update_session(ml_data)
+        current_cat = categories[current_slot] if categories else PRICE_NORMAL
+        next_cat = self._next_period_category(categories, current_slot, interval_minutes)
 
-        if self._ml_session_start_mode != mode and mode in [
-            "neutral",
-            "summer_mode",
-        ]:
-            self.ml_collector.end_session("mode_change", ml_data)
-            self._ml_session_started = False
+        # Ramp timing for this cycle
+        ramp_in = self._compute_ramp_minutes(current_cat, next_cat or current_cat, house_inertia) if next_cat else 15.0
+        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.5)
 
-    async def _get_price_data(
-        self, config: Dict[str, Any], current_time: datetime
-    ) -> Tuple[List[float], float, str, List[str], int, int]:
-        """Fetch price data and classify prices"""
-        entity_id = config.get("electricity_price_entity")
+        # Lookahead slots for preheating check
+        lookahead_slots = max(1, math.ceil(
+            (PRICE_LOOKAHEAD_HOURS * 60) / max(interval_minutes, 1)
+        ))
 
+        comfort_floor = self._comfort_floor(target, aggressiveness)
+
+        # ── State machine ─────────────────────────────────────────────────────
+
+        # 1. SUMMER MODE
+        if outdoor >= summer_threshold:
+            self._pi.reset(now)
+            self._brake_ramp = 0.0
+            self._brake_last_t = None
+            fake_temp = outdoor
+            mode = MODE_SUMMER
+            self._set_state(fake_temp, mode, {
+                "outdoor_temperature": outdoor,
+                "summer_threshold": summer_threshold,
+                "price_category": current_cat,
+                "aggressiveness": aggressiveness,
+            }, now)
+            return
+
+        # 2. PRECOOL (forecast shows warm period, braking to avoid overheat)
+        if self._should_precool(summer_threshold):
+            brake_t = self._brake_temp(outdoor)
+            factor = self._update_brake_ramp(True, now, ramp_in=10.0, ramp_out=20.0)
+            fake_temp = outdoor + (brake_t - outdoor) * factor
+            fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
+            mode = MODE_PRECOOL
+            self._set_state(fake_temp, mode, {
+                "brake_factor": round(factor, 3),
+                "outdoor_temperature": outdoor,
+                "price_category": current_cat,
+                "aggressiveness": aggressiveness,
+            }, now)
+            return
+
+        # 3. AGGRESSIVENESS 0 → pure PI, no price logic
+        if aggressiveness == 0:
+            demand = self._pi_output(target, indoor, outdoor, now, cfg)
+            fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
+            self._brake_ramp = 0.0
+            self._brake_last_t = None
+            mode = MODE_PI
+            self._set_state(fake_temp, mode, {
+                "heating_demand_c": round(demand, 2),
+                "target_temperature": target,
+                "indoor_temperature": indoor,
+                "outdoor_temperature": outdoor,
+                "price_category": current_cat,
+                "aggressiveness": 0,
+                "note": "Price control disabled (aggressiveness=0)",
+            }, now)
+            return
+
+        # 4. BRAKING — expensive period active
+        if current_cat == PRICE_EXPENSIVE:
+            # Read configurable brake parameters
+            brake_delta = float(cfg.get("brake_delta_c", BRAKE_DELTA_C))
+            brake_hold  = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
+
+            # Safety: if indoor drops below comfort floor, release brake
+            if indoor < comfort_floor:
+                _LOGGER.info(
+                    "Comfort floor reached (%.1f < %.1f), releasing brake",
+                    indoor, comfort_floor,
+                )
+                brake_requested = False
+            else:
+                brake_requested = True
+
+            factor = self._update_brake_ramp(brake_requested, now, ramp_in, ramp_out, hold_minutes=brake_hold)
+
+            if factor >= 0.99:
+                # Full brake: PI completely disconnected
+                fake_temp = self._brake_temp(outdoor, delta_c=brake_delta)
+                mode = MODE_BRAKING
+            elif factor > 0.0:
+                # Ramping in or out: blend PI and brake
+                pi_demand = self._pi_output(target, indoor, outdoor, now, cfg, freeze_integral=True)
+                pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
+                brake_t = self._brake_temp(outdoor, delta_c=brake_delta)
+                fake_temp = pi_fake + (brake_t - pi_fake) * factor
+                mode = MODE_BRAKING
+            else:
+                # Brake fully released, back to PI
+                pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
+                fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
+                mode = MODE_PI
+
+            fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
+            self._set_state(fake_temp, mode, {
+                "brake_factor": round(factor, 3),
+                "comfort_floor_c": round(comfort_floor, 2),
+                "indoor_temperature": indoor,
+                "target_temperature": target,
+                "outdoor_temperature": outdoor,
+                "price_category": current_cat,
+                "aggressiveness": aggressiveness,
+                "ramp_in_minutes": round(ramp_in, 1),
+                "ramp_out_minutes": round(ramp_out, 1),
+            }, now)
+            return
+
+        # 5. PREHEATING / PRE-BRAKE — expensive period is coming
+        upcoming = self._upcoming_expensive(categories, current_slot, lookahead_slots)
+        forecast_cold = self._forecast_is_cold(summer_threshold, hours=PRICE_LOOKAHEAD_HOURS)
+
+        if upcoming and forecast_cold:
+            # How many minutes until the next expensive slot?
+            minutes_until_exp = self._minutes_until_expensive(
+                categories, current_slot, interval_minutes, now
+            )
+
+            if minutes_until_exp is not None and minutes_until_exp <= ramp_in:
+                # PRE-BRAKE: within ramp window — start building the brake.
+                # PI still active but blended with brake target.
+                factor = self._update_brake_ramp(True, now, ramp_in, ramp_out)
+                pi_demand = self._pi_output(target, indoor, outdoor, now, cfg, freeze_integral=True)
+                pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
+                brake_t = self._brake_temp(outdoor)
+                fake_temp = pi_fake + (brake_t - pi_fake) * factor
+                fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
+                mode = MODE_PREHEAT  # still preheat label, ramp building
+                self._set_state(fake_temp, mode, {
+                    "brake_factor": round(factor, 3),
+                    "minutes_until_expensive": round(minutes_until_exp, 0),
+                    "ramp_in_minutes": round(ramp_in, 1),
+                    "indoor_temperature": indoor,
+                    "target_temperature": target,
+                    "outdoor_temperature": outdoor,
+                    "price_category": current_cat,
+                    "aggressiveness": aggressiveness,
+                    "upcoming_expensive": True,
+                }, now)
+                return
+
+            # PREHEATING: boost PI, keep brake at 0
+            base_demand = self._pi_output(target, indoor, outdoor, now, cfg)
+            boosted_demand = base_demand + PREHEAT_BOOST_C
+            fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - boosted_demand))
+            self._update_brake_ramp(False, now, ramp_in, ramp_out)
+            mode = MODE_PREHEAT
+            self._set_state(fake_temp, mode, {
+                "heating_demand_c": round(boosted_demand, 2),
+                "preheat_boost_c": PREHEAT_BOOST_C,
+                "brake_factor": 0.0,
+                "minutes_until_expensive": round(minutes_until_exp, 0) if minutes_until_exp else None,
+                "indoor_temperature": indoor,
+                "target_temperature": target,
+                "outdoor_temperature": outdoor,
+                "price_category": current_cat,
+                "aggressiveness": aggressiveness,
+                "upcoming_expensive": True,
+            }, now)
+            return
+
+        # 6. NORMAL PI — cheap or normal price, no special action
+        demand = self._pi_output(target, indoor, outdoor, now, cfg)
+        fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
+        self._update_brake_ramp(False, now, ramp_in, ramp_out)
+        mode = MODE_HOLIDAY if holiday else MODE_PI
+        self._set_state(fake_temp, mode, {
+            "heating_demand_c": round(demand, 2),
+            "indoor_temperature": indoor,
+            "target_temperature": target,
+            "outdoor_temperature": outdoor,
+            "price_category": current_cat,
+            "aggressiveness": aggressiveness,
+            "p30": round(self._p30, 3),
+            "p80": round(self._p80, 3),
+        }, now)
+
+    # ── Price data ────────────────────────────────────────────────────────────
+
+    async def _get_prices(
+        self, cfg: Dict[str, Any], now: datetime
+    ) -> Tuple[List[float], List[str], int, int]:
+        entity_id = cfg.get("electricity_price_entity")
         if not entity_id:
-            _LOGGER.error("No electricity price entity configured")
-            return [], 0.0, "unknown", [], 60, 0
+            return [], [], 60, 0
 
         prices_raw = get_attr(self.hass, entity_id, "today") or get_attr(
             self.hass, entity_id, "raw_today"
         )
         if not prices_raw:
-            _LOGGER.warning("Could not retrieve electricity prices from %s", entity_id)
-            return [], 0.0, "unknown", [], 60, 0
+            _LOGGER.warning("No price data from %s", entity_id)
+            return [], [], 60, 0
 
-        try:
-            prices = [
-                float(p)
-                for p in prices_raw
-                if isinstance(p, (float, int)) and p is not None
-            ]
-        except (ValueError, TypeError) as e:
-            _LOGGER.error("Error converting prices to float: %s", e)
-            return [], 0.0, "unknown", [], 60, 0
+        prices = []
+        for item in prices_raw:
+            val = self._extract_price(item)
+            if val is not None and math.isfinite(val):
+                prices.append(val)
 
         if not prices:
-            _LOGGER.warning("No valid prices found after conversion")
-            return [], 0.0, "unknown", [], 60, 0
+            return [], [], 60, 0
 
-        price_interval_minutes = detect_price_interval_minutes(prices)
-        current_slot_index = compute_price_slot_index(
-            current_time,
-            price_interval_minutes,
-            len(prices),
+        self._p30, self._p80 = await async_get_price_thresholds(
+            self.hass, entity_id, prices
         )
 
-        mode = (
-            get_state(self.hass, HARDCODED_ENTITIES["price_model_entity"]) or "hybrid"
-        )
-        categories = []
+        categories = classify_price_list(prices, self._p30, self._p80)
+        interval_minutes = detect_price_interval_minutes(prices)
+        categories = filter_short_peaks(categories, interval_minutes, PEAK_FILTER_MIN_DURATION_MINUTES)
+        current_slot = compute_price_slot_index(now, interval_minutes, len(prices))
 
-        if mode == "percentiles":
-            categories = classify_prices(prices)
-        else:
-            categories = await async_hybrid_classify_with_history(
-                self.hass,
-                price_list=prices,
-                price_entity_id=entity_id,
-                trailing_hours=72,
-            )
+        return prices, categories, interval_minutes, current_slot
 
-        current_price, price_category = safe_get_current_price_and_category(
-            prices, categories, current_slot_index, mode
-        )
+    @staticmethod
+    def _extract_price(item: Any) -> Optional[float]:
+        if item is None:
+            return None
+        if isinstance(item, dict):
+            for key in ("value", "price"):
+                if key in item:
+                    return PumpSteerSensor._extract_price(item[key])
+            return None
+        if isinstance(item, (float, int)):
+            return float(item)
+        if isinstance(item, str):
+            s = item.strip()
+            if not s or s.lower() in ("unknown", "unavailable"):
+                return None
+            try:
+                return float(s)
+            except ValueError:
+                return None
+        return None
 
-        return (
-            prices,
-            current_price,
-            price_category,
-            categories,
-            price_interval_minutes,
-            current_slot_index,
-        )
+    # ── State helper ──────────────────────────────────────────────────────────
 
-    def _build_attributes(
+    def _set_state(
         self,
-        sensor_data: Dict[str, Any],
-        prices: List[float],
-        current_price: float,
-        price_category: str,
+        fake_temp: float,
         mode: str,
-        holiday: bool,
-        categories: List[str],
-        now_hour: int,
-        price_interval_minutes: int,
-        current_slot_index: int,
-    ) -> Dict[str, Any]:
-        """Build attribute dictionary for the sensor"""
-        max_price = max(prices) if prices else 1.0
-        min_price = min(prices) if prices else 0.0
-
-        price_range = max_price - min_price
-        if price_range > 0:
-            price_factor = (current_price - min_price) / price_range
-        else:
-            price_factor = 0.0
-
-        price_factor = max(0.0, min(price_factor, 1.0))
-        braking_threshold_ratio = (
-            1.0 - (sensor_data["aggressiveness"] / 5.0) * AGGRESSIVENESS_SCALING_FACTOR
-        )
-
-        decision_triggers = {
-            "braking_by_price": "price",
-            "braking_by_temp": "temperature",
-            "heating": "temperature",
-            "cooling": "temperature",
-            "summer_mode": "summer",
-            "neutral": "neutral",
-            "precool": "pre-cool (warm forecast)",
-            "error": "error in calculation",
-        }
-        # If heating is enabled while prices are very cheap, the trigger should reflect that
-        if mode == "heating" and "very_cheap" in price_category:
-            decision_reason = f"{mode} - Triggered by very cheap price"
-        else:
-            decision_reason = (
-                f"{mode} - Triggered by {decision_triggers.get(mode, 'unknown')}"
-            )
-        next_3_hours_prices = get_price_window_for_hours(
-            prices,
-            current_slot_index,
-            3,
-            price_interval_minutes,
-        )
-
-        attributes = {
+        extra: Dict[str, Any],
+        now: datetime,
+    ) -> None:
+        self._state = round(fake_temp, 1)
+        self._attributes = {
             "mode": mode,
             "fake_outdoor_temperature": self._state,
-            "price_category": price_category,
             "status": "ok",
-            "current_price": round(current_price, 3),
-            "max_price": round(max_price, 3),
-            "aggressiveness": sensor_data["aggressiveness"],
-            "inertia": sensor_data["inertia"],
-            "target_temperature": sensor_data["target_temp"],
-            "indoor_temperature": sensor_data["indoor_temp"],
-            "outdoor_temperature": sensor_data["outdoor_temp"],
-            "summer_threshold": sensor_data["summer_threshold"],
-            "braking_threshold_percent": round(braking_threshold_ratio * 100, 1),
-            "price_factor_percent": round(price_factor * 100, 1),
-            "holiday_mode": holiday,
-            "last_updated": dt_util.now().isoformat(),
-            "temp_error_c": round(
-                sensor_data["indoor_temp"] - sensor_data["target_temp"], 2
-            ),
-            "to_summer_threshold_c": round(
-                sensor_data["summer_threshold"] - sensor_data["outdoor_temp"], 2
-            ),
-            "next_3_hours_prices": next_3_hours_prices,
-            "decision_reason": decision_reason,
-            "current_hour": now_hour,
-            "current_price_slot_index": current_slot_index,
-            "price_interval_minutes": price_interval_minutes,
-            "data_quality": {
-                "prices_count": len(prices),
-                "categories_count": len(categories),
-                "forecast_available": bool(sensor_data["outdoor_temp_forecast_entity"]),
-            },
+            "last_updated": now.isoformat(),
+            **extra,
         }
-
-        return attributes
-
-    async def async_update(self) -> None:
-        """Update sensor data"""
-
-        update_time = dt_util.now()
-        now_hour = update_time.hour
-
-        config = {**self._config_entry.data, **self._config_entry.options}
-        sensor_data = self._get_sensor_data(config)
-        (
-            prices,
-            current_price,
-            price_category,
-            categories,
-            price_interval_minutes,
-            current_slot_index,
-        ) = await self._get_price_data(config, update_time)
-        self._last_current_price = current_price
-        self._last_price_category = price_category
-
-        missing = self._validate_required_data(sensor_data, prices)
-        if missing:
-            self._state = STATE_UNAVAILABLE
-            self._attributes = {
-                "Status": f"Missing: {', '.join(missing)}",
-                "Last Updated": update_time.isoformat(),
-                "Current Hour": now_hour,
-            }
-            return
-
-        holiday = is_holiday_mode_active(
-            self.hass,
-            HARDCODED_ENTITIES["holiday_mode_boolean_entity"],
-            HARDCODED_ENTITIES["holiday_start_datetime_entity"],
-            HARDCODED_ENTITIES["holiday_end_datetime_entity"],
-        )
-
-        if holiday:
-            sensor_data["target_temp"] = HOLIDAY_TEMP
-
-        fake_temp, mode = self._calculate_output_temperature(
-            sensor_data,
-            price_category,
-            current_slot_index,
-        )
-        self._state = round(fake_temp, 1)
-
-        self._attributes = self._build_attributes(
-            sensor_data,
-            prices,
-            current_price,
-            price_category,
-            mode,
-            holiday,
-            categories,
-            now_hour,
-            price_interval_minutes,
-            current_slot_index,
-        )
-
-        if self.ml_collector:
-            self._collect_ml_data(sensor_data, mode, fake_temp)
-
-        self._last_update_time = update_time
 
 
 async def async_setup_entry(
@@ -612,6 +682,5 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the PumpSteer sensor entity"""
     sensor = PumpSteerSensor(hass, config_entry)
     async_add_entities([sensor], update_before_add=True)
