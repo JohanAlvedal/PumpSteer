@@ -29,8 +29,29 @@ class OptionsFlow:
         return {}
 
 
+class ConfigFlow:
+    """Stub för ConfigFlow — används av PumpSteerConfigFlow i control.py."""
+
+    def __init_subclass__(cls, domain=None, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+    async def async_step_user(self, user_input=None):
+        return {}
+
+    def async_create_entry(self, title="", data=None):
+        return {"title": title, "data": data or {}}
+
+    def async_show_form(self, **kwargs):
+        return {}
+
+    @classmethod
+    def async_get_options_flow(cls, config_entry):
+        return None
+
+
 config_entries.ConfigEntry = ConfigEntry
 config_entries.OptionsFlow = OptionsFlow
+config_entries.ConfigFlow = ConfigFlow
 sys.modules["homeassistant.config_entries"] = config_entries
 
 # ── core ──────────────────────────────────────────────────────────────────────
