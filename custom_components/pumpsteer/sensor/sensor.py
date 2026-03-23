@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.restore_state import RestoreEntity  # FIX: RestoreEntity
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -82,7 +82,7 @@ MODE_BRAKING = "braking"
 MODE_PI      = "normal"
 MODE_HOLIDAY = "holiday"
 MODE_ERROR   = "error"
-MODE_SAFE    = "safe_mode"   # FIX 2: passthrough när data saknas
+MODE_SAFE    = "safe_mode"
 
 
 def is_ml_experimental_enabled(config_entry: ConfigEntry) -> bool:
@@ -90,7 +90,7 @@ def is_ml_experimental_enabled(config_entry: ConfigEntry) -> bool:
     return bool(cfg.get("experimental_ml_enabled", False))
 
 
-class PumpSteerSensor(Entity):
+class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entity
     """
     PumpSteer — Ngenic-inspired heat pump controller.
 
@@ -163,7 +163,6 @@ class PumpSteerSensor(Entity):
     def icon(self) -> str:
         return "mdi:thermostat-box"
 
-    # FIX 1: available var alltid True eftersom _state är float, aldrig strängen "unavailable"
     @property
     def available(self) -> bool:
         return self._state is not None
@@ -173,7 +172,23 @@ class PumpSteerSensor(Entity):
         return True
 
     async def async_added_to_hass(self) -> None:
+        """FIX: Återställ senaste kända state efter HA-omstart."""
         await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None:
+            restored = safe_float(last.state)
+            if restored is not None:
+                self._state = restored
+                # Återställ attribut men filtrera bort HA-interna nycklar
+                self._attributes = {
+                    k: v for k, v in last.attributes.items()
+                    if k != "friendly_name"
+                }
+                _LOGGER.debug(
+                    "PumpSteer: återställde state %.1f°C (mode=%s) efter omstart",
+                    self._state,
+                    self._attributes.get("mode", "okänt"),
+                )
 
     async def async_will_remove_from_hass(self) -> None:
         await super().async_will_remove_from_hass()
@@ -283,7 +298,6 @@ class PumpSteerSensor(Entity):
 
     # ── Safe mode ─────────────────────────────────────────────────────────────
 
-    # FIX 2: ny metod — passthrough + nollställ PI/broms när data saknas
     def _enter_safe_mode(self, reason: str, outdoor: Optional[float], now: datetime) -> None:
         """
         Safe mode: skickar verklig utomhustemperatur oförändrad till värmepumpen.
@@ -300,7 +314,6 @@ class PumpSteerSensor(Entity):
         self._brake_last_expensive_t = None
 
         if outdoor is not None:
-            # Passthrough: fake-temp = verklig utetemp → ingen påverkan på pumpen
             self._state = round(outdoor, 1)
             self._attributes = {
                 "mode": MODE_SAFE,
@@ -310,7 +323,6 @@ class PumpSteerSensor(Entity):
                 "outdoor_temperature": outdoor,
             }
         else:
-            # Utesensorn saknas också — sätt sensor unavailable
             self._state = None
             self._attributes = {
                 "mode": MODE_SAFE,
@@ -392,7 +404,7 @@ class PumpSteerSensor(Entity):
             await self._do_update()
         except Exception as err:
             _LOGGER.exception("PumpSteer update failed: %s", err)
-            self._state = None   # FIX 1: None istället för STATE_UNAVAILABLE (en sträng)
+            self._state = None
             self._attributes = {
                 "status": "error",
                 "last_error": str(err),
@@ -406,12 +418,12 @@ class PumpSteerSensor(Entity):
         # ── Read sensors ──────────────────────────────────────────────────────
         indoor  = safe_float(get_state(self.hass, cfg.get("indoor_temp_entity")))
         outdoor = safe_float(get_state(self.hass, cfg.get("real_outdoor_entity")))
-        target           = self._read_entity(PACKAGE_ENTITIES["target_temp"])    or DEFAULT_TARGET_TEMP
+        target           = self._read_entity(PACKAGE_ENTITIES["target_temp"])      or DEFAULT_TARGET_TEMP
         summer_threshold = self._read_entity(PACKAGE_ENTITIES["summer_threshold"]) or DEFAULT_SUMMER_THRESHOLD
         aggressiveness   = self._aggressiveness(cfg)
         house_inertia    = self._house_inertia(cfg)
 
-        # ── FIX 2: Safe mode vid saknade temperatursensorer ───────────────────
+        # ── Safe mode: missing temperature sensors ────────────────────────────
         if indoor is None or outdoor is None:
             missing = []
             if indoor is None:
@@ -424,7 +436,7 @@ class PumpSteerSensor(Entity):
                 )
             self._enter_safe_mode(
                 "Saknade sensorer: " + ", ".join(missing),
-                outdoor,  # None om utesensor saknas, annars passthrough
+                outdoor,
                 now,
             )
             return
@@ -437,7 +449,7 @@ class PumpSteerSensor(Entity):
         # ── Fetch & classify prices ───────────────────────────────────────────
         prices, categories, interval_minutes, current_slot = await self._get_prices(cfg, now)
 
-        # ── FIX 2: Safe mode vid saknad prisdata ──────────────────────────────
+        # ── Safe mode: missing price data ─────────────────────────────────────
         if not prices:
             entity_id = cfg.get("electricity_price_entity") or "ej konfigurerad"
             self._enter_safe_mode(
@@ -495,7 +507,7 @@ class PumpSteerSensor(Entity):
         if aggressiveness == 0:
             demand    = self._pi_output(target, indoor, outdoor, now, cfg)
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
-            self._brake_ramp  = 0.0
+            self._brake_ramp   = 0.0
             self._brake_last_t = None
             mode = MODE_PI
             self._set_state(fake_temp, mode, {
@@ -554,7 +566,7 @@ class PumpSteerSensor(Entity):
             return
 
         # 5. PREHEATING / PRE-BRAKE — expensive period is coming
-        upcoming     = self._upcoming_expensive(categories, current_slot, lookahead_slots)
+        upcoming      = self._upcoming_expensive(categories, current_slot, lookahead_slots)
         forecast_cold = self._forecast_is_cold(summer_threshold, hours=PRICE_LOOKAHEAD_HOURS)
 
         if upcoming and forecast_cold:
@@ -627,9 +639,11 @@ class PumpSteerSensor(Entity):
         if not entity_id:
             return [], [], 60, 0
 
-        prices_raw = get_attr(self.hass, entity_id, "today") or get_attr(
-            self.hass, entity_id, "raw_today"
-        )
+        # FIX: kombinera today + tomorrow för korrekt lookahead vid dygnsövergång
+        raw_today    = get_attr(self.hass, entity_id, "today")    or get_attr(self.hass, entity_id, "raw_today")    or []
+        raw_tomorrow = get_attr(self.hass, entity_id, "tomorrow") or get_attr(self.hass, entity_id, "raw_tomorrow") or []
+        prices_raw   = [*raw_today, *raw_tomorrow]
+
         if not prices_raw:
             _LOGGER.warning("No price data from %s", entity_id)
             return [], [], 60, 0
@@ -643,14 +657,21 @@ class PumpSteerSensor(Entity):
         if not prices:
             return [], [], 60, 0
 
+        # Använd bara today-priser för tröskelberäkning (historisk kontext)
+        today_prices = []
+        for item in (raw_today or []):
+            val = self._extract_price(item)
+            if val is not None and math.isfinite(val):
+                today_prices.append(val)
+
         self._p30, self._p80 = await async_get_price_thresholds(
-            self.hass, entity_id, prices
+            self.hass, entity_id, today_prices or prices
         )
 
-        categories      = classify_price_list(prices, self._p30, self._p80)
+        categories       = classify_price_list(prices, self._p30, self._p80)
         interval_minutes = detect_price_interval_minutes(prices)
-        categories      = filter_short_peaks(categories, interval_minutes, PEAK_FILTER_MIN_DURATION_MINUTES)
-        current_slot    = compute_price_slot_index(now, interval_minutes, len(prices))
+        categories       = filter_short_peaks(categories, interval_minutes, PEAK_FILTER_MIN_DURATION_MINUTES)
+        current_slot     = compute_price_slot_index(now, interval_minutes, len(prices))
 
         return prices, categories, interval_minutes, current_slot
 
