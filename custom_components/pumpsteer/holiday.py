@@ -21,10 +21,10 @@ import homeassistant.util.dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
-BOOLEAN_ENTITY   = "input_boolean.pumpsteer_holiday_mode"
-START_ENTITY     = "input_datetime.pumpsteer_holiday_start"
-END_ENTITY       = "input_datetime.pumpsteer_holiday_end"
-CLEARED_YEAR     = 1970   # sentinel value meaning "no date set"
+BOOLEAN_ENTITY = "input_boolean.pumpsteer_holiday_mode"
+START_ENTITY   = "input_datetime.pumpsteer_holiday_start"
+END_ENTITY     = "input_datetime.pumpsteer_holiday_end"
+CLEARED_YEAR   = 1970   # sentinel value meaning "no date set"
 
 
 def _get_datetime(hass: HomeAssistant, entity_id: str) -> Optional[datetime]:
@@ -36,11 +36,10 @@ def _get_datetime(hass: HomeAssistant, entity_id: str) -> Optional[datetime]:
         dt = dt_util.parse_datetime(state.state)
         if dt is None:
             return None
-        # Make timezone-aware using HA local timezone
         if dt.tzinfo is None:
             dt = dt_util.as_local(dt)
         if dt.year <= CLEARED_YEAR:
-            return None   # cleared / unset
+            return None
         return dt
     except (ValueError, TypeError):
         return None
@@ -53,11 +52,12 @@ def _is_boolean_on(hass: HomeAssistant) -> bool:
 
 async def _turn_boolean(hass: HomeAssistant, on: bool) -> None:
     service = "turn_on" if on else "turn_off"
+    # FIX 4: blocking=True så att state är uppdaterad innan vi returnerar
     await hass.services.async_call(
         "input_boolean",
         service,
         {"entity_id": BOOLEAN_ENTITY},
-        blocking=False,
+        blocking=True,
     )
 
 
@@ -65,16 +65,18 @@ async def _clear_dates(hass: HomeAssistant) -> None:
     """Reset both date fields to the sentinel 1970 value."""
     cleared = "1970-01-01 00:00:00"
     for entity_id in (START_ENTITY, END_ENTITY):
+        # FIX 4: blocking=True så att datumen är rensade innan vi går vidare
         await hass.services.async_call(
             "input_datetime",
             "set_datetime",
             {"entity_id": entity_id, "datetime": cleared},
-            blocking=False,
+            blocking=True,
         )
     _LOGGER.debug("Holiday dates cleared")
 
 
 async def _send_notification(hass: HomeAssistant, title: str, message: str) -> None:
+    # Notiser behöver inte vara blocking — ordningen spelar ingen roll här
     await hass.services.async_call(
         "persistent_notification",
         "create",
@@ -90,10 +92,10 @@ async def async_update_holiday(hass: HomeAssistant) -> bool:
 
     Returns True if holiday mode is currently active.
     """
-    now = dt_util.now()
+    now        = dt_util.now()
     boolean_on = _is_boolean_on(hass)
-    start_dt = _get_datetime(hass, START_ENTITY)
-    end_dt   = _get_datetime(hass, END_ENTITY)
+    start_dt   = _get_datetime(hass, START_ENTITY)
+    end_dt     = _get_datetime(hass, END_ENTITY)
 
     dates_valid = (
         start_dt is not None
