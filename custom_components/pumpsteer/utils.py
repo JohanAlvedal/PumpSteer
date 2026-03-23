@@ -44,11 +44,22 @@ def safe_float(
     min_val: Optional[float] = None,
     max_val: Optional[float] = None,
 ) -> Optional[float]:
-    """Safely convert value to float with optional bounds."""
+    """
+    Safely convert value to float with optional bounds.
+
+    Returns None for:
+      - None input
+      - Non-numeric strings (e.g. "unavailable", "unknown")
+      - NaN and +-Inf  ← FIX: previously passed through
+      - Values outside [min_val, max_val] if specified
+    """
     if val is None:
         return None
     try:
         f = float(val)
+        # FIX: NaN and infinity are not valid physical sensor values
+        if not math.isfinite(f):
+            return None
         if min_val is not None and f < min_val:
             return None
         if max_val is not None and f > max_val:
@@ -106,6 +117,8 @@ def safe_parse_temperature_forecast(
     for p in parts:
         try:
             t = float(p)
+            if not math.isfinite(t):
+                continue
             if MIN_REASONABLE_TEMP <= t <= MAX_REASONABLE_TEMP:
                 temps.append(t)
             else:
