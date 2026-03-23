@@ -1,10 +1,12 @@
 """
 HA test stubs — ersätter homeassistant-moduler i testmiljö utan HA installerat.
 
-Uppdaterad med:
-  - dt_util.as_local() och korrekt parse_datetime()
-  - RestoreEntity med async_get_last_state()
-  - restore_state-modul
+Changelog:
+  - FIX: callback-decorator tillagd i homeassistant.core (blockerade collection)
+  - FIX: parse_datetime använder fromisoformat
+  - FIX: as_local konverterar naive datetime till UTC
+  - FIX: RestoreEntity stub med async_get_last_state
+  - FIX: vol.Optional tillagd
 """
 import sys
 import types
@@ -39,7 +41,14 @@ class HomeAssistant:
     pass
 
 
+# FIX: @callback decorator saknades — orsakade collection error
+def callback(func):
+    """Stub för @callback decorator från homeassistant.core."""
+    return func
+
+
 core.HomeAssistant = HomeAssistant
+core.callback = callback
 sys.modules["homeassistant.core"] = core
 
 # ── helpers (root) ────────────────────────────────────────────────────────────
@@ -58,12 +67,11 @@ entity_mod.Entity = Entity
 sys.modules["homeassistant.helpers.entity"] = entity_mod
 
 # ── helpers.restore_state ─────────────────────────────────────────────────────
-# FIX: RestoreEntity stub så sensor.py kan ärva från den i testmiljö
 restore_state_mod = types.ModuleType("homeassistant.helpers.restore_state")
 
 
 class RestoreEntity(Entity):
-    """Stub för RestoreEntity. async_get_last_state returnerar alltid None."""
+    """Stub för RestoreEntity. async_get_last_state returnerar None i testmiljö."""
 
     async def async_added_to_hass(self) -> None:
         pass
@@ -72,7 +80,6 @@ class RestoreEntity(Entity):
         pass
 
     async def async_get_last_state(self):
-        """Returnerar None i testmiljö — ingen historik tillgänglig."""
         return None
 
 
@@ -137,35 +144,27 @@ template_mod.as_datetime = as_datetime
 sys.modules["homeassistant.helpers.template"] = template_mod
 
 # ── util.dt ───────────────────────────────────────────────────────────────────
-# FIX: korrekt parse_datetime och as_local för holiday-tester
 util = types.ModuleType("homeassistant.util")
 dt = types.ModuleType("homeassistant.util.dt")
 
 
 def now():
-    """Returnerar aktuell tid med UTC-timezone (konsekvent i tester)."""
+    """Returnerar aktuell tid med UTC-timezone."""
     return _dt.datetime.now(tz=_dt.timezone.utc)
 
 
 def parse_datetime(value: str):
-    """
-    FIX: Parsar ISO-format datetime-strängar korrekt.
-    Returnerar None vid ogiltigt format.
-    """
+    """FIX: Parsar ISO-format datetime-strängar korrekt."""
     if not value or not isinstance(value, str):
         return None
     try:
-        # Försök med fromisoformat (Python 3.7+)
         return _dt.datetime.fromisoformat(value)
     except (ValueError, TypeError):
         return None
 
 
 def as_local(dt_obj):
-    """
-    FIX: Konverterar naive datetime till UTC i testmiljö.
-    I produktion konverterar HA till lokal timezone.
-    """
+    """FIX: Konverterar naive datetime till UTC i testmiljö."""
     if dt_obj is None:
         return None
     if dt_obj.tzinfo is None:
@@ -192,7 +191,7 @@ def Required(name, default=None):
     return name
 
 
-def Optional(name, default=None):
+def Optional(name, default=None):  # FIX: saknades tidigare
     return name
 
 
@@ -201,7 +200,7 @@ vol.Required = Required
 vol.Optional = Optional
 sys.modules["voluptuous"] = vol
 
-# ── numpy (används av vissa äldre delar) ──────────────────────────────────────
+# ── numpy ─────────────────────────────────────────────────────────────────────
 np_mod = types.ModuleType("numpy")
 
 
