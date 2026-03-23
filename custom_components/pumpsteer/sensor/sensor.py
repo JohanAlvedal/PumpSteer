@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any, Tuple, List
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.restore_state import RestoreEntity  # FIX: RestoreEntity
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -48,6 +48,7 @@ from ..settings import (
     MIN_REASONABLE_TEMP,
     BRAKE_DELTA_C,
     BRAKE_HOLD_MINUTES,
+    PREHEAT_ON_MISSING_FORECAST,
 )
 from ..utils import (
     safe_float,
@@ -90,7 +91,7 @@ def is_ml_experimental_enabled(config_entry: ConfigEntry) -> bool:
     return bool(cfg.get("experimental_ml_enabled", False))
 
 
-class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entity
+class PumpSteerSensor(RestoreEntity):
     """
     PumpSteer — Ngenic-inspired heat pump controller.
 
@@ -172,14 +173,13 @@ class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entit
         return True
 
     async def async_added_to_hass(self) -> None:
-        """FIX: Återställ senaste kända state efter HA-omstart."""
+        """Återställ senaste kända state efter HA-omstart."""
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         if last is not None:
             restored = safe_float(last.state)
             if restored is not None:
                 self._state = restored
-                # Återställ attribut men filtrera bort HA-interna nycklar
                 self._attributes = {
                     k: v for k, v in last.attributes.items()
                     if k != "friendly_name"
@@ -289,9 +289,20 @@ class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entit
         return any(t >= summer_threshold + PRECOOL_MARGIN for t in temps)
 
     def _forecast_is_cold(self, summer_threshold: float, hours: int = 6) -> bool:
+        """
+        FIX: Returnerar PREHEAT_ON_MISSING_FORECAST (konfigurerbar konstant, default False)
+        när prognos saknas, istället för att alltid anta kallt väder.
+
+        Tidigare returnerade den alltid True vid saknad prognos, vilket kunde ge
+        onödig förvärmning vid felkonfigurerad prognos-entitet.
+        """
         temps = self._forecast_temps()
         if not temps:
-            return True
+            if PREHEAT_ON_MISSING_FORECAST:
+                _LOGGER.debug("_forecast_is_cold: ingen prognos, antar kallt (PREHEAT_ON_MISSING_FORECAST=True)")
+            else:
+                _LOGGER.debug("_forecast_is_cold: ingen prognos, antar INTE kallt (PREHEAT_ON_MISSING_FORECAST=False)")
+            return PREHEAT_ON_MISSING_FORECAST
         window = temps[:hours]
         cold_hours = sum(1 for t in window if t < summer_threshold)
         return cold_hours >= max(1, len(window) // 2)
@@ -301,7 +312,6 @@ class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entit
     def _enter_safe_mode(self, reason: str, outdoor: Optional[float], now: datetime) -> None:
         """
         Safe mode: skickar verklig utomhustemperatur oförändrad till värmepumpen.
-        Värmepumpen styr då helt på sin egen värmekurva utan PumpSteer-påverkan.
         Återställer PI-integralen och bromsrampen så de inte driver iväg.
         """
         _LOGGER.warning(
@@ -505,6 +515,10 @@ class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entit
 
         # 3. AGGRESSIVENESS 0 → pure PI, no price logic
         if aggressiveness == 0:
+            # FIX: Återställ PI-integralen när aggressiveness sätts till 0
+            # Annars kan en uppbyggd integral från bromssessioner omedelbart
+            # appliceras fullt ut i PI-läget och ge för mycket/lite värme.
+            self._pi.reset(now)
             demand    = self._pi_output(target, indoor, outdoor, now, cfg)
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
             self._brake_ramp   = 0.0
@@ -639,7 +653,6 @@ class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entit
         if not entity_id:
             return [], [], 60, 0
 
-        # FIX: kombinera today + tomorrow för korrekt lookahead vid dygnsövergång
         raw_today    = get_attr(self.hass, entity_id, "today")    or get_attr(self.hass, entity_id, "raw_today")    or []
         raw_tomorrow = get_attr(self.hass, entity_id, "tomorrow") or get_attr(self.hass, entity_id, "raw_tomorrow") or []
         prices_raw   = [*raw_today, *raw_tomorrow]
@@ -657,7 +670,8 @@ class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entit
         if not prices:
             return [], [], 60, 0
 
-        # Använd bara today-priser för tröskelberäkning (historisk kontext)
+        # FIX: detektera intervall från today-listan för att undvika att
+        # kombinerad 48-slot-lista ger felaktigt 30-min intervall (24+24=48 → 1440/48=30)
         today_prices = []
         for item in (raw_today or []):
             val = self._extract_price(item)
@@ -669,7 +683,8 @@ class PumpSteerSensor(RestoreEntity):  # FIX: RestoreEntity istället för Entit
         )
 
         categories       = classify_price_list(prices, self._p30, self._p80)
-        interval_minutes = detect_price_interval_minutes(prices)
+        interval_source  = today_prices if today_prices else prices
+        interval_minutes = detect_price_interval_minutes(interval_source)
         categories       = filter_short_peaks(categories, interval_minutes, PEAK_FILTER_MIN_DURATION_MINUTES)
         current_slot     = compute_price_slot_index(now, interval_minutes, len(prices))
 
