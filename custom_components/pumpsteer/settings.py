@@ -12,6 +12,7 @@ MAX_FAKE_TEMP: Final[float] = 25.0
 # === SUMMER / PRECOOL ===
 PRECOOL_LOOKAHEAD: Final[int] = 24
 PRECOOL_MARGIN: Final[float] = 3.0
+# Dessa används fortfarande av sensor.py för att visa info-attribut
 WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0
 WINTER_BRAKE_THRESHOLD: Final[float] = 7.0
 
@@ -54,7 +55,6 @@ BRAKE_DELTA_C: Final[float] = 12.0
 # === RAMP TIMING ===
 # ramp_minutes = price_jump_ratio * house_inertia * RAMP_SCALE
 # clamped between RAMP_MIN and RAMP_MAX
-# ramp_minutes = price_jump_ratio * house_inertia * RAMP_SCALE
 # With 15-min prices and inertia=3: 1 jump × 3 × 10 = 30 min = 2 price slots
 RAMP_SCALE: Final[float] = 10.0
 RAMP_MIN_MINUTES: Final[float] = 15.0   # at least 1 price slot (15-min prices)
@@ -74,6 +74,18 @@ PRICE_LOOKAHEAD_HOURS: Final[int] = 6
 # E.g. 30 min = holds brake across 2 cheap 15-min slots before releasing.
 BRAKE_HOLD_MINUTES: Final[float] = 30.0
 
+# === PREHEATING FORECAST BEHAVIOUR ===
+# FIX: Styr vad _forecast_is_cold() returnerar när prognos-entiteten saknar data.
+#
+# False (default, rekommenderat):
+#   Ingen förvärmning triggas vid saknad prognos.
+#   Säkrare beteende — undviker onödig förvärmning om entiteten är felkonfigurerad.
+#
+# True (tidigare beteende):
+#   Antar kallt väder vid saknad prognos → förvärmning kan triggas.
+#   Kan vara önskvärt i klimat där kallt väder är normen.
+PREHEAT_ON_MISSING_FORECAST: Final[bool] = False
+
 # === DEFAULTS ===
 DEFAULT_SUMMER_THRESHOLD: Final[float] = 18.0
 DEFAULT_AGGRESSIVENESS: Final[float] = 3.0
@@ -86,6 +98,12 @@ MIN_REASONABLE_TEMP: Final[float] = -50.0
 MAX_REASONABLE_TEMP: Final[float] = 50.0
 MIN_REASONABLE_PRICE: Final[float] = -2.0
 MAX_REASONABLE_PRICE: Final[float] = 15.0
+
+# === REMOVED CONSTANTS (were only used by temp_control_logic.py, now deleted) ===
+# HEATING_COMPENSATION_FACTOR  — removed, was dead code
+# BRAKING_COMPENSATION_FACTOR  — removed, was dead code
+# HEATING_THRESHOLD            — removed, was dead code
+# BRAKE_FAKE_TEMP              — removed, was dead code
 
 
 def validate_core_settings() -> None:
