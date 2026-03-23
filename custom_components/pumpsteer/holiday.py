@@ -1,112 +1,143 @@
-from datetime import datetime
+"""
+PumpSteer holiday mode logic.
+
+Replaces the yaml automations for holiday mode activate/deactivate/safety check.
+Called from sensor.py on every update cycle.
+
+Logic:
+  - If boolean is manually ON and dates are set → check if within date range
+  - If now() >= start and boolean is OFF → turn ON automatically
+  - If now() >= end and boolean is ON  → turn OFF and clear dates
+  - If boolean is ON but no dates set  → manual override, leave as-is
+  - Safety: if boolean is ON and end has passed → turn OFF and clear dates
+"""
+
 import logging
+from datetime import datetime
+from typing import Optional
+
 from homeassistant.core import HomeAssistant
-from homeassistant.util.dt import parse_datetime
-from homeassistant.const import STATE_ON
-from .settings import HOLIDAY_TEMP
+import homeassistant.util.dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
+BOOLEAN_ENTITY   = "input_boolean.pumpsteer_holiday_mode"
+START_ENTITY     = "input_datetime.pumpsteer_holiday_start"
+END_ENTITY       = "input_datetime.pumpsteer_holiday_end"
+CLEARED_YEAR     = 1970   # sentinel value meaning "no date set"
 
-def is_holiday_mode_active(
-    hass: HomeAssistant,
-    holiday_mode_boolean_entity_id: str | None,
-    holiday_start_datetime_entity_id: str | None,
-    holiday_end_datetime_entity_id: str | None,
-) -> bool:
-    """
-    Checks if the current time falls within the defined holiday period AND if the boolean switch is ON.
-    When active, the target temperature should be set to HOLIDAY_TEMP.
-    Args:
-        hass: The Home Assistant instance.
-        holiday_mode_boolean_entity_id: The entity ID for the holiday mode boolean switch
-                                        (e.g., input_boolean.pumpsteer_holiday_mode).
-                                        If None, this check is skipped (see important note below).
-        holiday_start_datetime_entity_id: The entity ID for the holiday start datetime
-                                          (e.g., input_datetime.pumpsteer_holiday_start).
-        holiday_end_datetime_entity_id: The entity ID for the holiday end datetime
-                                        (e.g., input_datetime.pumpsteer_holiday_end).
 
-    Returns:
-        True if holiday mode is active, False otherwise.
-    """
-    # check the boolean entity first (if configured)
-    if holiday_mode_boolean_entity_id:
-        boolean_state = hass.states.get(holiday_mode_boolean_entity_id)
-
-        if not boolean_state or boolean_state.state != STATE_ON:
-            _LOGGER.debug(
-                "[PumpSteer - Holiday] Holiday mode boolean (%s) is not ON. State: %s",
-                holiday_mode_boolean_entity_id,
-                boolean_state.state if boolean_state else "N/A",
-            )
-            return False
-    else:
-        _LOGGER.debug(
-            "[PumpSteer - Holiday] Holiday mode boolean entity not configured. Skipping boolean check."
-        )
-
-    if not holiday_start_datetime_entity_id or not holiday_end_datetime_entity_id:
-        _LOGGER.debug(
-            "[PumpSteer - Holiday] Holiday datetime entities not configured. Holiday mode inactive."
-        )
-        return False
-
-    holiday_start_state = hass.states.get(holiday_start_datetime_entity_id)
-    holiday_end_state = hass.states.get(holiday_end_datetime_entity_id)
-
-    if not holiday_start_state or not holiday_end_state:
-        _LOGGER.debug(
-            "[PumpSteer - Holiday] Holiday datetime entities not available: "
-            "Start: %s (%s), "
-            "End: %s (%s)",
-            holiday_start_datetime_entity_id,
-            holiday_start_state,
-            holiday_end_datetime_entity_id,
-            holiday_end_state,
-        )
-        return False
-
+def _get_datetime(hass: HomeAssistant, entity_id: str) -> Optional[datetime]:
+    """Read an input_datetime entity and return a timezone-aware datetime, or None."""
+    state = hass.states.get(entity_id)
+    if not state or state.state in ("unknown", "unavailable", ""):
+        return None
     try:
-        holiday_start_time = parse_datetime(holiday_start_state.state)
-        holiday_end_time = parse_datetime(holiday_end_state.state)
-    except ValueError as e:
-        _LOGGER.warning(
-            "[PumpSteer - Holiday] Error parsing holiday datetime states. "
-            "Start state: '%s', End state: '%s', Error: %s",
-            holiday_start_state.state,
-            holiday_end_state.state,
-            e,
+        dt = dt_util.parse_datetime(state.state)
+        if dt is None:
+            return None
+        # Make timezone-aware using HA local timezone
+        if dt.tzinfo is None:
+            dt = dt_util.as_local(dt)
+        if dt.year <= CLEARED_YEAR:
+            return None   # cleared / unset
+        return dt
+    except (ValueError, TypeError):
+        return None
+
+
+def _is_boolean_on(hass: HomeAssistant) -> bool:
+    state = hass.states.get(BOOLEAN_ENTITY)
+    return bool(state and state.state == "on")
+
+
+async def _turn_boolean(hass: HomeAssistant, on: bool) -> None:
+    service = "turn_on" if on else "turn_off"
+    await hass.services.async_call(
+        "input_boolean",
+        service,
+        {"entity_id": BOOLEAN_ENTITY},
+        blocking=False,
+    )
+
+
+async def _clear_dates(hass: HomeAssistant) -> None:
+    """Reset both date fields to the sentinel 1970 value."""
+    cleared = "1970-01-01 00:00:00"
+    for entity_id in (START_ENTITY, END_ENTITY):
+        await hass.services.async_call(
+            "input_datetime",
+            "set_datetime",
+            {"entity_id": entity_id, "datetime": cleared},
+            blocking=False,
         )
-        return False
+    _LOGGER.debug("Holiday dates cleared")
 
-    current_time = datetime.now(holiday_start_time.tzinfo)
 
-    if holiday_start_time is None or holiday_end_time is None:
-        _LOGGER.warning(
-            "[PumpSteer - Holiday] Could not parse holiday datetime states. "
-            "Start state: '%s', End state: '%s'",
-            holiday_start_state.state,
-            holiday_end_state.state,
-        )
-        return False
+async def _send_notification(hass: HomeAssistant, title: str, message: str) -> None:
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {"title": title, "message": message, "notification_id": "pumpsteer_holiday"},
+        blocking=False,
+    )
 
-    if holiday_start_time <= current_time <= holiday_end_time:
-        _LOGGER.debug(
-            "[PumpSteer - Holiday] Holiday mode active (date range). Current: %s, "
-            "Start: %s, End: %s. Using target temperature %s°C",
-            current_time,
-            holiday_start_time,
-            holiday_end_time,
-            HOLIDAY_TEMP,
+
+async def async_update_holiday(hass: HomeAssistant) -> bool:
+    """
+    Called every sensor update cycle. Handles all holiday activation/deactivation
+    logic that would otherwise live in yaml automations.
+
+    Returns True if holiday mode is currently active.
+    """
+    now = dt_util.now()
+    boolean_on = _is_boolean_on(hass)
+    start_dt = _get_datetime(hass, START_ENTITY)
+    end_dt   = _get_datetime(hass, END_ENTITY)
+
+    dates_valid = (
+        start_dt is not None
+        and end_dt is not None
+        and end_dt > start_dt
+    )
+
+    # ── Case 1: Dates set, boolean OFF, start time reached → activate ─────────
+    if dates_valid and not boolean_on and now >= start_dt and now < end_dt:
+        _LOGGER.info("Holiday mode: auto-activating (start time reached)")
+        await _turn_boolean(hass, True)
+        await _send_notification(
+            hass,
+            "🏖️ Holiday mode activated",
+            f"PumpSteer holiday mode is now active.\n"
+            f"Holiday ends: {end_dt.strftime('%d/%m/%Y %H:%M')}",
         )
         return True
 
-    _LOGGER.debug(
-        "[PumpSteer - Holiday] Holiday mode inactive (date range). Current: %s, "
-        "Start: %s, End: %s",
-        current_time,
-        holiday_start_time,
-        holiday_end_time,
-    )
+    # ── Case 2: Boolean ON, dates valid, end time reached → deactivate ────────
+    if boolean_on and dates_valid and now >= end_dt:
+        _LOGGER.info("Holiday mode: auto-deactivating (end time reached)")
+        await _turn_boolean(hass, False)
+        await _clear_dates(hass)
+        await _send_notification(
+            hass,
+            "🏠 Holiday mode ended",
+            "PumpSteer is back to normal operation.\nWelcome home!",
+        )
+        return False
+
+    # ── Case 3: Boolean ON, no valid dates → manual override, stay active ─────
+    if boolean_on and not dates_valid:
+        _LOGGER.debug("Holiday mode: manually active (no dates set)")
+        return True
+
+    # ── Case 4: Boolean ON, dates valid, within window → active ───────────────
+    if boolean_on and dates_valid and start_dt <= now < end_dt:
+        return True
+
+    # ── Case 5: Boolean ON, dates valid but not yet started → not active yet ──
+    if boolean_on and dates_valid and now < start_dt:
+        _LOGGER.debug("Holiday mode: boolean ON but start not reached yet")
+        return False
+
+    # ── Default: not active ────────────────────────────────────────────────────
     return False
