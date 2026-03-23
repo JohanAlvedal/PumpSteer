@@ -69,21 +69,22 @@ SW_VERSION = get_version()
 
 # ── Hardcoded HA entity IDs (created by the package) ──────────────────────────
 PACKAGE_ENTITIES = {
-    "target_temp":        "input_number.indoor_target_temperature",
-    "summer_threshold":   "input_number.pumpsteer_summer_threshold",
-    "aggressiveness":     "input_number.pumpsteer_aggressiveness",
-    "house_inertia":      "input_number.pumpsteer_house_inertia",
-    "forecast_temps":     "input_text.hourly_forecast_temperatures",
+    "target_temp":      "input_number.indoor_target_temperature",
+    "summer_threshold": "input_number.pumpsteer_summer_threshold",
+    "aggressiveness":   "input_number.pumpsteer_aggressiveness",
+    "house_inertia":    "input_number.pumpsteer_house_inertia",
+    "forecast_temps":   "input_text.hourly_forecast_temperatures",
 }
 
 # ── Operating modes ────────────────────────────────────────────────────────────
-MODE_SUMMER    = "summer_mode"
-MODE_PRECOOL   = "precool"
-MODE_PREHEAT   = "preheating"
-MODE_BRAKING   = "braking"
-MODE_PI        = "normal"
-MODE_HOLIDAY   = "holiday"
-MODE_ERROR     = "error"
+MODE_SUMMER  = "summer_mode"
+MODE_PRECOOL = "precool"
+MODE_PREHEAT = "preheating"
+MODE_BRAKING = "braking"
+MODE_PI      = "normal"
+MODE_HOLIDAY = "holiday"
+MODE_ERROR   = "error"
+MODE_SAFE    = "safe_mode"   # FIX 2: passthrough när data saknas
 
 
 def is_ml_experimental_enabled(config_entry: ConfigEntry) -> bool:
@@ -102,6 +103,7 @@ class PumpSteerSensor(Entity):
         preheating   → expensive period coming, boost heating now
         braking      → expensive period active, PI disconnected
         normal       → PI regulates fake temp toward target
+        safe_mode    → required data missing, passthrough real outdoor temp
     """
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
@@ -110,10 +112,10 @@ class PumpSteerSensor(Entity):
         self._state: Optional[float] = None
         self._attributes: Dict[str, Any] = {}
         self._pi = PIController()
-        self._brake_ramp: float = 0.0          # 0.0 = no brake, 1.0 = full brake
+        self._brake_ramp: float = 0.0
         self._brake_last_t: Optional[datetime] = None
-        self._brake_last_expensive_t: Optional[datetime] = None  # hold timer
-        self._ramp_in_minutes: float = 15.0    # updated each cycle from price data
+        self._brake_last_expensive_t: Optional[datetime] = None
+        self._ramp_in_minutes: float = 15.0
         self._ramp_out_minutes: float = 15.0
         self._last_price_categories: List[str] = []
         self._p30: float = 0.0
@@ -163,9 +165,10 @@ class PumpSteerSensor(Entity):
     def icon(self) -> str:
         return "mdi:thermostat-box"
 
+    # FIX 1: available var alltid True eftersom _state är float, aldrig strängen "unavailable"
     @property
     def available(self) -> bool:
-        return self._state != STATE_UNAVAILABLE
+        return self._state is not None
 
     @property
     def should_poll(self) -> bool:
@@ -217,10 +220,6 @@ class PumpSteerSensor(Entity):
         next_cat: str,
         house_inertia: float,
     ) -> float:
-        """
-        Calculate ramp duration based on how big the price jump is
-        and how thermally sluggish the house is.
-        """
         ci = price_category_index(current_cat)
         ni = price_category_index(next_cat)
         jump = max(0, ni - ci)
@@ -233,7 +232,6 @@ class PumpSteerSensor(Entity):
         current_slot: int,
         interval_minutes: int,
     ) -> Optional[str]:
-        """Return the price category of the next slot (if it exists)."""
         next_slot = current_slot + 1
         if next_slot < len(categories):
             return categories[next_slot]
@@ -246,13 +244,8 @@ class PumpSteerSensor(Entity):
         interval_minutes: int,
         now: datetime,
     ) -> Optional[float]:
-        """
-        Return minutes until the next expensive slot starts.
-        Accounts for how far into the current slot we already are.
-        """
         for i in range(1, len(categories) - current_slot):
             if categories[current_slot + i] == PRICE_EXPENSIVE:
-                # Minutes remaining in current slot + full slots between
                 minutes_into_slot = now.minute % interval_minutes
                 minutes_left_in_slot = interval_minutes - minutes_into_slot
                 minutes_total = minutes_left_in_slot + (i - 1) * interval_minutes
@@ -265,7 +258,6 @@ class PumpSteerSensor(Entity):
         current_slot: int,
         lookahead_slots: int,
     ) -> bool:
-        """Return True if an expensive period starts within lookahead_slots."""
         for i in range(current_slot + 1, min(len(categories), current_slot + lookahead_slots + 1)):
             if categories[i] == PRICE_EXPENSIVE:
                 return True
@@ -284,15 +276,49 @@ class PumpSteerSensor(Entity):
         return any(t >= summer_threshold + PRECOOL_MARGIN for t in temps)
 
     def _forecast_is_cold(self, summer_threshold: float, hours: int = 6) -> bool:
-        """Return True if the next `hours` are below summer_threshold (worth preheating)."""
         temps = self._forecast_temps()
         if not temps:
-            return True  # assume cold if no forecast
+            return True
         window = temps[:hours]
-        # At least half the forecast window must be below threshold
         cold_hours = sum(1 for t in window if t < summer_threshold)
         return cold_hours >= max(1, len(window) // 2)
 
+    # ── Safe mode ─────────────────────────────────────────────────────────────
+
+    # FIX 2: ny metod — passthrough + nollställ PI/broms när data saknas
+    def _enter_safe_mode(self, reason: str, outdoor: Optional[float], now: datetime) -> None:
+        """
+        Safe mode: skickar verklig utomhustemperatur oförändrad till värmepumpen.
+        Värmepumpen styr då helt på sin egen värmekurva utan PumpSteer-påverkan.
+        Återställer PI-integralen och bromsrampen så de inte driver iväg.
+        """
+        _LOGGER.warning(
+            "PumpSteer SAFE MODE: %s — optimering pausad, skickar verklig utetemp",
+            reason,
+        )
+        self._pi.reset(now)
+        self._brake_ramp = 0.0
+        self._brake_last_t = None
+        self._brake_last_expensive_t = None
+
+        if outdoor is not None:
+            # Passthrough: fake-temp = verklig utetemp → ingen påverkan på pumpen
+            self._state = round(outdoor, 1)
+            self._attributes = {
+                "mode": MODE_SAFE,
+                "fake_outdoor_temperature": self._state,
+                "status": f"safe_mode: {reason}",
+                "last_updated": now.isoformat(),
+                "outdoor_temperature": outdoor,
+            }
+        else:
+            # Utesensorn saknas också — sätt sensor unavailable
+            self._state = None
+            self._attributes = {
+                "mode": MODE_SAFE,
+                "status": f"safe_mode (ingen data): {reason}",
+                "last_updated": now.isoformat(),
+            }
 
     # ── Brake ramp ────────────────────────────────────────────────────────────
 
@@ -304,12 +330,6 @@ class PumpSteerSensor(Entity):
         ramp_out: float,
         hold_minutes: float = BRAKE_HOLD_MINUTES,
     ) -> float:
-        """
-        Smoothly ramp brake factor between 0 and 1.
-        Includes a hold timer so the brake stays active for hold_minutes
-        after the last expensive slot — prevents rapid on/off cycling
-        over short cheap dips within an expensive block (15-min prices).
-        """
         if self._brake_last_t is None:
             dt_sec = 60.0
         else:
@@ -343,10 +363,6 @@ class PumpSteerSensor(Entity):
         cfg: Dict[str, Any],
         freeze_integral: bool = False,
     ) -> float:
-        """
-        Run PI controller. Returns heating demand in °C
-        (positive = more heating = lower fake temp).
-        """
         kp = float(cfg.get("pid_kp", PID_KP))
         ki = float(cfg.get("pid_ki", PID_KI))
         kd = float(cfg.get("pid_kd", PID_KD))
@@ -369,7 +385,6 @@ class PumpSteerSensor(Entity):
             brake_behavior="freeze",
             decay_per_minute_on_brake=0.98,
         )
-        # result.offset is negative when heating needed → flip to positive demand
         return -result.offset
 
     # ── Main state machine ────────────────────────────────────────────────────
@@ -379,7 +394,7 @@ class PumpSteerSensor(Entity):
             await self._do_update()
         except Exception as err:
             _LOGGER.exception("PumpSteer update failed: %s", err)
-            self._state = STATE_UNAVAILABLE
+            self._state = None   # FIX 1: None istället för STATE_UNAVAILABLE (en sträng)
             self._attributes = {
                 "status": "error",
                 "last_error": str(err),
@@ -391,24 +406,29 @@ class PumpSteerSensor(Entity):
         cfg = self._cfg()
 
         # ── Read sensors ──────────────────────────────────────────────────────
-        indoor = safe_float(get_state(self.hass, cfg.get("indoor_temp_entity")))
+        indoor  = safe_float(get_state(self.hass, cfg.get("indoor_temp_entity")))
         outdoor = safe_float(get_state(self.hass, cfg.get("real_outdoor_entity")))
-        target = self._read_entity(PACKAGE_ENTITIES["target_temp"]) or DEFAULT_TARGET_TEMP
+        target           = self._read_entity(PACKAGE_ENTITIES["target_temp"])    or DEFAULT_TARGET_TEMP
         summer_threshold = self._read_entity(PACKAGE_ENTITIES["summer_threshold"]) or DEFAULT_SUMMER_THRESHOLD
-        aggressiveness = self._aggressiveness(cfg)
-        house_inertia = self._house_inertia(cfg)
+        aggressiveness   = self._aggressiveness(cfg)
+        house_inertia    = self._house_inertia(cfg)
 
+        # ── FIX 2: Safe mode vid saknade temperatursensorer ───────────────────
         if indoor is None or outdoor is None:
             missing = []
             if indoor is None:
-                missing.append("indoor temperature")
+                missing.append(
+                    f"inomhussensor '{cfg.get('indoor_temp_entity') or 'ej konfigurerad'}'"
+                )
             if outdoor is None:
-                missing.append("outdoor temperature")
-            self._state = STATE_UNAVAILABLE
-            self._attributes = {
-                "status": f"Missing: {', '.join(missing)}",
-                "last_updated": now.isoformat(),
-            }
+                missing.append(
+                    f"utomhussensor '{cfg.get('real_outdoor_entity') or 'ej konfigurerad'}'"
+                )
+            self._enter_safe_mode(
+                "Saknade sensorer: " + ", ".join(missing),
+                outdoor,  # None om utesensor saknas, annars passthrough
+                now,
+            )
             return
 
         # ── Holiday mode ──────────────────────────────────────────────────────
@@ -419,14 +439,22 @@ class PumpSteerSensor(Entity):
         # ── Fetch & classify prices ───────────────────────────────────────────
         prices, categories, interval_minutes, current_slot = await self._get_prices(cfg, now)
 
-        current_cat = categories[current_slot] if categories else PRICE_NORMAL
-        next_cat = self._next_period_category(categories, current_slot, interval_minutes)
+        # ── FIX 2: Safe mode vid saknad prisdata ──────────────────────────────
+        if not prices:
+            entity_id = cfg.get("electricity_price_entity") or "ej konfigurerad"
+            self._enter_safe_mode(
+                f"Ingen prisdata från '{entity_id}'",
+                outdoor,
+                now,
+            )
+            return
 
-        # Ramp timing for this cycle
-        ramp_in = self._compute_ramp_minutes(current_cat, next_cat or current_cat, house_inertia) if next_cat else 15.0
+        current_cat = categories[current_slot] if categories else PRICE_NORMAL
+        next_cat    = self._next_period_category(categories, current_slot, interval_minutes)
+
+        ramp_in  = self._compute_ramp_minutes(current_cat, next_cat or current_cat, house_inertia) if next_cat else 15.0
         ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.5)
 
-        # Lookahead slots for preheating check
         lookahead_slots = max(1, math.ceil(
             (PRICE_LOOKAHEAD_HOURS * 60) / max(interval_minutes, 1)
         ))
@@ -450,10 +478,10 @@ class PumpSteerSensor(Entity):
             }, now)
             return
 
-        # 2. PRECOOL (forecast shows warm period, braking to avoid overheat)
+        # 2. PRECOOL
         if self._should_precool(summer_threshold):
             brake_t = self._brake_temp(outdoor)
-            factor = self._update_brake_ramp(True, now, ramp_in=10.0, ramp_out=20.0)
+            factor  = self._update_brake_ramp(True, now, ramp_in=10.0, ramp_out=20.0)
             fake_temp = outdoor + (brake_t - outdoor) * factor
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
             mode = MODE_PRECOOL
@@ -467,9 +495,9 @@ class PumpSteerSensor(Entity):
 
         # 3. AGGRESSIVENESS 0 → pure PI, no price logic
         if aggressiveness == 0:
-            demand = self._pi_output(target, indoor, outdoor, now, cfg)
+            demand    = self._pi_output(target, indoor, outdoor, now, cfg)
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
-            self._brake_ramp = 0.0
+            self._brake_ramp  = 0.0
             self._brake_last_t = None
             mode = MODE_PI
             self._set_state(fake_temp, mode, {
@@ -485,11 +513,9 @@ class PumpSteerSensor(Entity):
 
         # 4. BRAKING — expensive period active
         if current_cat == PRICE_EXPENSIVE:
-            # Read configurable brake parameters
             brake_delta = float(cfg.get("brake_delta_c", BRAKE_DELTA_C))
             brake_hold  = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
 
-            # Safety: if indoor drops below comfort floor, release brake
             if indoor < comfort_floor:
                 _LOGGER.info(
                     "Comfort floor reached (%.1f < %.1f), releasing brake",
@@ -502,18 +528,15 @@ class PumpSteerSensor(Entity):
             factor = self._update_brake_ramp(brake_requested, now, ramp_in, ramp_out, hold_minutes=brake_hold)
 
             if factor >= 0.99:
-                # Full brake: PI completely disconnected
                 fake_temp = self._brake_temp(outdoor, delta_c=brake_delta)
                 mode = MODE_BRAKING
             elif factor > 0.0:
-                # Ramping in or out: blend PI and brake
                 pi_demand = self._pi_output(target, indoor, outdoor, now, cfg, freeze_integral=True)
-                pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
-                brake_t = self._brake_temp(outdoor, delta_c=brake_delta)
+                pi_fake   = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
+                brake_t   = self._brake_temp(outdoor, delta_c=brake_delta)
                 fake_temp = pi_fake + (brake_t - pi_fake) * factor
                 mode = MODE_BRAKING
             else:
-                # Brake fully released, back to PI
                 pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
                 fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
                 mode = MODE_PI
@@ -533,25 +556,22 @@ class PumpSteerSensor(Entity):
             return
 
         # 5. PREHEATING / PRE-BRAKE — expensive period is coming
-        upcoming = self._upcoming_expensive(categories, current_slot, lookahead_slots)
+        upcoming     = self._upcoming_expensive(categories, current_slot, lookahead_slots)
         forecast_cold = self._forecast_is_cold(summer_threshold, hours=PRICE_LOOKAHEAD_HOURS)
 
         if upcoming and forecast_cold:
-            # How many minutes until the next expensive slot?
             minutes_until_exp = self._minutes_until_expensive(
                 categories, current_slot, interval_minutes, now
             )
 
             if minutes_until_exp is not None and minutes_until_exp <= ramp_in:
-                # PRE-BRAKE: within ramp window — start building the brake.
-                # PI still active but blended with brake target.
-                factor = self._update_brake_ramp(True, now, ramp_in, ramp_out)
+                factor    = self._update_brake_ramp(True, now, ramp_in, ramp_out)
                 pi_demand = self._pi_output(target, indoor, outdoor, now, cfg, freeze_integral=True)
-                pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
-                brake_t = self._brake_temp(outdoor)
+                pi_fake   = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
+                brake_t   = self._brake_temp(outdoor)
                 fake_temp = pi_fake + (brake_t - pi_fake) * factor
                 fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
-                mode = MODE_PREHEAT  # still preheat label, ramp building
+                mode = MODE_PREHEAT
                 self._set_state(fake_temp, mode, {
                     "brake_factor": round(factor, 3),
                     "minutes_until_expensive": round(minutes_until_exp, 0),
@@ -565,8 +585,7 @@ class PumpSteerSensor(Entity):
                 }, now)
                 return
 
-            # PREHEATING: boost PI, keep brake at 0
-            base_demand = self._pi_output(target, indoor, outdoor, now, cfg)
+            base_demand    = self._pi_output(target, indoor, outdoor, now, cfg)
             boosted_demand = base_demand + PREHEAT_BOOST_C
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - boosted_demand))
             self._update_brake_ramp(False, now, ramp_in, ramp_out)
@@ -586,7 +605,7 @@ class PumpSteerSensor(Entity):
             return
 
         # 6. NORMAL PI — cheap or normal price, no special action
-        demand = self._pi_output(target, indoor, outdoor, now, cfg)
+        demand    = self._pi_output(target, indoor, outdoor, now, cfg)
         fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
         self._update_brake_ramp(False, now, ramp_in, ramp_out)
         mode = MODE_HOLIDAY if holiday else MODE_PI
@@ -630,10 +649,10 @@ class PumpSteerSensor(Entity):
             self.hass, entity_id, prices
         )
 
-        categories = classify_price_list(prices, self._p30, self._p80)
+        categories      = classify_price_list(prices, self._p30, self._p80)
         interval_minutes = detect_price_interval_minutes(prices)
-        categories = filter_short_peaks(categories, interval_minutes, PEAK_FILTER_MIN_DURATION_MINUTES)
-        current_slot = compute_price_slot_index(now, interval_minutes, len(prices))
+        categories      = filter_short_peaks(categories, interval_minutes, PEAK_FILTER_MIN_DURATION_MINUTES)
+        current_slot    = compute_price_slot_index(now, interval_minutes, len(prices))
 
         return prices, categories, interval_minutes, current_slot
 
