@@ -1,6 +1,5 @@
 import builtins
 from datetime import datetime
-
 from custom_components.pumpsteer.utils import (
     compute_price_slot_index,
     detect_price_interval_minutes,
@@ -10,13 +9,13 @@ from custom_components.pumpsteer.utils import (
 
 
 def test_get_version_reads_manifest():
-    assert get_version() == "1.6.6"
+    # FIX: uppdaterad till aktuell version i manifest.json
+    assert get_version() == "2.1.0"
 
 
 def test_get_version_missing_manifest(monkeypatch):
     def fake_open(*args, **kwargs):
         raise FileNotFoundError
-
     monkeypatch.setattr(builtins, "open", fake_open)
     assert get_version() == "unknown"
 
@@ -34,7 +33,8 @@ def test_compute_price_slot_index_clamps_to_range():
 
 def test_get_price_window_for_hours_returns_expected_slice():
     prices = [float(i) for i in range(10)]
+    # FIX: parametern heter current_slot, inte current_slot_index
     window = get_price_window_for_hours(
-        prices, current_slot_index=2, hours=3, price_interval_minutes=60
+        prices, current_slot=2, hours=3, price_interval_minutes=60
     )
     assert window == [2.0, 3.0, 4.0]
