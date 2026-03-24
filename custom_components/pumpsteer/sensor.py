@@ -657,10 +657,7 @@ class PumpSteerSensor(RestoreEntity):
                 hold_minutes=brake_hold,
             )
 
-            if factor >= 0.99:
-                fake_temp = self._brake_temp(outdoor, delta_c=brake_delta)
-                mode = MODE_BRAKING
-            elif factor > 0.0:
+            if factor > 0.0:
                 pi_demand = self._pi_output(
                     target,
                     indoor,
@@ -672,6 +669,8 @@ class PumpSteerSensor(RestoreEntity):
                 pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
                 brake_temp = self._brake_temp(outdoor, delta_c=brake_delta)
                 fake_temp = pi_fake + (brake_temp - pi_fake) * factor
+                # Keep PI ticking even at near/full brake so dt does not jump
+                # when leaving expensive mode. This avoids abrupt integral steps.
                 mode = MODE_BRAKING
             else:
                 pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
