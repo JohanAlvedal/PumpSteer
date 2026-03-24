@@ -149,10 +149,8 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector(
                         {"number": {"min": 0.0, "max": 1.0, "step": 0.01, "mode": "box"}}
                     ),
-                    vol.Optional(
-                        "experimental_ml_enabled",
-                        default=current_data.get("experimental_ml_enabled", False),
-                    ): selector({"boolean": {}}),
+                    # FIX 4: experimental_ml_enabled removed — ML is out of scope
+                    # for 2.0.0 per ARCHITECTURE.md and ROADMAP.md.
                 }
             ),
             errors=errors,
