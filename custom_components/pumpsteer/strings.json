@@ -30,8 +30,25 @@
           "pid_kd": "PI derivative gain (Kd)",
           "pid_integral_clamp": "PI integral clamp",
           "pid_output_clamp": "PI output clamp",
-          "brake_delta_c": "Brake strength (°C above outdoor)",
-          "brake_hold_minutes": "Brake hold time (minutes)"
+          "pid_integrator_on_brake": "Integrator behavior during brake",
+          "pid_decay_per_minute_on_brake": "Decay per minute",
+          "pi_price_feedforward_gain": "Price feedforward gain",
+          "pi_forecast_feedforward_gain": "Forecast feedforward gain",
+          "brake_ramp_in_minutes": "Brake ramp-in time",
+          "brake_ramp_out_minutes": "Brake ramp-out time",
+          "min_brake_strength": "Minimum brake strength",
+          "max_brake_strength": "Maximum brake strength",
+          "experimental_ml_enabled": "Enable Experimental ML"
+        },
+        "data_description": {
+          "pid_kp": "Determines how fast the system reacts to current temp error. Normal: 2.0 - 5.0.",
+          "pid_ki": "Corrects long-term steady-state error. Very sensitive! Normal: 0.01 - 0.05.",
+          "pid_integral_clamp": "Prevents the integrator from building up too much energy (windup). Normal: 5.0 - 10.0.",
+          "pid_output_clamp": "The maximum degrees the PID is allowed to adjust the pump setpoint.",
+          "pid_integrator_on_brake": "What happens to the 'memory' when the price is high? 'Freeze' is usually safest.",
+          "pi_price_feedforward_gain": "How much the electricity price affects the pump before a temp drop occurs.",
+          "brake_ramp_in_minutes": "How many minutes to transition from normal operation to full brake. Protects the compressor.",
+          "experimental_ml_enabled": "Uses historical data to learn your house's thermal inertia automatically."
         }
       }
     },
@@ -39,6 +56,7 @@
       "required": "This field is required",
       "entity_not_found": "Entity not found",
       "entity_unavailable": "Entity unavailable",
+      "invalid_range": "Min brake strength cannot be higher than max brake strength",
       "unknown": "An unknown error occurred"
     }
   }
