@@ -445,7 +445,7 @@ def test_pi_all_zero_gains_no_crash():
 # ═════════════════════════════════════════════════════════════════════════════
 
 def test_safe_mode_passthrough():
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor, MODE_SAFE
+    from custom_components.pumpsteer.sensor import PumpSteerSensor, MODE_SAFE
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._enter_safe_mode("test", outdoor=5.0, now=now_utc())
     assert s._state == 5.0
@@ -454,7 +454,7 @@ def test_safe_mode_passthrough():
 
 
 def test_safe_mode_no_outdoor():
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor, MODE_SAFE
+    from custom_components.pumpsteer.sensor import PumpSteerSensor, MODE_SAFE
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._enter_safe_mode("ingen ute", outdoor=None, now=now_utc())
     assert s._state is None
@@ -463,7 +463,7 @@ def test_safe_mode_no_outdoor():
 
 
 def test_safe_mode_resets_pi_and_brake():
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
+    from custom_components.pumpsteer.sensor import PumpSteerSensor
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     t = now_utc()
     s._brake_ramp = 1.0
@@ -477,14 +477,14 @@ def test_safe_mode_resets_pi_and_brake():
 
 
 def test_available_false_when_none():
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
+    from custom_components.pumpsteer.sensor import PumpSteerSensor
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = None
     assert s.available is False
 
 
 def test_available_true_when_float():
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
+    from custom_components.pumpsteer.sensor import PumpSteerSensor
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
     assert s.available is True
@@ -532,7 +532,7 @@ def test_forecast_is_cold_returns_false_when_no_forecast():
     FIX: _forecast_is_cold ska returnera False (inte True) när prognos saknas,
     med PREHEAT_ON_MISSING_FORECAST=False.
     """
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
+    from custom_components.pumpsteer.sensor import PumpSteerSensor
     # Sensor utan forecast-entitet i hass
     s = PumpSteerSensor(DummyHass({}), DummyConfigEntry())
     result = s._forecast_is_cold(summer_threshold=18.0, hours=6)
@@ -544,7 +544,7 @@ def test_forecast_is_cold_returns_false_when_no_forecast():
 
 def test_forecast_is_cold_returns_true_when_cold_forecast():
     """_forecast_is_cold ska returnera True när prognosen visar kallt väder."""
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
+    from custom_components.pumpsteer.sensor import PumpSteerSensor
     # Prognos: 6 timmar alla under summer_threshold (18°C)
     cold_forecast = ",".join(["5.0"] * 6)
     hass = DummyHass({"input_text.hourly_forecast_temperatures": cold_forecast})
@@ -555,7 +555,7 @@ def test_forecast_is_cold_returns_true_when_cold_forecast():
 
 def test_forecast_is_cold_returns_false_when_warm_forecast():
     """_forecast_is_cold ska returnera False när prognosen visar varmt väder."""
-    from custom_components.pumpsteer.sensor.sensor import PumpSteerSensor
+    from custom_components.pumpsteer.sensor import PumpSteerSensor
     warm_forecast = ",".join(["22.0"] * 6)
     hass = DummyHass({"input_text.hourly_forecast_temperatures": warm_forecast})
     s = PumpSteerSensor(hass, DummyConfigEntry())
