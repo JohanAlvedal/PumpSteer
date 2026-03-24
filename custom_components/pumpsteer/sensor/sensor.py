@@ -289,13 +289,6 @@ class PumpSteerSensor(RestoreEntity):
         return any(t >= summer_threshold + PRECOOL_MARGIN for t in temps)
 
     def _forecast_is_cold(self, summer_threshold: float, hours: int = 6) -> bool:
-        """
-        FIX: Returnerar PREHEAT_ON_MISSING_FORECAST (konfigurerbar konstant, default False)
-        när prognos saknas, istället för att alltid anta kallt väder.
-
-        Tidigare returnerade den alltid True vid saknad prognos, vilket kunde ge
-        onödig förvärmning vid felkonfigurerad prognos-entitet.
-        """
         temps = self._forecast_temps()
         if not temps:
             if PREHEAT_ON_MISSING_FORECAST:
@@ -306,6 +299,29 @@ class PumpSteerSensor(RestoreEntity):
         window = temps[:hours]
         cold_hours = sum(1 for t in window if t < summer_threshold)
         return cold_hours >= max(1, len(window) // 2)
+
+    # ── Base attributes ───────────────────────────────────────────────────────
+
+    def _base_attrs(
+        self,
+        indoor: float,
+        target: float,
+        outdoor: float,
+        price_category: str,
+        aggressiveness: int,
+        heating_demand_c: float = 0.0,
+    ) -> Dict[str, Any]:
+        """Standardiserat attributset som alla lägen alltid inkluderar."""
+        return {
+            "heating_demand_c": round(heating_demand_c, 2),
+            "indoor_temperature": indoor,
+            "target_temperature": target,
+            "outdoor_temperature": outdoor,
+            "price_category": price_category,
+            "aggressiveness": aggressiveness,
+            "p30": round(self._p30, 3),
+            "p80": round(self._p80, 3),
+        }
 
     # ── Safe mode ─────────────────────────────────────────────────────────────
 
@@ -461,14 +477,14 @@ class PumpSteerSensor(RestoreEntity):
 
         # ── Safe mode: missing price data ─────────────────────────────────────
         if not prices:
-            entity_id = cfg.get("electricity_price_entity") or "ej konfigurerad"
+            today_entity_id = cfg.get("electricity_price_entity") or "ej konfigurerad"
+            tomorrow_entity_id = cfg.get("price_tomorrow_entity") or today_entity_id
             self._enter_safe_mode(
-                f"Ingen prisdata från '{entity_id}'",
+                f"Ingen prisdata från today='{today_entity_id}', tomorrow='{tomorrow_entity_id}'",
                 outdoor,
                 now,
             )
             return
-
         current_cat = categories[current_slot] if categories else PRICE_NORMAL
         next_cat    = self._next_period_category(categories, current_slot, interval_minutes)
 
@@ -491,10 +507,8 @@ class PumpSteerSensor(RestoreEntity):
             fake_temp = outdoor
             mode = MODE_SUMMER
             self._set_state(fake_temp, mode, {
-                "outdoor_temperature": outdoor,
+                **self._base_attrs(indoor, target, outdoor, current_cat, aggressiveness),
                 "summer_threshold": summer_threshold,
-                "price_category": current_cat,
-                "aggressiveness": aggressiveness,
             }, now)
             return
 
@@ -506,18 +520,15 @@ class PumpSteerSensor(RestoreEntity):
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
             mode = MODE_PRECOOL
             self._set_state(fake_temp, mode, {
+                **self._base_attrs(indoor, target, outdoor, current_cat, aggressiveness),
                 "brake_factor": round(factor, 3),
-                "outdoor_temperature": outdoor,
-                "price_category": current_cat,
-                "aggressiveness": aggressiveness,
             }, now)
             return
 
         # 3. AGGRESSIVENESS 0 → pure PI, no price logic
         if aggressiveness == 0:
-            # FIX: Återställ PI-integralen när aggressiveness sätts till 0
-            # Annars kan en uppbyggd integral från bromssessioner omedelbart
-            # appliceras fullt ut i PI-läget och ge för mycket/lite värme.
+            # Återställ PI-integralen när aggressiveness sätts till 0 för att undvika
+            # att en uppbyggd integral från bromssessioner appliceras fullt ut direkt.
             self._pi.reset(now)
             demand    = self._pi_output(target, indoor, outdoor, now, cfg)
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
@@ -525,12 +536,7 @@ class PumpSteerSensor(RestoreEntity):
             self._brake_last_t = None
             mode = MODE_PI
             self._set_state(fake_temp, mode, {
-                "heating_demand_c": round(demand, 2),
-                "target_temperature": target,
-                "indoor_temperature": indoor,
-                "outdoor_temperature": outdoor,
-                "price_category": current_cat,
-                "aggressiveness": 0,
+                **self._base_attrs(indoor, target, outdoor, current_cat, 0, demand),
                 "note": "Price control disabled (aggressiveness=0)",
             }, now)
             return
@@ -567,13 +573,9 @@ class PumpSteerSensor(RestoreEntity):
 
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
             self._set_state(fake_temp, mode, {
+                **self._base_attrs(indoor, target, outdoor, current_cat, aggressiveness),
                 "brake_factor": round(factor, 3),
                 "comfort_floor_c": round(comfort_floor, 2),
-                "indoor_temperature": indoor,
-                "target_temperature": target,
-                "outdoor_temperature": outdoor,
-                "price_category": current_cat,
-                "aggressiveness": aggressiveness,
                 "ramp_in_minutes": round(ramp_in, 1),
                 "ramp_out_minutes": round(ramp_out, 1),
             }, now)
@@ -589,6 +591,7 @@ class PumpSteerSensor(RestoreEntity):
             )
 
             if minutes_until_exp is not None and minutes_until_exp <= ramp_in:
+                # PRE-BRAKE: inom ramp-fönstret, bygg upp broms
                 factor    = self._update_brake_ramp(True, now, ramp_in, ramp_out)
                 pi_demand = self._pi_output(target, indoor, outdoor, now, cfg, freeze_integral=True)
                 pi_fake   = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
@@ -597,33 +600,25 @@ class PumpSteerSensor(RestoreEntity):
                 fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
                 mode = MODE_PREHEAT
                 self._set_state(fake_temp, mode, {
+                    **self._base_attrs(indoor, target, outdoor, current_cat, aggressiveness),
                     "brake_factor": round(factor, 3),
-                    "minutes_until_expensive": round(minutes_until_exp, 0),
                     "ramp_in_minutes": round(ramp_in, 1),
-                    "indoor_temperature": indoor,
-                    "target_temperature": target,
-                    "outdoor_temperature": outdoor,
-                    "price_category": current_cat,
-                    "aggressiveness": aggressiveness,
+                    "minutes_until_expensive": round(minutes_until_exp, 0),
                     "upcoming_expensive": True,
                 }, now)
                 return
 
+            # PREHEATING: boost PI, håll broms på 0
             base_demand    = self._pi_output(target, indoor, outdoor, now, cfg)
             boosted_demand = base_demand + PREHEAT_BOOST_C
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - boosted_demand))
             self._update_brake_ramp(False, now, ramp_in, ramp_out)
             mode = MODE_PREHEAT
             self._set_state(fake_temp, mode, {
-                "heating_demand_c": round(boosted_demand, 2),
+                **self._base_attrs(indoor, target, outdoor, current_cat, aggressiveness, boosted_demand),
                 "preheat_boost_c": PREHEAT_BOOST_C,
                 "brake_factor": 0.0,
                 "minutes_until_expensive": round(minutes_until_exp, 0) if minutes_until_exp else None,
-                "indoor_temperature": indoor,
-                "target_temperature": target,
-                "outdoor_temperature": outdoor,
-                "price_category": current_cat,
-                "aggressiveness": aggressiveness,
                 "upcoming_expensive": True,
             }, now)
             return
@@ -634,59 +629,82 @@ class PumpSteerSensor(RestoreEntity):
         self._update_brake_ramp(False, now, ramp_in, ramp_out)
         mode = MODE_HOLIDAY if holiday else MODE_PI
         self._set_state(fake_temp, mode, {
-            "heating_demand_c": round(demand, 2),
-            "indoor_temperature": indoor,
-            "target_temperature": target,
-            "outdoor_temperature": outdoor,
-            "price_category": current_cat,
-            "aggressiveness": aggressiveness,
-            "p30": round(self._p30, 3),
-            "p80": round(self._p80, 3),
+            **self._base_attrs(indoor, target, outdoor, current_cat, aggressiveness, demand),
         }, now)
 
     # ── Price data ────────────────────────────────────────────────────────────
-
     async def _get_prices(
         self, cfg: Dict[str, Any], now: datetime
     ) -> Tuple[List[float], List[str], int, int]:
-        entity_id = cfg.get("electricity_price_entity")
-        if not entity_id:
+        """Read price data from configured entities.
+
+        Backward compatibility:
+        - Older setups may expose both today and tomorrow on the same entity
+          using raw_today/raw_tomorrow or today/tomorrow.
+        - Newer setups typically expose:
+            electricity_price_entity -> current price state + attribute "today"
+            price_tomorrow_entity    -> attribute "tomorrow"
+        """
+        today_entity_id = cfg.get("electricity_price_entity")
+        tomorrow_entity_id = cfg.get("price_tomorrow_entity") or today_entity_id
+
+        if not today_entity_id:
             return [], [], 60, 0
 
-        raw_today    = get_attr(self.hass, entity_id, "today")    or get_attr(self.hass, entity_id, "raw_today")    or []
-        raw_tomorrow = get_attr(self.hass, entity_id, "tomorrow") or get_attr(self.hass, entity_id, "raw_tomorrow") or []
-        prices_raw   = [*raw_today, *raw_tomorrow]
+        raw_today = (
+            get_attr(self.hass, today_entity_id, "today")
+            or get_attr(self.hass, today_entity_id, "raw_today")
+            or []
+        )
+
+        raw_tomorrow = (
+            get_attr(self.hass, tomorrow_entity_id, "tomorrow")
+            or get_attr(self.hass, tomorrow_entity_id, "raw_tomorrow")
+            or get_attr(self.hass, today_entity_id, "tomorrow")
+            or get_attr(self.hass, today_entity_id, "raw_tomorrow")
+            or []
+        )
+
+        prices_raw = [*raw_today, *raw_tomorrow]
 
         if not prices_raw:
-            _LOGGER.warning("No price data from %s", entity_id)
+            _LOGGER.warning(
+                "No price data from today entity '%s' and tomorrow entity '%s'",
+                today_entity_id,
+                tomorrow_entity_id,
+            )
             return [], [], 60, 0
 
-        prices = []
+        prices: List[float] = []
         for item in prices_raw:
-            val = self._extract_price(item)
+            val = PumpSteerSensor._extract_price(item)
             if val is not None and math.isfinite(val):
                 prices.append(val)
 
         if not prices:
             return [], [], 60, 0
 
-        # FIX: detektera intervall från today-listan för att undvika att
-        # kombinerad 48-slot-lista ger felaktigt 30-min intervall (24+24=48 → 1440/48=30)
-        today_prices = []
-        for item in (raw_today or []):
-            val = self._extract_price(item)
+        today_prices: List[float] = []
+        for item in raw_today:
+            val = PumpSteerSensor._extract_price(item)
             if val is not None and math.isfinite(val):
                 today_prices.append(val)
 
         self._p30, self._p80 = await async_get_price_thresholds(
-            self.hass, entity_id, today_prices or prices
+            self.hass,
+            today_entity_id,
+            today_prices or prices,
         )
 
-        categories       = classify_price_list(prices, self._p30, self._p80)
-        interval_source  = today_prices if today_prices else prices
+        categories = classify_price_list(prices, self._p30, self._p80)
+        interval_source = raw_today if raw_today else prices_raw
         interval_minutes = detect_price_interval_minutes(interval_source)
-        categories       = filter_short_peaks(categories, interval_minutes, PEAK_FILTER_MIN_DURATION_MINUTES)
-        current_slot     = compute_price_slot_index(now, interval_minutes, len(prices))
+        categories = filter_short_peaks(
+            categories,
+            interval_minutes,
+            PEAK_FILTER_MIN_DURATION_MINUTES,
+        )
+        current_slot = compute_price_slot_index(now, interval_minutes, len(prices))
 
         return prices, categories, interval_minutes, current_slot
 
