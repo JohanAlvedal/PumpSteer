@@ -1,0 +1,268 @@
+###############################################################################
+## PACKAGE: SVOTC + Nordpool Price (SE3)
+##
+## Sensorer:
+##   sensor.elpris_today      state=aktuellt pris, attr.raw=prisl ista idag
+##   sensor.elpris_tomorrow   state=antal entries,  attr.raw=prislista imorgon
+##   sensor.elpris_spot_avgifter  state=aktuellt pris, attr.min/max
+##   sensor.elpris_chart          lättviktig sensor för historik i grafer
+##   sensor.elpriskoefficient     relativ prisnivå
+##   sensor.nordpool_price_band   very_cheap/cheap/normal/expensive/very_expensive
+##   binary_sensor.elpris_ok      true om koefficient < 1.0
+##
+## Recorder-tips:
+##   Exkludera sensor.elpris_today och sensor.elpris_tomorrow
+##   (stora attribut, ingen historik behövs).
+##   Behåll sensor.elpris_chart för historik.
+##
+## SVOTC-konfiguration (input_text i 00_helpers.yaml):
+##   svotc_source_price_today    -> sensor.elpris_today
+##   svotc_source_price_tomorrow -> sensor.elpris_tomorrow
+###############################################################################
+
+###############################################################################
+## 1. INPUT_NUMBER – Elhandel-parametrar
+###############################################################################
+input_number:
+  elhandel_rorlig_kvart_paslag:
+    name: "Elhandel påslag (SEK/kWh)"
+    min: 0
+    max: 1
+    step: 0.001
+    unit_of_measurement: "SEK/kWh"
+    mode: box
+    icon: mdi:plus-circle
+
+  elhandel_rorlig_kvart_elcertifikat:
+    name: "Elhandel elcertifikat (SEK/kWh)"
+    min: 0
+    max: 1
+    step: 0.001
+    unit_of_measurement: "SEK/kWh"
+    mode: box
+    icon: mdi:certificate
+
+  elhandel_rorlig_kvart_moms:
+    name: "Elhandel moms (%)"
+    min: 0
+    max: 30
+    step: 0.1
+    unit_of_measurement: "%"
+    mode: box
+    icon: mdi:percent
+
+###############################################################################
+## 2. TEMPLATE – Nordpool raw-sensorer + analyssensorer
+###############################################################################
+template:
+  # ==========================================================================
+  # 2A) TODAY – triggas var 10:e minut + vid pålagsändringar
+  #     state  = aktuellt pris inkl. avgifter (SEK/kWh)
+  #     raw    = hela dagens prislista [{start, end, value}, ...]
+  # ==========================================================================
+  - trigger:
+      - platform: time_pattern
+        minutes: "/10"
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - input_number.elhandel_rorlig_kvart_paslag
+          - input_number.elhandel_rorlig_kvart_elcertifikat
+          - input_number.elhandel_rorlig_kvart_moms
+
+    action:
+      - action: nordpool.get_prices_for_date
+        data:
+          config_entry: 01KGFMFDG6SDFKHQFKK5QKCJ5T
+          date: "{{ now().date() }}"
+          areas: SE3
+          currency: SEK
+        response_variable: today_price
+
+    sensor:
+      - name: "Elpris today"
+        unique_id: elpris_today
+        state_class: measurement
+        unit_of_measurement: "SEK/kWh"
+        icon: mdi:calendar-today
+        availability: >
+          {{ (today_price.get('SE3') or []) | length > 0 }}
+        state: >
+          {% set entries = (today_price.get('SE3') or []) %}
+          {% set now_ts  = now().timestamp() %}
+          {% set el_paslag = states('input_number.elhandel_rorlig_kvart_paslag')    | float(0) %}
+          {% set el_cert   = states('input_number.elhandel_rorlig_kvart_elcertifikat') | float(0) %}
+          {% set el_moms   = 1 + (states('input_number.elhandel_rorlig_kvart_moms') | float(0) / 100) %}
+          {% set ns = namespace(v=none) %}
+          {% for s in entries %}
+            {% if as_timestamp(s.start) <= now_ts < as_timestamp(s.end) %}
+              {% set ns.v = ((s.price | float(0)) / 1000 + el_paslag + el_cert) * el_moms %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.v | round(3) if ns.v is not none else none }}
+        attributes:
+          today: >
+            {% set el_paslag = states('input_number.elhandel_rorlig_kvart_paslag')    | float(0) %}
+            {% set el_cert   = states('input_number.elhandel_rorlig_kvart_elcertifikat') | float(0) %}
+            {% set el_moms   = 1 + (states('input_number.elhandel_rorlig_kvart_moms') | float(0) / 100) %}
+            {% set ns = namespace(r=[]) %}
+            {% for s in (today_price.get('SE3') or []) %}
+              {% set val = ((s.price | float(0)) / 1000 + el_paslag + el_cert) * el_moms %}
+              {% set ns.r = ns.r + [{'start': (s.start | as_datetime | as_local).isoformat(),
+                                     'end':   (s.end   | as_datetime | as_local).isoformat(),
+                                     'value': val | round(2)}] %}
+            {% endfor %}
+            {{ ns.r }}
+
+  # ==========================================================================
+  # 2B) TOMORROW – triggas var 10:e minut (priser finns från ~13:00)
+  #     state  = antal entries (0 = inga morgondagspriser än)
+  #     raw    = morgondagens prislista [{start, end, value}, ...]
+  # ==========================================================================
+  - trigger:
+      - platform: time_pattern
+        minutes: "/10"
+        seconds: "30" # Körs 30 sekunder efter "Today"-sensorn
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - input_number.elhandel_rorlig_kvart_paslag
+          - input_number.elhandel_rorlig_kvart_elcertifikat
+          - input_number.elhandel_rorlig_kvart_moms
+
+    action:
+      - action: nordpool.get_prices_for_date
+        data:
+          config_entry: 01KGFMFDG6SDFKHQFKK5QKCJ5T
+          date: "{{ (now() + timedelta(days=1)).date() }}"
+          areas: SE3
+          currency: SEK
+        response_variable: tomorrow_price
+
+    sensor:
+      - name: "Elpris tomorrow"
+        unique_id: elpris_tomorrow
+        icon: mdi:calendar-arrow-right
+        # state = antal entries — lättviktigt heltal, inget aktuellt pris behövs
+        state: >
+          {{ (tomorrow_price.get('SE3') or []) | length }}
+        attributes:
+          tomorrow: >
+            {% set entries = (tomorrow_price.get('SE3') or []) %}
+            {% if not entries %}
+              []
+            {% else %}
+              {% set el_paslag = states('input_number.elhandel_rorlig_kvart_paslag')    | float(0) %}
+              {% set el_cert   = states('input_number.elhandel_rorlig_kvart_elcertifikat') | float(0) %}
+              {% set el_moms   = 1 + (states('input_number.elhandel_rorlig_kvart_moms') | float(0) / 100) %}
+              {% set ns = namespace(r=[]) %}
+              {% for s in entries %}
+                {% set val = ((s.price | float(0)) / 1000 + el_paslag + el_cert) * el_moms %}
+                {% set ns.r = ns.r + [{'start': (s.start | as_datetime | as_local).isoformat(),
+                                       'end':   (s.end   | as_datetime | as_local).isoformat(),
+                                       'value': val | round(2)}] %}
+              {% endfor %}
+              {{ ns.r }}
+            {% endif %}
+
+  # ==========================================================================
+  # 2C) SPOT + AVGIFTER – min/max för dagen
+  # ==========================================================================
+  - trigger:
+      - platform: time_pattern
+        minutes: "/10"
+        seconds: "40" # Körs 40 sekunder efter "Today"-sensorn
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - sensor.elpris_today
+          - input_number.elhandel_rorlig_kvart_paslag
+          - input_number.elhandel_rorlig_kvart_elcertifikat
+          - input_number.elhandel_rorlig_kvart_moms
+
+    sensor:
+      - name: "Elpris spot + avgifter"
+        unique_id: elpris_spot_avgifter
+        state_class: measurement
+        unit_of_measurement: "SEK/kWh"
+        icon: mdi:flash
+        availability: >
+          {{ states('sensor.elpris_today') not in ['unknown','unavailable','none'] }}
+        state: >
+          {{ states('sensor.elpris_today') | float(none) }}
+        attributes:
+          min: >
+            {% set entries = state_attr('sensor.elpris_today', 'today') or [] %}
+            {% if entries %}
+              {{ (entries | map(attribute='value') | list | min) | round(3) }}
+            {% endif %}
+          max: >
+            {% set entries = state_attr('sensor.elpris_today', 'today') or [] %}
+            {% if entries %}
+              {{ (entries | map(attribute='value') | list | max) | round(3) }}
+            {% endif %}
+
+  # ==========================================================================
+  # 2D) VANLIGA TEMPLATE-SENSORER – chart-feed + analys
+  # ==========================================================================
+  - sensor:
+      - name: "Elpriskoefficient"
+        unique_id: elpriskoefficient
+        icon: mdi:chart-line
+        state: >
+          {% set price = states('sensor.elpris_spot_avgifter') | float(none) %}
+          {% set pmax  = state_attr('sensor.elpris_spot_avgifter', 'max') | float(none) %}
+          {% set pmin  = state_attr('sensor.elpris_spot_avgifter', 'min') | float(none) %}
+          {% if price is none or pmax is none or pmin is none or pmax <= 0 %}
+            {{ this.state | float(0) }}
+          {% else %}
+            {% set threshold = (pmax - pmin) * (1.3 * (pmax ** -0.7)) * (1 / (1 + pmin * 0.25)) + pmin %}
+            {{ (price / threshold) | round(3) }}
+          {% endif %}
+        availability: >
+          {{ states('sensor.elpris_spot_avgifter') not in ['unknown','unavailable','none'] }}
+
+      - name: "Nordpool price band"
+        unique_id: nordpool_price_band
+        icon: mdi:traffic-light
+        state: >
+          {% set price = states('sensor.elpris_spot_avgifter') | float(0) %}
+          {% set pmin  = state_attr('sensor.elpris_spot_avgifter', 'min') | float(price) %}
+          {% set pmax  = state_attr('sensor.elpris_spot_avgifter', 'max') | float(price) %}
+          {% set span  = pmax - pmin %}
+          {% if span <= 0 %}
+            normal
+          {% else %}
+            {% set x    = (price - pmin) / span %}
+            {% set prev = this.state | default('normal') %}
+            {% set h    = 0.02 %}
+            {% set t_vc = 0.15 + (h if prev == 'very_cheap'     else -h if prev == 'cheap'          else 0) %}
+            {% set t_c  = 0.35 + (h if prev == 'cheap'          else -h if prev == 'normal'         else 0) %}
+            {% set t_e  = 0.65 + (h if prev == 'normal'         else -h if prev == 'expensive'      else 0) %}
+            {% set t_ve = 0.85 + (h if prev == 'expensive'      else -h if prev == 'very_expensive' else 0) %}
+            {% if   x <= t_vc %}very_cheap
+            {% elif x <= t_c  %}cheap
+            {% elif x <  t_e  %}normal
+            {% elif x <= t_ve %}expensive
+            {% else            %}very_expensive
+            {% endif %}
+          {% endif %}
+
+  - binary_sensor:
+      - name: "Elpris OK"
+        unique_id: elpris_ok
+        state: >
+          {% set k = states('sensor.elpriskoefficient') | float(none) %}
+          {{ (k is not none) and (k < 1.0) }}
+
+###############################################################################
+## 3. RECORDER – exkludera rådata-sensorerna, behåll chart-historik
+###############################################################################
+recorder:
+  exclude:
+    entities:
+      - sensor.elpris_today
+      - sensor.elpris_tomorrow
