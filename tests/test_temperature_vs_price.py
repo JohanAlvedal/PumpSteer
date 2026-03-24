@@ -476,6 +476,31 @@ def test_safe_mode_resets_pi_and_brake():
     assert s._pi._integral == 0.0
 
 
+def test_brake_hold_can_be_bypassed_for_immediate_release():
+    from custom_components.pumpsteer.sensor import PumpSteerSensor
+
+    s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
+    t0 = now_utc()
+
+    engaged = s._update_brake_ramp(
+        brake_requested=True,
+        now=t0,
+        ramp_in=1.0,
+        ramp_out=1.0,
+        hold_minutes=30.0,
+    )
+    assert engaged > 0.0
+
+    released = s._update_brake_ramp(
+        brake_requested=False,
+        now=t0 + timedelta(minutes=1),
+        ramp_in=1.0,
+        ramp_out=1.0,
+        hold_minutes=0.0,
+    )
+    assert released == 0.0
+
+
 def test_available_false_when_none():
     from custom_components.pumpsteer.sensor import PumpSteerSensor
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
