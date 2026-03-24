@@ -760,7 +760,7 @@ class PumpSteerSensor(RestoreEntity):
                 min(MAX_FAKE_TEMP, outdoor - boosted_demand),
             )
 
-            self._update_brake_ramp(False, now, ramp_in, ramp_out)
+            self._update_brake_ramp(True, now, ramp_in, ramp_out)
 
             self._set_state(
                 fake_temp,
