@@ -787,10 +787,16 @@ class PumpSteerSensor(RestoreEntity):
             )
             return
 
+        bridge_short_dip = (
+            upcoming
+            and not forecast_cold
+            and self._brake_ramp > 0.0
+        )
+
         # 6. Normal PI control.
         demand = self._pi_output(target, indoor, outdoor, now, cfg)
         fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
-        self._update_brake_ramp(False, now, ramp_in, ramp_out)
+        self._update_brake_ramp(bridge_short_dip, now, ramp_in, ramp_out)
 
         mode = MODE_HOLIDAY if holiday else MODE_PI
         self._set_state(
