@@ -3,7 +3,7 @@ import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-PUMPSTEER_VERSION: Final[str] = "2.1.0"
+PUMPSTEER_VERSION: Final[str] = "2.0.0"
 
 # === FAKE TEMPERATURE LIMITS ===
 MIN_FAKE_TEMP: Final[float] = -20.0
@@ -17,11 +17,11 @@ PRECOOL_MARGIN: Final[float] = 3.0
 # WINTER_BRAKE_THRESHOLD: Final[float] = 7.0
 
 # === PI CONTROLLER ===
-PID_KP: Final[float] = 8.0
-PID_KI: Final[float] = 0.05
+PID_KP: Final[float] = 2.4
+PID_KI: Final[float] = 0.035
 PID_KD: Final[float] = 0.0
-PID_INTEGRAL_CLAMP: Final[float] = 10.0
-PID_OUTPUT_CLAMP: Final[float] = 20.0
+PID_INTEGRAL_CLAMP: Final[float] = 6.0
+PID_OUTPUT_CLAMP: Final[float] = 12.0
 
 # === PRICE CLASSIFICATION ===
 # Default thresholds use P30/P80 and a 72-hour trailing history window.
@@ -40,11 +40,11 @@ MAX_PRICE_WARNING_THRESHOLD: Final[float] = 3.0
 # Index 0 = aggressiveness 0 (no price control), index 5 = max saving
 COMFORT_FLOOR_BY_AGGRESSIVENESS: Final[List[float]] = [
     0.0,  # 0 — pure PI, no price logic
-    0.2,  # 1 — very gentle
-    0.5,  # 2 — mild
-    0.9,  # 3 — normal / balanced
-    1.4,  # 4 — aggressive
-    2.0,  # 5 — maximum saving, can get cold
+    0.5,  # 1 — very gentle
+    1.0,  # 2 — mild
+    1.5,  # 3 — normal / balanced
+    2.0,  # 4 — aggressive
+    3.0,  # 5 — maximum saving, can get cold
 ]
 
 # === BRAKE TARGET OFFSET ===
