@@ -30,8 +30,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             try:
                 entity_errors = self._validate_entities(user_input)
-                range_errors = self._validate_numeric_ranges(user_input)
-                errors = {**entity_errors, **range_errors}
+                errors = {**entity_errors}
 
                 if not errors:
                     combined_data = {**user_input, **HARDCODED_ENTITIES}
@@ -101,56 +100,6 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector(
                         {"number": {"min": 0.0, "max": 30.0, "step": 0.1, "mode": "box"}}
                     ),
-                    vol.Optional(
-                        "pid_integrator_on_brake",
-                        default=current_data.get("pid_integrator_on_brake", "freeze"),
-                    ): selector(
-                        {"select": {"options": ["freeze", "decay", "reset"], "mode": "dropdown"}}
-                    ),
-                    vol.Optional(
-                        "pid_decay_per_minute_on_brake",
-                        default=current_data.get("pid_decay_per_minute_on_brake", 0.98),
-                    ): selector(
-                        {"number": {"min": 0.5, "max": 1.0, "step": 0.01, "mode": "box"}}
-                    ),
-                    vol.Optional(
-                        "pi_price_feedforward_gain",
-                        default=current_data.get("pi_price_feedforward_gain", 1.0),
-                    ): selector(
-                        {"number": {"min": 0.0, "max": 10.0, "step": 0.1, "mode": "box"}}
-                    ),
-                    vol.Optional(
-                        "pi_forecast_feedforward_gain",
-                        default=current_data.get("pi_forecast_feedforward_gain", 1.0),
-                    ): selector(
-                        {"number": {"min": 0.0, "max": 10.0, "step": 0.1, "mode": "box"}}
-                    ),
-                    vol.Optional(
-                        "brake_ramp_in_minutes",
-                        default=current_data.get("brake_ramp_in_minutes", 15.0),
-                    ): selector(
-                        {"number": {"min": 0.1, "max": 120.0, "step": 0.1, "mode": "box"}}
-                    ),
-                    vol.Optional(
-                        "brake_ramp_out_minutes",
-                        default=current_data.get("brake_ramp_out_minutes", 15.0),
-                    ): selector(
-                        {"number": {"min": 0.1, "max": 120.0, "step": 0.1, "mode": "box"}}
-                    ),
-                    vol.Optional(
-                        "min_brake_strength",
-                        default=current_data.get("min_brake_strength", 0.0),
-                    ): selector(
-                        {"number": {"min": 0.0, "max": 1.0, "step": 0.01, "mode": "box"}}
-                    ),
-                    vol.Optional(
-                        "max_brake_strength",
-                        default=current_data.get("max_brake_strength", 1.0),
-                    ): selector(
-                        {"number": {"min": 0.0, "max": 1.0, "step": 0.01, "mode": "box"}}
-                    ),
-                    # FIX 4: experimental_ml_enabled removed — ML is out of scope
-                    # for 2.0.0 per ARCHITECTURE.md and ROADMAP.md.
                 }
             ),
             errors=errors,
@@ -181,22 +130,6 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             if not self._entity_available(entity_id):
                 _LOGGER.warning("%s unavailable: %s", description, entity_id)
                 errors[field] = "entity_unavailable"
-
-        return errors
-
-    def _validate_numeric_ranges(self, user_input):
-        """Validate logical numeric relationships."""
-        errors = {}
-
-        try:
-            min_brake = float(user_input.get("min_brake_strength", 0.0))
-            max_brake = float(user_input.get("max_brake_strength", 1.0))
-        except (TypeError, ValueError):
-            return {"base": "invalid_numeric"}
-
-        if min_brake > max_brake:
-            errors["min_brake_strength"] = "invalid_range"
-            errors["max_brake_strength"] = "invalid_range"
 
         return errors
 
