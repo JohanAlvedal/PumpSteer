@@ -328,7 +328,7 @@ def test_comfort_floor_agg_0_is_zero():
 
 
 def test_comfort_floor_agg_5_is_max():
-    assert COMFORT_FLOOR_BY_AGGRESSIVENESS[5] == 2.0
+    assert COMFORT_FLOOR_BY_AGGRESSIVENESS[5] == 3.0
 
 
 def test_comfort_floor_increases():
