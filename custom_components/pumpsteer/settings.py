@@ -6,15 +6,15 @@ _LOGGER = logging.getLogger(__name__)
 PUMPSTEER_VERSION: Final[str] = "2.1.0"
 
 # === FAKE TEMPERATURE LIMITS ===
-MIN_FAKE_TEMP: Final[float] = -25.0
+MIN_FAKE_TEMP: Final[float] = -20.0
 MAX_FAKE_TEMP: Final[float] = 25.0
 
-# === SUMMER / PRECOOL ===
+# === SUMMER / PRECOOL SETTINGS ===
 PRECOOL_LOOKAHEAD: Final[int] = 24
 PRECOOL_MARGIN: Final[float] = 3.0
-# Dessa används fortfarande av sensor.py för att visa info-attribut
-WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0
-WINTER_BRAKE_THRESHOLD: Final[float] = 7.0
+# These legacy constants are no longer used by sensor.py
+# WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0
+# WINTER_BRAKE_THRESHOLD: Final[float] = 7.0
 
 # === PI CONTROLLER ===
 PID_KP: Final[float] = 8.0
@@ -23,9 +23,10 @@ PID_KD: Final[float] = 0.0
 PID_INTEGRAL_CLAMP: Final[float] = 10.0
 PID_OUTPUT_CLAMP: Final[float] = 20.0
 
-# === PRICE CLASSIFICATION: P30/P80 against 72h history ===
-# cheap  = below P30
-# normal = P30 to P80
+# === PRICE CLASSIFICATION ===
+# Default thresholds use P30/P80 and a 72-hour trailing history window.
+# cheap     = below P30
+# normal    = P30 to P80
 # expensive = above P80
 PRICE_PERCENTILE_CHEAP: Final[float] = 30.0
 PRICE_PERCENTILE_EXPENSIVE: Final[float] = 80.0
@@ -46,21 +47,24 @@ COMFORT_FLOOR_BY_AGGRESSIVENESS: Final[List[float]] = [
     2.0,  # 5 — maximum saving, can get cold
 ]
 
-# === BRAKE DELTA ===
-# How many °C above outdoor temp the fake temp is set during full braking.
-# Higher = pump sees warmer "outdoor" = less heating output = harder braking.
-# Typical: 10–15°C. 10°C is conservative, 15°C stops most pumps completely.
-BRAKE_DELTA_C: Final[float] = 12.0
+# === BRAKE TARGET OFFSET ===
+# Full-brake target:
+# fake outdoor temperature = real outdoor temperature + BRAKE_DELTA_C
+# Higher value = stronger braking, because the heat pump sees a warmer outdoor temperature.
+# Typical: 10–15°C. 10°C is conservative, while 15°C gives very strong braking
+# for many heating systems.
+BRAKE_DELTA_C: Final[float] = 10.0
 
 # === RAMP TIMING ===
-# ramp_minutes = price_jump_ratio * house_inertia * RAMP_SCALE
-# clamped between RAMP_MIN and RAMP_MAX
-# With 15-min prices and inertia=3: 1 jump × 3 × 10 = 30 min = 2 price slots
+# Ramp duration scales with price-category jump severity and house inertia,
+# then gets clamped between RAMP_MIN_MINUTES and RAMP_MAX_MINUTES.
+# Example with 15-minute prices and inertia=3:
+# 1 category jump × 3 × 10 = 30 minutes = 2 price slots
 RAMP_SCALE: Final[float] = 10.0
 RAMP_MIN_MINUTES: Final[float] = 15.0   # at least 1 price slot (15-min prices)
 RAMP_MAX_MINUTES: Final[float] = 60.0   # max 4 price slots
 
-# Preheating: extra fake-temp depression during preheat window (°C)
+# Preheating: extra boost applied during the preheat window (°C)
 PREHEAT_BOOST_C: Final[float] = 4.0
 
 # Peak filter: ignore expensive spikes shorter than this
@@ -74,16 +78,16 @@ PRICE_LOOKAHEAD_HOURS: Final[int] = 6
 # E.g. 30 min = holds brake across 2 cheap 15-min slots before releasing.
 BRAKE_HOLD_MINUTES: Final[float] = 30.0
 
-# === PREHEATING FORECAST BEHAVIOUR ===
-# FIX: Styr vad _forecast_is_cold() returnerar när prognos-entiteten saknar data.
+# === PREHEATING FORECAST BEHAVIOR ===
+# Controls what _forecast_is_cold() returns when the forecast entity has no data.
 #
-# False (default, rekommenderat):
-#   Ingen förvärmning triggas vid saknad prognos.
-#   Säkrare beteende — undviker onödig förvärmning om entiteten är felkonfigurerad.
+# False (default, recommended):
+#   No preheating is triggered when forecast data is missing.
+#   Safer behavior — avoids unnecessary preheating if the forecast entity is misconfigured.
 #
-# True (tidigare beteende):
-#   Antar kallt väder vid saknad prognos → förvärmning kan triggas.
-#   Kan vara önskvärt i klimat där kallt väder är normen.
+# True:
+#   Missing forecast data is treated as cold weather, so preheating may trigger.
+#   This may be useful in climates where cold weather is the default assumption.
 PREHEAT_ON_MISSING_FORECAST: Final[bool] = False
 
 # === DEFAULTS ===
@@ -94,17 +98,10 @@ DEFAULT_TARGET_TEMP: Final[float] = 21.0
 HOLIDAY_TEMP: Final[float] = 16.0
 
 # === SANITY BOUNDS ===
-MIN_REASONABLE_TEMP: Final[float] = -50.0
-MAX_REASONABLE_TEMP: Final[float] = 50.0
+MIN_REASONABLE_TEMP: Final[float] = -30.0
+MAX_REASONABLE_TEMP: Final[float] = 30.0
 MIN_REASONABLE_PRICE: Final[float] = -2.0
 MAX_REASONABLE_PRICE: Final[float] = 15.0
-
-# === REMOVED CONSTANTS (were only used by temp_control_logic.py, now deleted) ===
-# HEATING_COMPENSATION_FACTOR  — removed, was dead code
-# BRAKING_COMPENSATION_FACTOR  — removed, was dead code
-# HEATING_THRESHOLD            — removed, was dead code
-# BRAKE_FAKE_TEMP              — removed, was dead code
-
 
 def validate_core_settings() -> None:
     errors = []
