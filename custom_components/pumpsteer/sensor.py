@@ -646,6 +646,7 @@ class PumpSteerSensor(RestoreEntity):
                     comfort_floor,
                 )
                 brake_requested = False
+                brake_hold = 0.0
             else:
                 brake_requested = True
 
