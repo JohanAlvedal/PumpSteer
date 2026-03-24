@@ -3,7 +3,7 @@ import logging
 import math
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -50,14 +50,13 @@ def safe_float(
     Returns None for:
       - None input
       - Non-numeric strings (e.g. "unavailable", "unknown")
-      - NaN and +-Inf  ← FIX: previously passed through
+      - NaN and +-Inf
       - Values outside [min_val, max_val] if specified
     """
     if val is None:
         return None
     try:
         f = float(val)
-        # FIX: NaN and infinity are not valid physical sensor values
         if not math.isfinite(f):
             return None
         if min_val is not None and f < min_val:
@@ -81,7 +80,13 @@ def get_state(
     if not entity:
         _LOGGER.debug("Entity not found: %s", entity_id)
         return default
-    if entity.state in {STATE_UNAVAILABLE, STATE_UNKNOWN, "unavailable", "unknown", None}:
+    if entity.state in {
+        STATE_UNAVAILABLE,
+        STATE_UNKNOWN,
+        "unavailable",
+        "unknown",
+        None,
+    }:
         return default
     return entity.state
 
@@ -129,19 +134,54 @@ def safe_parse_temperature_forecast(
 
 
 def detect_price_interval_minutes(prices: List[Any]) -> int:
-    """Detect interval in minutes between price points."""
+    """Detect interval in minutes between price points.
+
+    Preferred method:
+    - Read "start" and "end" timestamps from dict items.
+
+    Fallback:
+    - Infer interval from the number of price points in one day.
+    """
     if not prices:
         return 60
+
+    # Prefer explicit timestamps if available.
+    for item in prices:
+        if not isinstance(item, dict):
+            continue
+
+        start_raw = item.get("start")
+        end_raw = item.get("end")
+        if not start_raw or not end_raw:
+            continue
+
+        try:
+            start_dt = datetime.fromisoformat(str(start_raw))
+            end_dt = datetime.fromisoformat(str(end_raw))
+            delta_min = int((end_dt - start_dt).total_seconds() / 60)
+
+            if delta_min > 0:
+                return delta_min
+        except (TypeError, ValueError):
+            continue
+
+    # Fallback: infer from number of slots in one day.
     count = len(prices)
+
     for interval in [5, 10, 15, 20, 30, 60, 120]:
         if count * interval == 1440:
             return interval
+
     if 1440 % count == 0:
         interval = 1440 // count
         if interval > 0:
             return interval
+
     estimated = max(1, math.floor(1440 / max(1, count)))
-    return min([5, 10, 15, 20, 30, 60, 120], key=lambda x: abs(x - estimated))
+    return min(
+        [5, 10, 15, 20, 30, 60, 120],
+        key=lambda x: abs(x - estimated),
+    )
 
 
 def compute_price_slot_index(
@@ -170,4 +210,4 @@ def get_price_window_for_hours(
     interval = max(1, price_interval_minutes)
     slots = max(1, math.ceil(hours * 60 / interval))
     start = min(current_slot, len(prices) - 1)
-    return prices[start: min(len(prices), start + slots)]
+    return prices[start:min(len(prices), start + slots)]
