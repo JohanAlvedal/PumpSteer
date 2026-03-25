@@ -584,21 +584,24 @@ class PumpSteerSensor(RestoreEntity):
         current_cat = categories[current_slot] if categories else PRICE_NORMAL
         next_cat = self._next_period_category(categories, current_slot, interval_minutes)
 
-        if next_cat:
-            ramp_in = self._compute_ramp_minutes(
-                current_cat,
-                next_cat,
-                house_inertia,
-            )
-        else:
-            ramp_in = 15.0
-
-        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.5)
-
         lookahead_slots = max(
             1,
             math.ceil((PRICE_LOOKAHEAD_HOURS * 60) / max(interval_minutes, 1)),
         )
+
+        # Compute ramp_in based on the upcoming expensive period, not just next_cat.
+        # When current=normal, next=normal but expensive is coming soon, the old logic
+        # gave jump=0 → ramp_in=RAMP_MIN, so minutes_until_expensive never fit inside
+        # the window and pre-brake never triggered. By targeting PRICE_EXPENSIVE when
+        # upcoming=True, ramp_in is correctly scaled to house_inertia and the trigger
+        # window opens in time. The same ramp_out benefits bridge_short_dip.
+        upcoming = self._upcoming_expensive(categories, current_slot, lookahead_slots)
+        if upcoming:
+            ramp_target_cat = PRICE_EXPENSIVE
+        else:
+            ramp_target_cat = next_cat or current_cat
+        ramp_in = self._compute_ramp_minutes(current_cat, ramp_target_cat, house_inertia)
+        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.5)
 
         comfort_floor = self._comfort_floor(target, aggressiveness)
         forecast_temps = await self._forecast_temps()
@@ -753,7 +756,6 @@ class PumpSteerSensor(RestoreEntity):
             return
 
         # 5. Preheating / pre-brake before expensive period.
-        upcoming = self._upcoming_expensive(categories, current_slot, lookahead_slots)
         forecast_cold = self._forecast_is_cold(
             summer_threshold,
             forecast_temps,
