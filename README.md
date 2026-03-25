@@ -1,6 +1,6 @@
 # 🔥 PumpSteer 2.0.0
 
-➡️ Swedish version: [README (Svenska)](#pumpsteer-200-svenska)
+➡️ Swedish version: [README (Svenska)](#readme_sv.md)
 
 > ⚠️ This is a major rewrite. Read upgrade notes before installing.
 
