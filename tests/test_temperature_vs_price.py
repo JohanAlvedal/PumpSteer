@@ -554,37 +554,33 @@ def test_preheat_on_missing_forecast_is_false_by_default():
 
 def test_forecast_is_cold_returns_false_when_no_forecast():
     """
-    FIX: _forecast_is_cold ska returnera False (inte True) när prognos saknas,
-    med PREHEAT_ON_MISSING_FORECAST=False.
+    _forecast_is_cold ska returnera False (inte True) när temps=None,
+    med PREHEAT_ON_MISSING_FORECAST=False (default).
     """
     from custom_components.pumpsteer.sensor import PumpSteerSensor
-    # Sensor utan forecast-entitet i hass
     s = PumpSteerSensor(DummyHass({}), DummyConfigEntry())
-    result = s._forecast_is_cold(summer_threshold=18.0, hours=6)
+    result = s._forecast_is_cold(summer_threshold=18.0, temps=None, hours=6)
     assert result is False, (
-        "_forecast_is_cold ska returnera False vid saknad prognos "
+        "_forecast_is_cold ska returnera False vid temps=None "
         "(PREHEAT_ON_MISSING_FORECAST=False)"
     )
 
 
 def test_forecast_is_cold_returns_true_when_cold_forecast():
-    """_forecast_is_cold ska returnera True när prognosen visar kallt väder."""
+    """_forecast_is_cold ska returnera True när alla temps är under summer_threshold."""
     from custom_components.pumpsteer.sensor import PumpSteerSensor
-    # Prognos: 6 timmar alla under summer_threshold (18°C)
-    cold_forecast = ",".join(["5.0"] * 6)
-    hass = DummyHass({"input_text.hourly_forecast_temperatures": cold_forecast})
-    s = PumpSteerSensor(hass, DummyConfigEntry())
-    result = s._forecast_is_cold(summer_threshold=18.0, hours=6)
+    s = PumpSteerSensor(DummyHass({}), DummyConfigEntry())
+    cold_temps = [5.0] * 6
+    result = s._forecast_is_cold(summer_threshold=18.0, temps=cold_temps, hours=6)
     assert result is True
 
 
 def test_forecast_is_cold_returns_false_when_warm_forecast():
-    """_forecast_is_cold ska returnera False när prognosen visar varmt väder."""
+    """_forecast_is_cold ska returnera False när temps är över summer_threshold."""
     from custom_components.pumpsteer.sensor import PumpSteerSensor
-    warm_forecast = ",".join(["22.0"] * 6)
-    hass = DummyHass({"input_text.hourly_forecast_temperatures": warm_forecast})
-    s = PumpSteerSensor(hass, DummyConfigEntry())
-    result = s._forecast_is_cold(summer_threshold=18.0, hours=6)
+    s = PumpSteerSensor(DummyHass({}), DummyConfigEntry())
+    warm_temps = [22.0] * 6
+    result = s._forecast_is_cold(summer_threshold=18.0, temps=warm_temps, hours=6)
     assert result is False
 
 
