@@ -249,3 +249,203 @@ Braking is no longer a simple immediate switch. In 2.0.0 it is stateful:
 6. Repoint holiday automations to PumpSteer Holiday switch/datetime entities.
 7. Verify runtime attributes: `mode`, `price_category`, `p30`, `p80`, `brake_factor`, `status`.
 8. Test one expensive period to confirm preheat/brake transitions and comfort floor behavior.
+
+## Part 6 — Installation & Upgrade Guides
+
+### Section A — Fresh Installation (PumpSteer 2.0.0)
+
+This guide is for users who are **not** upgrading from older PumpSteer versions.
+
+#### Step 1: Install PumpSteer
+
+- Preferred: Install via HACS custom repository (`https://github.com/JohanAlvedal/PumpSteer`).
+- Alternative: Manual copy of `custom_components/pumpsteer` into your Home Assistant config.
+
+#### Step 2: Restart Home Assistant
+
+- Fully restart Home Assistant after installation.
+- Do not continue setup before restart is complete.
+
+#### Step 3: Add integration in UI
+
+- Go to **Settings → Devices & Services → Add Integration → PumpSteer**.
+
+#### Step 4: Select required entities during config flow
+
+Required:
+
+1. Indoor temperature sensor (`indoor_temp_entity`)
+2. Outdoor temperature sensor (`real_outdoor_entity`)
+3. Electricity price entity for today/current (`electricity_price_entity`)
+4. Electricity price entity for tomorrow (`price_tomorrow_entity`)
+
+Optional but recommended:
+
+5. Weather entity (`weather_entity`) for forecast-aware preheat/precool logic
+
+#### Step 5: Understand what PumpSteer creates automatically
+
+After setup, PumpSteer creates integration-owned entities:
+
+- **Number entities**
+  - Target Temperature
+  - Summer Mode Threshold
+  - Saving Level (aggressiveness)
+  - House Thermal Mass (inertia)
+- **Switch entity**
+  - Holiday Mode
+- **Datetime entities**
+  - Holiday Start
+  - Holiday End
+
+These entities belong to the PumpSteer config entry and should be used in automations instead of old helper assumptions.
+
+#### Step 6: Verify price sensor format (critical)
+
+Your selected price entities must expose day-ahead list attributes:
+
+- Today list from `today` or `raw_today`
+- Tomorrow list from `tomorrow` or `raw_tomorrow`
+
+Accepted list item formats:
+
+- Numeric: `0.95`
+- Numeric string: `"0.95"`
+- Dict item: `{"value": 0.95}` or `{"price": 0.95}`
+
+If these lists are missing or non-numeric, PumpSteer cannot classify and plan correctly.
+
+#### Step 7: First validation checklist
+
+After 10–30 minutes of runtime, verify:
+
+- `sensor.pumpsteer` has numeric state updates.
+- Attribute `status` is `ok` (not safe mode).
+- Attribute `price_category` changes between `cheap|normal|expensive` over the day.
+- Attributes `p30` and `p80` are present and finite.
+- Attribute `mode` changes logically with conditions.
+- During expensive periods, `brake_factor` can rise above 0.
+
+If validation fails, first inspect price attributes and selected entities in options flow.
+
+---
+
+### Section B — Upgrade Guide (1.6.6 → 2.0.0)
+
+This guide is for existing 1.6.6 users. Follow in order.
+
+#### 1) Before upgrading
+
+Checklist before touching files:
+
+- Export/backup Home Assistant config.
+- Document current PumpSteer automations and dashboard cards.
+- List every reference to old entities, especially:
+  - `input_select.pumpsteer_price_model`
+  - `input_boolean.holiday_mode`
+  - `input_datetime.holiday_start`
+  - `input_datetime.holiday_end`
+  - ML sensor cards/templates
+- Check what your price sensor actually exposes (`today/raw_today`, `tomorrow/raw_tomorrow`).
+
+#### 2) What will NOT carry over (or should be considered deprecated)
+
+These old assumptions should be treated as non-valid in 2.0.0 runtime behavior:
+
+- Legacy price categories (`very_cheap`, `very_expensive`, `extreme`, `negative_price`).
+- ML runtime/sensor expectations from 1.6.6.
+- `input_select.pumpsteer_price_model` behavior (hybrid vs percentile switch).
+- Old holiday helper naming model as primary control source.
+
+#### 3) What MUST be reconfigured
+
+Must-do migration actions:
+
+1. Configure/verify both price entities:
+   - today/current price entity
+   - tomorrow price entity
+2. Update automations/templates to `cheap|normal|expensive` categories.
+3. Update dashboards/cards that reference removed ML outputs.
+4. Repoint holiday automations to PumpSteer-created Holiday switch/datetime entities.
+
+#### 4) What MAY still work but must be verified
+
+- Existing indoor/outdoor sensors (usually reusable).
+- Aggressiveness setting value (same range, different behavior impact).
+- Forecast-related behavior (especially if you depended on old helper-only approach).
+- Any template reading old attribute names or expecting old mode names.
+
+#### 5) Step-by-step upgrade process
+
+1. Upgrade PumpSteer files/version.
+2. Restart Home Assistant.
+3. Open PumpSteer config/options UI.
+4. Re-select/confirm:
+   - indoor temp
+   - outdoor temp
+   - electricity price (today)
+   - electricity price (tomorrow)
+   - optional weather entity
+5. Verify that PumpSteer Number/Switch/Datetime entities exist.
+6. Replace legacy automation conditions on old price categories.
+7. Remove/replace legacy ML cards and entities.
+8. Save and monitor one full price cycle.
+
+#### 6) Post-upgrade validation checklist
+
+- `sensor.pumpsteer` status is `ok`.
+- Price classification transitions happen (`cheap|normal|expensive`).
+- Braking appears during expensive blocks (check `mode=braking` and `brake_factor`).
+- No persistent `safe_mode` unless input is truly missing.
+- Holiday switch/datetime works and toggles expected behavior.
+- Expected transitions appear: `normal`, `preheating`, `braking`, `precool`, `summer_mode` when conditions match.
+
+#### 7) Common upgrade issues (real-world)
+
+##### Issue: "PumpSteer stuck in safe mode"
+
+- Likely cause:
+  - Missing/invalid selected indoor/outdoor entity
+  - No usable price list data
+- Fix:
+  1. Re-open options flow and re-select entities
+  2. Confirm price attributes contain numeric list values
+  3. Check `status` attribute reason text
+
+##### Issue: "No braking happening"
+
+- Likely cause:
+  - Current slot not classified as `expensive`
+  - Comfort floor protection is releasing brake
+  - Price spikes filtered as too short
+- Fix:
+  1. Inspect `price_category`, `comfort_floor_c`, `brake_factor`
+  2. Verify price interval/list continuity
+  3. Validate aggressiveness and temperature conditions
+
+##### Issue: "Wrong price category"
+
+- Likely cause:
+  - Unexpected price list format or bad numeric conversion
+  - Thresholds affected by history/fallback data quality
+- Fix:
+  1. Inspect raw `today/raw_today` and `tomorrow/raw_tomorrow`
+  2. Confirm entries are parseable as numeric values
+  3. Verify `p30` and `p80` attributes are sane
+
+##### Issue: "Holiday mode not working"
+
+- Likely cause:
+  - Automation still targets old helper entities
+  - Start/end datetime invalid or not set
+- Fix:
+  1. Use PumpSteer Holiday switch + Holiday Start/End entities
+  2. Ensure start < end and values are valid datetimes
+
+##### Issue: "Automations not triggering"
+
+- Likely cause:
+  - Conditions still keyed on removed categories or removed ML entities
+- Fix:
+  1. Update triggers/conditions to current attributes and categories
+  2. Test with Developer Tools → States to verify live values
