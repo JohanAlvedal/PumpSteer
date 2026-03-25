@@ -61,7 +61,7 @@ BRAKE_DELTA_C: Final[float] = 10.0
 # Example with 15-minute prices and inertia=3:
 # 1 category jump × 3 × 10 = 30 minutes = 2 price slots
 RAMP_SCALE: Final[float] = 10.0
-RAMP_MIN_MINUTES: Final[float] = 15.0   # at least 1 price slot (15-min prices)
+RAMP_MIN_MINUTES: Final[float] = 20.0   # at least 1 price slot (15-min prices)
 RAMP_MAX_MINUTES: Final[float] = 60.0   # max 4 price slots
 
 # Preheating: extra boost applied during the preheat window (°C)
