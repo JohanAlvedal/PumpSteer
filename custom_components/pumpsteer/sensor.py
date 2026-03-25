@@ -54,22 +54,12 @@ from .utils import (
     get_version,
     detect_price_interval_minutes,
     compute_price_slot_index,
-    safe_parse_temperature_forecast,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
 SW_VERSION = get_version()
-
-# Hardcoded HA entity IDs created by the package.
-PACKAGE_ENTITIES = {
-    "target_temp": "input_number.indoor_target_temperature",
-    "summer_threshold": "input_number.pumpsteer_summer_threshold",
-    "aggressiveness": "input_number.pumpsteer_aggressiveness",
-    "house_inertia": "input_number.pumpsteer_house_inertia",
-    "forecast_temps": "input_text.hourly_forecast_temperatures",
-}
 
 # Operating modes.
 MODE_SUMMER = "summer_mode"
@@ -130,6 +120,7 @@ class PumpSteerSensor(RestoreEntity):
         self._remove_update_listener = None
 
         self._attr_unique_id = config_entry.entry_id
+        self._forecast_available_last: Optional[bool] = None
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
         self._attr_state_class = "measurement"
@@ -178,7 +169,6 @@ class PumpSteerSensor(RestoreEntity):
         return True
 
     async def async_added_to_hass(self) -> None:
-        """Restore last state and register options update listener."""
         await super().async_added_to_hass()
 
         self._remove_update_listener = self._config_entry.add_update_listener(
@@ -195,11 +185,17 @@ class PumpSteerSensor(RestoreEntity):
                     for key, value in last.attributes.items()
                     if key != "friendly_name"
                 }
-                _LOGGER.debug(
-                    "PumpSteer restored state %.1f°C (mode=%s) after restart",
-                    self._state,
-                    self._attributes.get("mode", "unknown"),
-                )
+
+        # Wait until Home Assistant is fully started before the first real update.
+        self.hass.bus.async_listen_once(
+            "homeassistant_started",
+            self._handle_ha_started,
+        )
+
+        # If HA is already running (for example on reload), update immediately.
+        if self.hass.is_running:
+            await self.async_update()
+            self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
         """Cancel options update listener on unload."""
@@ -215,6 +211,11 @@ class PumpSteerSensor(RestoreEntity):
         self._config_entry = entry
         await self.async_update()
 
+    async def _handle_ha_started(self, event) -> None:
+        """Run when HA is fully started and entities are ready."""
+        await self.async_update()
+        self.async_write_ha_state()
+
     def _cfg(self) -> Dict[str, Any]:
         return {**self._config_entry.data, **self._config_entry.options}
 
@@ -225,20 +226,28 @@ class PumpSteerSensor(RestoreEntity):
     ) -> Optional[float]:
         return safe_float(get_state(self.hass, entity_id)) if entity_id else default
 
+    def _number_entity_id(self, key: str) -> Optional[str]:
+        """Look up entity_id for a PumpSteer NumberEntity by its unique_id."""
+        from homeassistant.helpers import entity_registry as er
+        registry = er.async_get(self.hass)
+        return registry.async_get_entity_id("number", DOMAIN, f"{self._config_entry.entry_id}_{key}")
+
     def _aggressiveness(self, cfg: Dict[str, Any]) -> int:
         raw = (
             cfg.get("aggressiveness")
-            or self._read_entity(PACKAGE_ENTITIES["aggressiveness"])
-            or DEFAULT_AGGRESSIVENESS
+            or self._read_entity(self._number_entity_id("aggressiveness"))
         )
+        if raw is None:
+            return int(DEFAULT_AGGRESSIVENESS)
         return max(0, min(5, int(round(float(raw)))))
 
     def _house_inertia(self, cfg: Dict[str, Any]) -> float:
         raw = (
             cfg.get("house_inertia")
-            or self._read_entity(PACKAGE_ENTITIES["house_inertia"])
-            or DEFAULT_HOUSE_INERTIA
+            or self._read_entity(self._number_entity_id("house_inertia"))
         )
+        if raw is None:
+            return float(DEFAULT_HOUSE_INERTIA)
         return max(0.5, min(10.0, float(raw)))
 
     def _comfort_floor(self, target: float, aggressiveness: int) -> float:
@@ -302,20 +311,63 @@ class PumpSteerSensor(RestoreEntity):
                 return True
         return False
 
-    def _forecast_temps(self) -> Optional[List[float]]:
-        raw = get_state(self.hass, PACKAGE_ENTITIES["forecast_temps"])
-        if not raw:
-            return None
-        return safe_parse_temperature_forecast(raw, max_hours=PRECOOL_LOOKAHEAD)
+    async def _forecast_temps(self) -> Optional[List[float]]:
+        cfg = self._cfg()
+        weather_entity = cfg.get("weather_entity")
+        price_entity = cfg.get("electricity_price_entity")
 
-    def _should_precool(self, summer_threshold: float) -> bool:
-        temps = self._forecast_temps()
+        if not weather_entity or not price_entity:
+            if self._forecast_available_last is not False:
+                _LOGGER.debug(
+                    "PumpSteer forecast unavailable: %s",
+                    "weather_entity not configured" if not weather_entity
+                    else "electricity_price_entity not configured",
+                )
+                self._forecast_available_last = False
+            return None
+
+        from .forecast import async_build_forecast
+
+        try:
+            points = await async_build_forecast(
+                self.hass,
+                price_entity_id=price_entity,
+                weather_entity_id=weather_entity,
+                horizon_hours=PRECOOL_LOOKAHEAD,
+            )
+        except Exception as err:
+            if self._forecast_available_last is not False:
+                _LOGGER.debug("PumpSteer forecast build failed: %s", err)
+                self._forecast_available_last = False
+            return None
+
+        temps = [p.outdoor_temp for p in points if p.outdoor_temp is not None]
+        available_now = bool(temps)
+
+        if available_now != self._forecast_available_last:
+            if available_now:
+                _LOGGER.debug(
+                    "PumpSteer forecast available (weather=%s, %d points)",
+                    weather_entity,
+                    len(temps),
+                )
+            else:
+                _LOGGER.debug(
+                    "PumpSteer forecast returned no usable temperatures "
+                    "(weather=%s, price=%s)",
+                    weather_entity,
+                    price_entity,
+                )
+            self._forecast_available_last = available_now
+
+        return temps if temps else None
+
+    def _should_precool(self, summer_threshold: float, temps: Optional[List[float]]) -> bool:
         if not temps:
             return False
         return any(temp >= summer_threshold + PRECOOL_MARGIN for temp in temps)
 
-    def _forecast_is_cold(self, summer_threshold: float, hours: int = 6) -> bool:
-        temps = self._forecast_temps()
+    def _forecast_is_cold(self, summer_threshold: float, temps: Optional[List[float]], hours: int = 6) -> bool:
         if not temps:
             if PREHEAT_ON_MISSING_FORECAST:
                 _LOGGER.debug(
@@ -482,14 +534,13 @@ class PumpSteerSensor(RestoreEntity):
 
         indoor = safe_float(get_state(self.hass, cfg.get("indoor_temp_entity")))
         outdoor = safe_float(get_state(self.hass, cfg.get("real_outdoor_entity")))
-        target = (
-            self._read_entity(PACKAGE_ENTITIES["target_temp"])
-            or DEFAULT_TARGET_TEMP
-        )
-        summer_threshold = (
-            self._read_entity(PACKAGE_ENTITIES["summer_threshold"])
-            or DEFAULT_SUMMER_THRESHOLD
-        )
+        target = self._read_entity(self._number_entity_id("target_temperature"))
+        if target is None:
+            target = float(DEFAULT_TARGET_TEMP)
+
+        summer_threshold = self._read_entity(self._number_entity_id("summer_threshold"))
+        if summer_threshold is None:
+            summer_threshold = float(DEFAULT_SUMMER_THRESHOLD)
         aggressiveness = self._aggressiveness(cfg)
         house_inertia = self._house_inertia(cfg)
 
@@ -510,7 +561,7 @@ class PumpSteerSensor(RestoreEntity):
             )
             return
 
-        holiday = await async_update_holiday(self.hass)
+        holiday = await async_update_holiday(self.hass, self._config_entry.entry_id)
         if holiday:
             target = HOLIDAY_TEMP
 
@@ -550,6 +601,7 @@ class PumpSteerSensor(RestoreEntity):
         )
 
         comfort_floor = self._comfort_floor(target, aggressiveness)
+        forecast_temps = await self._forecast_temps()
 
         # 1. Summer mode.
         if outdoor >= summer_threshold:
@@ -577,7 +629,7 @@ class PumpSteerSensor(RestoreEntity):
             return
 
         # 2. Precool.
-        if self._should_precool(summer_threshold):
+        if self._should_precool(summer_threshold, forecast_temps):
             brake_temp = self._brake_temp(outdoor)
             factor = self._update_brake_ramp(
                 True,
@@ -704,6 +756,7 @@ class PumpSteerSensor(RestoreEntity):
         upcoming = self._upcoming_expensive(categories, current_slot, lookahead_slots)
         forecast_cold = self._forecast_is_cold(
             summer_threshold,
+            forecast_temps,
             hours=PRICE_LOOKAHEAD_HOURS,
         )
 
@@ -974,4 +1027,4 @@ async def async_setup_entry(
 ) -> None:
     """Set up PumpSteer sensor from a config entry."""
     sensor = PumpSteerSensor(hass, config_entry)
-    async_add_entities([sensor], update_before_add=True)
+    async_add_entities([sensor], update_before_add=False)
