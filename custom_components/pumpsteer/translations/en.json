@@ -29,14 +29,16 @@
           "pid_ki": "Long-term correction strength (Ki)",
           "pid_kd": "Rapid-change damping (Kd)",
           "pid_integral_clamp": "Long-term correction limit",
-          "pid_output_clamp": "Maximum temperature adjustment"
+          "pid_output_clamp": "Maximum temperature adjustment",
+          "notify_service": "Notification service (optional, e.g. notify.mobile_app_my_phone)"
         },
         "data_description": {
           "pid_kp": "How strongly PumpSteer reacts to current temperature error. Typical range: 2.0 to 5.0.",
           "pid_ki": "How much PumpSteer corrects long-term drift. Typical range: 0.01 to 0.05.",
           "pid_kd": "How much PumpSteer reacts to fast temperature changes. Keep at 0.0 unless you tune it intentionally.",
           "pid_integral_clamp": "Limits built-up long-term correction to reduce windup. Typical range: 5.0 to 10.0.",
-          "pid_output_clamp": "Caps how many degrees PumpSteer may adjust the setpoint."
+          "pid_output_clamp": "Caps how many degrees PumpSteer may adjust the setpoint.",
+          "notify_service": "Leave empty to use persistent notifications in the HA sidebar instead."
         }
       }
     },
