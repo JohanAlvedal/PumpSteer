@@ -9,13 +9,6 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
 
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-}
-
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for PumpSteer."""
@@ -33,8 +26,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                 errors = {**entity_errors}
 
                 if not errors:
-                    combined_data = {**user_input, **HARDCODED_ENTITIES}
-                    return self.async_create_entry(title="", data=combined_data)
+                    return self.async_create_entry(title="", data={**user_input})
 
             except Exception as err:
                 _LOGGER.exception("Options flow save failed: %s", err)
@@ -55,6 +47,12 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         default=current_data.get("real_outdoor_entity"),
                     ): selector(
                         {"entity": {"domain": "sensor", "device_class": "temperature"}}
+                    ),
+                    vol.Optional(
+                        "weather_entity",
+                        default=current_data.get("weather_entity"),
+                    ): selector(
+                        {"entity": {"domain": "weather"}}
                     ),
                     vol.Required(
                         "electricity_price_entity",
@@ -100,6 +98,10 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector(
                         {"number": {"min": 0.0, "max": 30.0, "step": 0.1, "mode": "box"}}
                     ),
+                    vol.Optional(
+                        "notify_service",
+                        default=current_data.get("notify_service", ""),
+                    ): selector({"text": {}}),
                 }
             ),
             errors=errors,
@@ -109,27 +111,30 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         """Validate that entities exist and are available."""
         errors = {}
 
-        user_configurable_entities = {
+        required_entities = {
             "indoor_temp_entity": "Indoor temperature sensor",
             "real_outdoor_entity": "Outdoor temperature sensor",
             "electricity_price_entity": "Electricity price sensor",
             "price_tomorrow_entity": "Tomorrow electricity price sensor",
         }
 
-        for field, description in user_configurable_entities.items():
+        for field, description in required_entities.items():
             entity_id = user_input.get(field)
             if not entity_id:
                 errors[field] = "required"
                 continue
-
             if not self._entity_exists(entity_id):
                 _LOGGER.warning("%s not found: %s", description, entity_id)
                 errors[field] = "entity_not_found"
                 continue
-
             if not self._entity_available(entity_id):
                 _LOGGER.warning("%s unavailable: %s", description, entity_id)
                 errors[field] = "entity_unavailable"
+
+        # weather_entity är valfri — validera bara om den är ifylld
+        weather = user_input.get("weather_entity")
+        if weather and not self._entity_exists(weather):
+            errors["weather_entity"] = "entity_not_found"
 
         return errors
 
@@ -142,7 +147,6 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         entity = self.hass.states.get(entity_id)
         if not entity:
             return False
-
         return entity.state not in {
             STATE_UNAVAILABLE,
             STATE_UNKNOWN,
