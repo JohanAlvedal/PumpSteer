@@ -16,7 +16,9 @@ PLATFORMS = ["sensor", "number", "switch", "datetime"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up PumpSteer from a config entry."""
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = async_setup_notifications(hass, entry)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = async_setup_notifications(
+        hass, entry
+    )
     _LOGGER.info("PumpSteer integration setup completed")
     return True
 

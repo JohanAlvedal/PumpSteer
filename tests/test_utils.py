@@ -1,5 +1,6 @@
 import builtins
 from datetime import datetime
+
 from custom_components.pumpsteer.utils import (
     compute_price_slot_index,
     detect_price_interval_minutes,
@@ -16,6 +17,7 @@ def test_get_version_reads_manifest():
 def test_get_version_missing_manifest(monkeypatch):
     def fake_open(*args, **kwargs):
         raise FileNotFoundError
+
     monkeypatch.setattr(builtins, "open", fake_open)
     assert get_version() == "unknown"
 

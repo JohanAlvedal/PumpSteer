@@ -10,29 +10,30 @@ Fix: ramp_in baseras på current_cat → PRICE_EXPENSIVE när upcoming=True,
 
 Kör med: pytest tests/ -v
 """
+
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from datetime import timedelta, timezone, datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ha_test_stubs  # noqa: F401
 
-from custom_components.pumpsteer.sensor import PumpSteerSensor
 from custom_components.pumpsteer.electricity_price import (
     PRICE_CHEAP,
-    PRICE_NORMAL,
     PRICE_EXPENSIVE,
+    PRICE_NORMAL,
 )
+from custom_components.pumpsteer.sensor import PumpSteerSensor
 from custom_components.pumpsteer.settings import (
-    RAMP_MIN_MINUTES,
     RAMP_MAX_MINUTES,
+    RAMP_MIN_MINUTES,
     RAMP_SCALE,
 )
 
-
 # ── Hjälpklasser (samma mönster som befintliga tester) ────────────────────────
+
 
 class DummyState:
     def __init__(self, state, attributes=None):
@@ -77,6 +78,7 @@ def make_sensor() -> PumpSteerSensor:
 
 # ── Hjälp: _compute_ramp_minutes direkt ──────────────────────────────────────
 
+
 def ramp(current, target, inertia):
     s = make_sensor()
     return s._compute_ramp_minutes(current, target, inertia)
@@ -92,6 +94,7 @@ def ramp(current, target, inertia):
 #   minutes_until_expensive <= ramp_in kan bli True
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_ramp_in_uses_expensive_when_upcoming():
     """ramp_in ska baseras på hopp till expensive, inte next_cat, när upcoming=True."""
     s = make_sensor()
@@ -106,19 +109,21 @@ def test_ramp_in_uses_expensive_when_upcoming():
     # Gammalt beteende (buggen):
     old_ramp_in = s._compute_ramp_minutes(current_cat, next_cat, house_inertia)
     # normal→normal: jump=0 → ramp = max(RAMP_MIN, 0) = RAMP_MIN
-    assert old_ramp_in == RAMP_MIN_MINUTES, (
-        f"Förväntat {RAMP_MIN_MINUTES}, fick {old_ramp_in} — kontrollfråga för gammalt beteende"
-    )
+    assert (
+        old_ramp_in == RAMP_MIN_MINUTES
+    ), f"Förväntat {RAMP_MIN_MINUTES}, fick {old_ramp_in} — kontrollfråga för gammalt beteende"
 
     # Nytt beteende (efter patch):
     ramp_target_cat = PRICE_EXPENSIVE if upcoming else (next_cat or current_cat)
     new_ramp_in = s._compute_ramp_minutes(current_cat, ramp_target_cat, house_inertia)
     # normal→expensive: jump=1, inertia=3 → ramp=30 min
-    expected = max(RAMP_MIN_MINUTES, min(RAMP_MAX_MINUTES, 1 * house_inertia * RAMP_SCALE))
-    assert new_ramp_in == expected, f"Förväntat {expected}, fick {new_ramp_in}"
-    assert new_ramp_in > RAMP_MIN_MINUTES, (
-        "ramp_in ska vara > RAMP_MIN när upcoming=True och inertia ger jump>0"
+    expected = max(
+        RAMP_MIN_MINUTES, min(RAMP_MAX_MINUTES, 1 * house_inertia * RAMP_SCALE)
     )
+    assert new_ramp_in == expected, f"Förväntat {expected}, fick {new_ramp_in}"
+    assert (
+        new_ramp_in > RAMP_MIN_MINUTES
+    ), "ramp_in ska vara > RAMP_MIN när upcoming=True och inertia ger jump>0"
 
 
 def test_pre_brake_trigger_window_opens_with_fix():
@@ -136,15 +141,15 @@ def test_pre_brake_trigger_window_opens_with_fix():
 
     # Gammalt: ramp_in baserat på normal→normal
     old_ramp_in = s._compute_ramp_minutes(PRICE_NORMAL, PRICE_NORMAL, house_inertia)
-    assert minutes_to_expensive > old_ramp_in, (
-        "Gammalt beteende: trigger skulle INTE ske (minutes > ramp_in)"
-    )
+    assert (
+        minutes_to_expensive > old_ramp_in
+    ), "Gammalt beteende: trigger skulle INTE ske (minutes > ramp_in)"
 
     # Nytt: ramp_in baserat på normal→expensive
     new_ramp_in = s._compute_ramp_minutes(PRICE_NORMAL, PRICE_EXPENSIVE, house_inertia)
-    assert minutes_to_expensive <= new_ramp_in, (
-        "Nytt beteende: trigger SKA ske (minutes <= ramp_in)"
-    )
+    assert (
+        minutes_to_expensive <= new_ramp_in
+    ), "Nytt beteende: trigger SKA ske (minutes <= ramp_in)"
 
 
 def test_ramp_in_not_affected_when_no_upcoming():
@@ -169,6 +174,7 @@ def test_ramp_in_not_affected_when_no_upcoming():
 # Nyckelkrav: bromsen ska INTE ha börjat rampa ned efter bara 1 minut
 # under dippen (BRAKE_HOLD_MINUTES skyddar mot det).
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def test_bridge_short_dip_brake_holds_during_cheap_gap():
     """
@@ -199,9 +205,9 @@ def test_bridge_short_dip_brake_holds_during_cheap_gap():
         hold_minutes=30.0,
     )
     # Hold är aktiv (bara 1 min sedan sista expensive) → bromsen ska inte ha sjunkit
-    assert factor_after_1min == 1.0, (
-        f"Bromsen ska hålla på 1.0 under hold-perioden, fick {factor_after_1min}"
-    )
+    assert (
+        factor_after_1min == 1.0
+    ), f"Bromsen ska hålla på 1.0 under hold-perioden, fick {factor_after_1min}"
 
 
 def test_bridge_short_dip_releases_after_hold():
@@ -229,9 +235,7 @@ def test_bridge_short_dip_releases_after_hold():
         hold_minutes=30.0,
     )
     # Hold är slut → bromsen ska ha börjat sjunka
-    assert factor < 1.0, (
-        f"Bromsen ska ha börjat rampa ned efter hold, fick {factor}"
-    )
+    assert factor < 1.0, f"Bromsen ska ha börjat rampa ned efter hold, fick {factor}"
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -241,6 +245,7 @@ def test_bridge_short_dip_releases_after_hold():
 # bara för att upcoming=True.
 # Grinden minutes_until_expensive <= ramp_in skyddar mot detta.
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def test_pre_brake_does_not_trigger_when_expensive_far_away():
     """
@@ -266,6 +271,6 @@ def test_ramp_in_clamped_to_max():
     """ramp_in ska aldrig överstiga RAMP_MAX_MINUTES oavsett house_inertia."""
     s = make_sensor()
     ramp_in = s._compute_ramp_minutes(PRICE_CHEAP, PRICE_EXPENSIVE, house_inertia=10.0)
-    assert ramp_in <= RAMP_MAX_MINUTES, (
-        f"ramp_in={ramp_in} överstiger RAMP_MAX_MINUTES={RAMP_MAX_MINUTES}"
-    )
+    assert (
+        ramp_in <= RAMP_MAX_MINUTES
+    ), f"ramp_in={ramp_in} överstiger RAMP_MAX_MINUTES={RAMP_MAX_MINUTES}"

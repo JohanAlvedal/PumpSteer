@@ -1,6 +1,6 @@
 import logging
-import voluptuous as vol
 
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.selector import selector
@@ -51,9 +51,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         "weather_entity",
                         default=current_data.get("weather_entity"),
-                    ): selector(
-                        {"entity": {"domain": "weather"}}
-                    ),
+                    ): selector({"entity": {"domain": "weather"}}),
                     vol.Required(
                         "electricity_price_entity",
                         default=current_data.get(
@@ -72,31 +70,66 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "pid_kp",
                         default=current_data.get("pid_kp", 2.4),
                     ): selector(
-                        {"number": {"min": 0.0, "max": 20.0, "step": 0.1, "mode": "box"}}
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 20.0,
+                                "step": 0.1,
+                                "mode": "box",
+                            }
+                        }
                     ),
                     vol.Optional(
                         "pid_ki",
                         default=current_data.get("pid_ki", 0.035),
                     ): selector(
-                        {"number": {"min": 0.0, "max": 2.0, "step": 0.001, "mode": "box"}}
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 2.0,
+                                "step": 0.001,
+                                "mode": "box",
+                            }
+                        }
                     ),
                     vol.Optional(
                         "pid_kd",
                         default=current_data.get("pid_kd", 0.0),
                     ): selector(
-                        {"number": {"min": 0.0, "max": 2.0, "step": 0.001, "mode": "box"}}
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 2.0,
+                                "step": 0.001,
+                                "mode": "box",
+                            }
+                        }
                     ),
                     vol.Optional(
                         "pid_integral_clamp",
                         default=current_data.get("pid_integral_clamp", 6.0),
                     ): selector(
-                        {"number": {"min": 0.0, "max": 30.0, "step": 0.1, "mode": "box"}}
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 30.0,
+                                "step": 0.1,
+                                "mode": "box",
+                            }
+                        }
                     ),
                     vol.Optional(
                         "pid_output_clamp",
                         default=current_data.get("pid_output_clamp", 12.0),
                     ): selector(
-                        {"number": {"min": 0.0, "max": 30.0, "step": 0.1, "mode": "box"}}
+                        {
+                            "number": {
+                                "min": 0.0,
+                                "max": 30.0,
+                                "step": 0.1,
+                                "mode": "box",
+                            }
+                        }
                     ),
                     vol.Optional(
                         "notify_service",

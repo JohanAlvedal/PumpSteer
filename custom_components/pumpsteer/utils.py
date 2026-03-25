@@ -5,17 +5,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
 
-from homeassistant.core import HomeAssistant
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import StateType
 
-from .settings import (
-    MIN_REASONABLE_TEMP,
-    MAX_REASONABLE_TEMP,
-    MIN_REASONABLE_PRICE,
-    MAX_REASONABLE_PRICE,
-    PRECOOL_LOOKAHEAD,
-)
+from .settings import MAX_REASONABLE_TEMP, MIN_REASONABLE_TEMP
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -210,4 +204,4 @@ def get_price_window_for_hours(
     interval = max(1, price_interval_minutes)
     slots = max(1, math.ceil(hours * 60 / interval))
     start = min(current_slot, len(prices) - 1)
-    return prices[start:min(len(prices), start + slots)]
+    return prices[start : min(len(prices), start + slots)]

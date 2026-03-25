@@ -1,59 +1,59 @@
 import logging
 import math
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
+import homeassistant.util.dt as dt_util
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-import homeassistant.util.dt as dt_util
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.typing import StateType
 
 from .control import PIController
-from .holiday import async_update_holiday
 from .electricity_price import (
+    PRICE_EXPENSIVE,
+    PRICE_NORMAL,
     async_get_price_thresholds,
     classify_price_list,
     filter_short_peaks,
     price_category_index,
-    PRICE_NORMAL,
-    PRICE_EXPENSIVE,
 )
+from .holiday import async_update_holiday
 from .settings import (
-    MIN_FAKE_TEMP,
-    MAX_FAKE_TEMP,
-    PRECOOL_LOOKAHEAD,
-    PRECOOL_MARGIN,
-    PID_KP,
-    PID_KI,
-    PID_KD,
-    PID_INTEGRAL_CLAMP,
-    PID_OUTPUT_CLAMP,
-    COMFORT_FLOOR_BY_AGGRESSIVENESS,
-    RAMP_SCALE,
-    RAMP_MIN_MINUTES,
-    RAMP_MAX_MINUTES,
-    PREHEAT_BOOST_C,
-    PEAK_FILTER_MIN_DURATION_MINUTES,
-    PRICE_LOOKAHEAD_HOURS,
-    DEFAULT_SUMMER_THRESHOLD,
-    DEFAULT_AGGRESSIVENESS,
-    DEFAULT_HOUSE_INERTIA,
-    DEFAULT_TARGET_TEMP,
-    HOLIDAY_TEMP,
     BRAKE_DELTA_C,
     BRAKE_HOLD_MINUTES,
+    COMFORT_FLOOR_BY_AGGRESSIVENESS,
+    DEFAULT_AGGRESSIVENESS,
+    DEFAULT_HOUSE_INERTIA,
+    DEFAULT_SUMMER_THRESHOLD,
+    DEFAULT_TARGET_TEMP,
+    HOLIDAY_TEMP,
+    MAX_FAKE_TEMP,
+    MIN_FAKE_TEMP,
+    PEAK_FILTER_MIN_DURATION_MINUTES,
+    PID_INTEGRAL_CLAMP,
+    PID_KD,
+    PID_KI,
+    PID_KP,
+    PID_OUTPUT_CLAMP,
+    PRECOOL_LOOKAHEAD,
+    PRECOOL_MARGIN,
+    PREHEAT_BOOST_C,
     PREHEAT_ON_MISSING_FORECAST,
+    PRICE_LOOKAHEAD_HOURS,
+    RAMP_MAX_MINUTES,
+    RAMP_MIN_MINUTES,
+    RAMP_SCALE,
 )
 from .utils import (
-    safe_float,
-    get_state,
-    get_attr,
-    get_version,
-    detect_price_interval_minutes,
     compute_price_slot_index,
+    detect_price_interval_minutes,
+    get_attr,
+    get_state,
+    get_version,
+    safe_float,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -229,22 +229,23 @@ class PumpSteerSensor(RestoreEntity):
     def _number_entity_id(self, key: str) -> Optional[str]:
         """Look up entity_id for a PumpSteer NumberEntity by its unique_id."""
         from homeassistant.helpers import entity_registry as er
+
         registry = er.async_get(self.hass)
-        return registry.async_get_entity_id("number", DOMAIN, f"{self._config_entry.entry_id}_{key}")
+        return registry.async_get_entity_id(
+            "number", DOMAIN, f"{self._config_entry.entry_id}_{key}"
+        )
 
     def _aggressiveness(self, cfg: Dict[str, Any]) -> int:
-        raw = (
-            cfg.get("aggressiveness")
-            or self._read_entity(self._number_entity_id("aggressiveness"))
+        raw = cfg.get("aggressiveness") or self._read_entity(
+            self._number_entity_id("aggressiveness")
         )
         if raw is None:
             return int(DEFAULT_AGGRESSIVENESS)
         return max(0, min(5, int(round(float(raw)))))
 
     def _house_inertia(self, cfg: Dict[str, Any]) -> float:
-        raw = (
-            cfg.get("house_inertia")
-            or self._read_entity(self._number_entity_id("house_inertia"))
+        raw = cfg.get("house_inertia") or self._read_entity(
+            self._number_entity_id("house_inertia")
         )
         if raw is None:
             return float(DEFAULT_HOUSE_INERTIA)
@@ -320,8 +321,11 @@ class PumpSteerSensor(RestoreEntity):
             if self._forecast_available_last is not False:
                 _LOGGER.debug(
                     "PumpSteer forecast unavailable: %s",
-                    "weather_entity not configured" if not weather_entity
-                    else "electricity_price_entity not configured",
+                    (
+                        "weather_entity not configured"
+                        if not weather_entity
+                        else "electricity_price_entity not configured"
+                    ),
                 )
                 self._forecast_available_last = False
             return None
@@ -362,12 +366,16 @@ class PumpSteerSensor(RestoreEntity):
 
         return temps if temps else None
 
-    def _should_precool(self, summer_threshold: float, temps: Optional[List[float]]) -> bool:
+    def _should_precool(
+        self, summer_threshold: float, temps: Optional[List[float]]
+    ) -> bool:
         if not temps:
             return False
         return any(temp >= summer_threshold + PRECOOL_MARGIN for temp in temps)
 
-    def _forecast_is_cold(self, summer_threshold: float, temps: Optional[List[float]], hours: int = 6) -> bool:
+    def _forecast_is_cold(
+        self, summer_threshold: float, temps: Optional[List[float]], hours: int = 6
+    ) -> bool:
         if not temps:
             if PREHEAT_ON_MISSING_FORECAST:
                 _LOGGER.debug(
@@ -582,7 +590,9 @@ class PumpSteerSensor(RestoreEntity):
             return
 
         current_cat = categories[current_slot] if categories else PRICE_NORMAL
-        next_cat = self._next_period_category(categories, current_slot, interval_minutes)
+        next_cat = self._next_period_category(
+            categories, current_slot, interval_minutes
+        )
 
         lookahead_slots = max(
             1,
@@ -600,7 +610,9 @@ class PumpSteerSensor(RestoreEntity):
             ramp_target_cat = PRICE_EXPENSIVE
         else:
             ramp_target_cat = next_cat or current_cat
-        ramp_in = self._compute_ramp_minutes(current_cat, ramp_target_cat, house_inertia)
+        ramp_in = self._compute_ramp_minutes(
+            current_cat, ramp_target_cat, house_inertia
+        )
         ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.5)
 
         comfort_floor = self._comfort_floor(target, aggressiveness)
@@ -842,11 +854,7 @@ class PumpSteerSensor(RestoreEntity):
             )
             return
 
-        bridge_short_dip = (
-            upcoming
-            and not forecast_cold
-            and self._brake_ramp > 0.0
-        )
+        bridge_short_dip = upcoming and not forecast_cold and self._brake_ramp > 0.0
 
         # 6. Normal PI control.
         demand = self._pi_output(target, indoor, outdoor, now, cfg)
@@ -937,9 +945,7 @@ class PumpSteerSensor(RestoreEntity):
         elif self._price_thresholds_entity_id != today_entity_id:
             recalc_thresholds = True
         else:
-            cache_age_seconds = (
-                now - self._price_thresholds_cached_at
-            ).total_seconds()
+            cache_age_seconds = (now - self._price_thresholds_cached_at).total_seconds()
             if cache_age_seconds >= 3600:
                 recalc_thresholds = True
 

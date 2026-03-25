@@ -7,6 +7,7 @@ Contains:
 Note: PumpSteerConfigFlow lives in config_flow.py (the standard HA location).
 The duplicate class that was previously in this file has been removed.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,9 +20,11 @@ _LOGGER = logging.getLogger(__name__)
 
 # ── PI Controller ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class PIResult:
     """Result from one PI controller compute step."""
+
     offset: float
     p_term: float
     i_term: float
@@ -80,7 +83,7 @@ class PIController:
 
         if braking_active:
             if brake_behavior == "decay":
-                self._integral *= (decay_per_minute_on_brake ** dt_minutes)
+                self._integral *= decay_per_minute_on_brake**dt_minutes
         else:
             self._integral += ki * error * dt_minutes
             self._integral = max(-integral_clamp, min(integral_clamp, self._integral))
@@ -96,6 +99,11 @@ class PIController:
 
         _LOGGER.debug(
             "PI: error=%.2f P=%.2f I=%.2f → offset=%.2f (dt=%.1f min, braking=%s)",
-            error, p_term, i_term, clamped, dt_minutes, braking_active,
+            error,
+            p_term,
+            i_term,
+            clamped,
+            dt_minutes,
+            braking_active,
         )
         return PIResult(offset=clamped, p_term=p_term, i_term=i_term, error=error)

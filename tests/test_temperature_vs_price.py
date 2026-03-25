@@ -9,9 +9,10 @@ Nya tester i denna version:
 
 Kör med: pytest tests/ -v
 """
+
 import sys
-from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -19,31 +20,28 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ha_test_stubs  # noqa: F401 — måste importeras före alla HA-moduler
 
 from custom_components.pumpsteer.electricity_price import (
+    PRICE_CHEAP,
+    PRICE_EXPENSIVE,
+    PRICE_NORMAL,
     classify_price,
     classify_price_list,
     compute_price_thresholds,
     filter_short_peaks,
-    PRICE_CHEAP,
-    PRICE_NORMAL,
-    PRICE_EXPENSIVE,
-)
-from custom_components.pumpsteer.utils import (
-    safe_float,
-    get_price_window_for_hours,
-    detect_price_interval_minutes,
-    compute_price_slot_index,
 )
 from custom_components.pumpsteer.settings import (
-    COMFORT_FLOOR_BY_AGGRESSIVENESS,
-    BRAKE_DELTA_C,
-    MIN_FAKE_TEMP,
-    MAX_FAKE_TEMP,
     ABSOLUTE_CHEAP_LIMIT,
+    COMFORT_FLOOR_BY_AGGRESSIVENESS,
     PREHEAT_ON_MISSING_FORECAST,
 )
-
+from custom_components.pumpsteer.utils import (
+    compute_price_slot_index,
+    detect_price_interval_minutes,
+    get_price_window_for_hours,
+    safe_float,
+)
 
 # ── Gemensamma test-hjälpklasser ──────────────────────────────────────────────
+
 
 class DummyState:
     def __init__(self, state, attributes=None):
@@ -86,6 +84,7 @@ def now_utc() -> datetime:
 # 1. Prisklassificering
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_classify_cheap_below_p30():
     assert classify_price(0.5, p30=1.0, p80=2.0) == PRICE_CHEAP
 
@@ -110,7 +109,7 @@ def test_classify_price_list_length_preserved():
 
 def test_compute_thresholds_uses_history_when_sufficient():
     history = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    today   = [100.0, 200.0]
+    today = [100.0, 200.0]
     p30, p80 = compute_price_thresholds(history, today)
     assert 0 < p30 < p80
     assert p80 < 50.0
@@ -139,14 +138,15 @@ def test_classify_all_identical_prices_as_cheap():
 # 2. filter_short_peaks
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_filter_removes_single_slot_spike():
-    cats   = [PRICE_NORMAL, PRICE_EXPENSIVE, PRICE_NORMAL]
+    cats = [PRICE_NORMAL, PRICE_EXPENSIVE, PRICE_NORMAL]
     result = filter_short_peaks(cats, interval_minutes=60, min_duration_minutes=120)
     assert PRICE_EXPENSIVE not in result
 
 
 def test_filter_keeps_long_expensive_block():
-    cats   = [PRICE_NORMAL] + [PRICE_EXPENSIVE] * 3 + [PRICE_NORMAL]
+    cats = [PRICE_NORMAL] + [PRICE_EXPENSIVE] * 3 + [PRICE_NORMAL]
     result = filter_short_peaks(cats, interval_minutes=60, min_duration_minutes=120)
     assert result.count(PRICE_EXPENSIVE) == 3
 
@@ -156,13 +156,13 @@ def test_filter_empty_list():
 
 
 def test_filter_all_expensive_unchanged():
-    cats   = [PRICE_EXPENSIVE] * 5
+    cats = [PRICE_EXPENSIVE] * 5
     result = filter_short_peaks(cats, interval_minutes=60, min_duration_minutes=60)
     assert result == cats
 
 
 def test_filter_replaces_with_left_neighbor():
-    cats   = [PRICE_CHEAP, PRICE_EXPENSIVE, PRICE_NORMAL]
+    cats = [PRICE_CHEAP, PRICE_EXPENSIVE, PRICE_NORMAL]
     result = filter_short_peaks(cats, interval_minutes=60, min_duration_minutes=120)
     assert result[1] == PRICE_CHEAP
 
@@ -177,6 +177,7 @@ def test_filter_zero_interval_no_crash():
 # ═════════════════════════════════════════════════════════════════════════════
 # 3. safe_float
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def test_safe_float_normal():
     assert safe_float("21.5") == 21.5
@@ -230,32 +231,42 @@ def test_safe_float_zero():
 # 4. get_price_window_for_hours
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_get_price_window_basic():
     prices = [1.0, 1.5, 2.0, 2.5, 3.0]
-    result = get_price_window_for_hours(prices=prices, current_slot=0, hours=2, price_interval_minutes=60)
+    result = get_price_window_for_hours(
+        prices=prices, current_slot=0, hours=2, price_interval_minutes=60
+    )
     assert result == [1.0, 1.5]
 
 
 def test_get_price_window_from_middle():
     prices = [1.0, 1.5, 2.0, 2.5, 3.0]
-    result = get_price_window_for_hours(prices=prices, current_slot=2, hours=2, price_interval_minutes=60)
+    result = get_price_window_for_hours(
+        prices=prices, current_slot=2, hours=2, price_interval_minutes=60
+    )
     assert result == [2.0, 2.5]
 
 
 def test_get_price_window_empty():
-    result = get_price_window_for_hours(prices=[], current_slot=0, hours=3, price_interval_minutes=60)
+    result = get_price_window_for_hours(
+        prices=[], current_slot=0, hours=3, price_interval_minutes=60
+    )
     assert result == []
 
 
 def test_get_price_window_15min_intervals():
     prices = list(range(96))
-    result = get_price_window_for_hours(prices=prices, current_slot=0, hours=1, price_interval_minutes=15)
+    result = get_price_window_for_hours(
+        prices=prices, current_slot=0, hours=1, price_interval_minutes=15
+    )
     assert len(result) == 4
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 # 5. detect_price_interval_minutes
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def test_detect_interval_24_hourly():
     assert detect_price_interval_minutes([1.0] * 24) == 60
@@ -278,7 +289,7 @@ def test_detect_interval_today_only_not_combined():
     FIX: Intervallet ska detekteras från today-listan (24 poster = 60 min),
     INTE från kombinerad today+tomorrow (48 poster = 30 min fel).
     """
-    today_prices    = [1.0] * 24
+    today_prices = [1.0] * 24
     combined_prices = [1.0] * 48  # today + tomorrow
     assert detect_price_interval_minutes(today_prices) == 60
     # Kombinerad lista ger fel intervall om man inte använder today separat
@@ -288,6 +299,7 @@ def test_detect_interval_today_only_not_combined():
 # ═════════════════════════════════════════════════════════════════════════════
 # 6. compute_price_slot_index
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def test_slot_index_midnight():
     t = datetime(2025, 1, 1, 0, 0, tzinfo=timezone.utc)
@@ -319,6 +331,7 @@ def test_slot_index_combined_48_slot_list_at_2330():
 # 7. Comfort floor
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_comfort_floor_has_six_entries():
     assert len(COMFORT_FLOOR_BY_AGGRESSIVENESS) == 6
 
@@ -340,12 +353,19 @@ def test_comfort_floor_increases():
 # 8. PIController
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_pi_heats_when_cold():
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     result = pi.compute(
-        target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=now_utc(), kp=8.0, ki=0.0,
+        target_temp=21.0,
+        indoor_temp=19.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=now_utc(),
+        kp=8.0,
+        ki=0.0,
     )
     assert result.offset < 0
     assert result.error == 2.0
@@ -353,75 +373,126 @@ def test_pi_heats_when_cold():
 
 def test_pi_zero_at_target():
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     result = pi.compute(
-        target_temp=21.0, indoor_temp=21.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=now_utc(), kp=8.0, ki=0.0,
+        target_temp=21.0,
+        indoor_temp=21.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=now_utc(),
+        kp=8.0,
+        ki=0.0,
     )
     assert result.offset == 0.0
 
 
 def test_pi_integral_builds():
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     pi.compute(
-        target_temp=21.0, indoor_temp=20.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=now_utc(), kp=0.0, ki=1.0,
+        target_temp=21.0,
+        indoor_temp=20.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=now_utc(),
+        kp=0.0,
+        ki=1.0,
     )
     assert pi._integral > 0.0
 
 
 def test_pi_integral_frozen_during_braking():
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     t = now_utc()
     pi.compute(
-        target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=t, kp=0.0, ki=1.0, braking_active=False,
+        target_temp=21.0,
+        indoor_temp=19.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=t,
+        kp=0.0,
+        ki=1.0,
+        braking_active=False,
     )
     integral_before = pi._integral
     pi.compute(
-        target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=t + timedelta(minutes=10),
-        kp=0.0, ki=1.0, braking_active=True, brake_behavior="freeze",
+        target_temp=21.0,
+        indoor_temp=19.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=t + timedelta(minutes=10),
+        kp=0.0,
+        ki=1.0,
+        braking_active=True,
+        brake_behavior="freeze",
     )
     assert pi._integral == integral_before
 
 
 def test_pi_integral_decays():
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     t = now_utc()
     pi.compute(
-        target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=t, kp=0.0, ki=1.0, braking_active=False,
+        target_temp=21.0,
+        indoor_temp=19.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=t,
+        kp=0.0,
+        ki=1.0,
+        braking_active=False,
     )
     integral_before = pi._integral
     pi.compute(
-        target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=t + timedelta(minutes=10),
-        kp=0.0, ki=1.0, braking_active=True, brake_behavior="decay", decay_per_minute_on_brake=0.9,
+        target_temp=21.0,
+        indoor_temp=19.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=t + timedelta(minutes=10),
+        kp=0.0,
+        ki=1.0,
+        braking_active=True,
+        brake_behavior="decay",
+        decay_per_minute_on_brake=0.9,
     )
     assert pi._integral < integral_before
 
 
 def test_pi_clamped():
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     result = pi.compute(
-        target_temp=30.0, indoor_temp=0.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=now_utc(), kp=100.0, ki=0.0, output_clamp=20.0,
+        target_temp=30.0,
+        indoor_temp=0.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=now_utc(),
+        kp=100.0,
+        ki=0.0,
+        output_clamp=20.0,
     )
     assert abs(result.offset) <= 20.0
 
 
 def test_pi_reset():
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     t = now_utc()
     pi.compute(
-        target_temp=21.0, indoor_temp=18.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=t, ki=1.0,
+        target_temp=21.0,
+        indoor_temp=18.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=t,
+        ki=1.0,
     )
     assert pi._integral != 0.0
     pi.reset(t)
@@ -432,10 +503,17 @@ def test_pi_reset():
 def test_pi_all_zero_gains_no_crash():
     """FIX edge case: kp=ki=kd=0 ska ge offset=0.0 utan krasch."""
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     result = pi.compute(
-        target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=now_utc(), kp=0.0, ki=0.0, kd=0.0,
+        target_temp=21.0,
+        indoor_temp=19.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=now_utc(),
+        kp=0.0,
+        ki=0.0,
+        kd=0.0,
     )
     assert result.offset == 0.0
 
@@ -444,8 +522,10 @@ def test_pi_all_zero_gains_no_crash():
 # 9. Safe mode + available
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_safe_mode_passthrough():
-    from custom_components.pumpsteer.sensor import PumpSteerSensor, MODE_SAFE
+    from custom_components.pumpsteer.sensor import MODE_SAFE, PumpSteerSensor
+
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._enter_safe_mode("test", outdoor=5.0, now=now_utc())
     assert s._state == 5.0
@@ -454,7 +534,8 @@ def test_safe_mode_passthrough():
 
 
 def test_safe_mode_no_outdoor():
-    from custom_components.pumpsteer.sensor import PumpSteerSensor, MODE_SAFE
+    from custom_components.pumpsteer.sensor import MODE_SAFE, PumpSteerSensor
+
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._enter_safe_mode("ingen ute", outdoor=None, now=now_utc())
     assert s._state is None
@@ -464,6 +545,7 @@ def test_safe_mode_no_outdoor():
 
 def test_safe_mode_resets_pi_and_brake():
     from custom_components.pumpsteer.sensor import PumpSteerSensor
+
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     t = now_utc()
     s._brake_ramp = 1.0
@@ -503,6 +585,7 @@ def test_brake_hold_can_be_bypassed_for_immediate_release():
 
 def test_available_false_when_none():
     from custom_components.pumpsteer.sensor import PumpSteerSensor
+
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = None
     assert s.available is False
@@ -510,6 +593,7 @@ def test_available_false_when_none():
 
 def test_available_true_when_float():
     from custom_components.pumpsteer.sensor import PumpSteerSensor
+
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
     s._state = 5.0
     assert s.available is True
@@ -519,19 +603,26 @@ def test_available_true_when_float():
 # 10. FIX: PI-integral resettas vid aggressiveness=0
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_pi_integral_reset_when_aggressiveness_zero():
     """
     FIX: När aggressiveness=0 ska PI-integralen resettas så att en uppbyggd
     integral från bromssessioner inte plötsligt appliceras i rent PI-läge.
     """
     from custom_components.pumpsteer.control import PIController
+
     pi = PIController()
     t = now_utc()
 
     # Simulera att integralen byggts upp under en bromssession
     pi.compute(
-        target_temp=21.0, indoor_temp=19.0, outdoor_temp=5.0,
-        aggressiveness=1.0, update_time=t, kp=0.0, ki=1.0,
+        target_temp=21.0,
+        indoor_temp=19.0,
+        outdoor_temp=5.0,
+        aggressiveness=1.0,
+        update_time=t,
+        kp=0.0,
+        ki=1.0,
     )
     assert pi._integral > 0.0, "Integralen ska ha byggts upp"
 
@@ -543,6 +634,7 @@ def test_pi_integral_reset_when_aggressiveness_zero():
 # ═════════════════════════════════════════════════════════════════════════════
 # 11. FIX: _forecast_is_cold med PREHEAT_ON_MISSING_FORECAST=False
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def test_preheat_on_missing_forecast_is_false_by_default():
     """
@@ -558,6 +650,7 @@ def test_forecast_is_cold_returns_false_when_no_forecast():
     med PREHEAT_ON_MISSING_FORECAST=False (default).
     """
     from custom_components.pumpsteer.sensor import PumpSteerSensor
+
     s = PumpSteerSensor(DummyHass({}), DummyConfigEntry())
     result = s._forecast_is_cold(summer_threshold=18.0, temps=None, hours=6)
     assert result is False, (
@@ -569,6 +662,7 @@ def test_forecast_is_cold_returns_false_when_no_forecast():
 def test_forecast_is_cold_returns_true_when_cold_forecast():
     """_forecast_is_cold ska returnera True när alla temps är under summer_threshold."""
     from custom_components.pumpsteer.sensor import PumpSteerSensor
+
     s = PumpSteerSensor(DummyHass({}), DummyConfigEntry())
     cold_temps = [5.0] * 6
     result = s._forecast_is_cold(summer_threshold=18.0, temps=cold_temps, hours=6)
@@ -578,6 +672,7 @@ def test_forecast_is_cold_returns_true_when_cold_forecast():
 def test_forecast_is_cold_returns_false_when_warm_forecast():
     """_forecast_is_cold ska returnera False när temps är över summer_threshold."""
     from custom_components.pumpsteer.sensor import PumpSteerSensor
+
     s = PumpSteerSensor(DummyHass({}), DummyConfigEntry())
     warm_temps = [22.0] * 6
     result = s._forecast_is_cold(summer_threshold=18.0, temps=warm_temps, hours=6)
@@ -588,14 +683,17 @@ def test_forecast_is_cold_returns_false_when_warm_forecast():
 # 12. Holiday sentinel-år
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def test_holiday_sentinel_1970_returns_none():
     from custom_components.pumpsteer.holiday import _get_datetime
+
     hass = DummyHass({"input_datetime.pumpsteer_holiday_start": "1970-01-01 00:00:00"})
     assert _get_datetime(hass, "input_datetime.pumpsteer_holiday_start") is None
 
 
 def test_holiday_unknown_returns_none():
     from custom_components.pumpsteer.holiday import _get_datetime
+
     hass = DummyHass({"input_datetime.pumpsteer_holiday_start": "unknown"})
     assert _get_datetime(hass, "input_datetime.pumpsteer_holiday_start") is None
 
@@ -603,6 +701,7 @@ def test_holiday_unknown_returns_none():
 def test_holiday_valid_date_parsed():
     """FIX: fungerar nu med uppdaterad parse_datetime i ha_test_stubs."""
     from custom_components.pumpsteer.holiday import _get_datetime
+
     hass = DummyHass({"input_datetime.pumpsteer_holiday_start": "2025-07-01 10:00:00"})
     result = _get_datetime(hass, "input_datetime.pumpsteer_holiday_start")
     assert result is not None
@@ -612,4 +711,7 @@ def test_holiday_valid_date_parsed():
 
 def test_holiday_missing_entity_returns_none():
     from custom_components.pumpsteer.holiday import _get_datetime
-    assert _get_datetime(DummyHass({}), "input_datetime.pumpsteer_holiday_start") is None
+
+    assert (
+        _get_datetime(DummyHass({}), "input_datetime.pumpsteer_holiday_start") is None
+    )

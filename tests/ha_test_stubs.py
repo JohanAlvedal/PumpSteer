@@ -8,9 +8,10 @@ Changelog:
   - FIX: RestoreEntity stub med async_get_last_state
   - FIX: vol.Optional tillagd
 """
+
+import datetime as _dt
 import sys
 import types
-import datetime as _dt
 
 # ── homeassistant (root) ──────────────────────────────────────────────────────
 ha = types.ModuleType("homeassistant")
@@ -110,8 +111,10 @@ sys.modules["homeassistant.helpers.restore_state"] = restore_state_mod
 # ── helpers.event ─────────────────────────────────────────────────────────────
 event_mod = types.ModuleType("homeassistant.helpers.event")
 
+
 def async_track_state_change_event(hass, entity_ids, action):
     return lambda: None
+
 
 event_mod.async_track_state_change_event = async_track_state_change_event
 sys.modules["homeassistant.helpers.event"] = event_mod
@@ -119,12 +122,15 @@ sys.modules["homeassistant.helpers.event"] = event_mod
 # ── helpers.entity_registry ───────────────────────────────────────────────────
 entity_registry_mod = types.ModuleType("homeassistant.helpers.entity_registry")
 
+
 class EntityRegistry:
     def async_get_entity_id(self, domain, platform, unique_id):
         return None
 
+
 def async_get(hass):
     return EntityRegistry()
+
 
 entity_registry_mod.async_get = async_get
 entity_registry_mod.EntityRegistry = EntityRegistry
