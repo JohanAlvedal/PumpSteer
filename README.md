@@ -8,6 +8,19 @@ PumpSteer is a Home Assistant custom integration that optimizes your heat pump b
 
 It reduces energy cost when electricity is expensive — while protecting indoor comfort.
 
+<a href="https://www.buymeacoffee.com/alvjo" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 200px !important;">
+</a>
+
+---
+
+# PumpSteer
+
+| ![PumpSteer Drift & Status](docs/img/01.png) | ![PumpSteer Chart](docs/img/02.png) |
+| -------------------------------------------- | ----------------------------------- |
+| ![PumpSteer Troubleshooting](docs/img/03.png) | ![PumpSteer Templates](docs/img/04.png) |
+
+
 ---
 
 ## 📘 Documentation
@@ -132,8 +145,6 @@ Must support:
 
 ### ML removed
 
-- no longer part of runtime
-
 ---
 
 ## Price Sensor Support
@@ -151,7 +162,6 @@ Supported formats:
 
 ✔ Works with:
 - Official Nord Pool integration
-- PumpSteer 2.0.0
 
 ---
 
