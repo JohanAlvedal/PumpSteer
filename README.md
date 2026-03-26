@@ -1,4 +1,4 @@
-# 🔥 PumpSteer 2.0.0
+# 🔥 PumpSteer 2.0.0 – Smart Heat Pump Optimization
 
 ➡️ Swedish version: [README (Svenska)](README_sv.md)
 
@@ -8,16 +8,30 @@ PumpSteer is a Home Assistant custom integration that optimizes your heat pump b
 
 It reduces energy cost when electricity is expensive — while protecting indoor comfort.
 
+<a href="https://www.buymeacoffee.com/alvjo" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 200px !important;">
+</a>
+
+---
+
+## 📸 Dashboard Preview
+
+![PumpSteer 1](docs/img/01.png)
+![PumpSteer 2](docs/img/02.png)
+![PumpSteer 3](docs/img/03.png)
+![PumpSteer 4](docs/img/04.png)
+
 ---
 
 ## 📘 Documentation
 
-- [Upgrade Warning](#important--not-a-drop-in-upgrade)
+- [Upgrade Warning](#important--not-a-drop-in-upgrade-)
 - [What's New](#whats-new-in-200)
 - [Breaking Changes](#breaking-changes)
 - [Price Sensors](#price-sensor-support)
 - [Weather Support](#weather-support)
 - [New Installation](#new-installation)
+- [Dashboard (Lovelace)](#lovelace-dashboard-mini-graph-card--apexcharts-card)
 - [Upgrade Guide](#upgrade-from-166)
 - [Troubleshooting](#troubleshooting)
 - [Tuning](#tuning-quick-guide)
@@ -41,6 +55,16 @@ It is a **complete rewrite of the control system**.
 
 ---
 
+## ⚠️ Disclaimer
+
+You use this integration at your own risk. Heating is a critical system in your home, and incorrect settings may lead to discomfort or damage.
+
+Do not use PumpSteer if your heating system is not functioning properly.
+
+Only use PumpSteer if you understand how it works and have verified that it functions correctly in your specific setup. Always monitor indoor temperatures and system behavior after installation.
+
+---
+
 ### Required after upgrade
 
 - Rebuild Lovelace cards  
@@ -57,7 +81,7 @@ It is a **complete rewrite of the control system**.
 - Ramped braking  
 - Forecast-aware decisions  
 
-➡️ Do not expect 1.6.6 behavior
+➡️ Do not expect behavior identical to 1.6.6  
 
 ---
 
@@ -71,13 +95,15 @@ It is a **complete rewrite of the control system**.
 
 ## What's New in 2.0.0
 
-- 🧠 PI-based control (replaces heuristics)
-- ⚡ Smart price classification (`cheap / normal / expensive`)
-- 🔁 State machine (predictable behavior)
-- 🧊 Dynamic braking (ramp + hold + filtering)
-- 🌦 Forecast-aware planning (optional)
-- 🏠 Integration-managed entities
-- 🔒 Fully local (no cloud)
+PumpSteer 2.0.0 introduces a completely redesigned control system focused on stability, predictability, and cost optimization.
+
+- 🧠 PI-based control (replaces heuristics)  
+- ⚡ Smart price classification (`cheap / normal / expensive`)  
+- 🔁 State machine (predictable behavior)  
+- 🧊 Dynamic braking (ramp + hold + filtering)  
+- 🌦 Forecast-aware planning (optional)  
+- 🏠 Integration-managed entities  
+- 🔒 Fully local (no cloud)  
 
 ---
 
@@ -86,18 +112,22 @@ It is a **complete rewrite of the control system**.
 ### Price categories changed
 
 Old:
-- `very_cheap`, `very_expensive`, `extreme`
+- `very_cheap`
+- `very_expensive`
+- `extreme`
 
 New:
-- `cheap`, `normal`, `expensive`
+- `cheap`
+- `normal`
+- `expensive`
 
 ---
 
 ### Price sensor requirements
 
 Must support:
-- `today/raw_today`
-- `tomorrow/raw_tomorrow`
+- `today/raw_today`  
+- `tomorrow/raw_tomorrow`  
 
 ---
 
@@ -110,24 +140,22 @@ Must support:
 
 ### Braking redesigned
 
-- ramping
-- hold logic
-- peak filtering
-- comfort protection
+- Ramping  
+- Hold logic  
+- Peak filtering  
+- Comfort protection  
 
 ---
 
 ### Integration owns entities
 
-- numbers
-- switch
-- datetime
+- numbers  
+- switch  
+- datetime  
 
 ---
 
 ### ML removed
-
-- no longer part of runtime
 
 ---
 
@@ -135,31 +163,70 @@ Must support:
 
 Supported formats:
 
-- `0.95`
-- `"0.95"`
-- `{ "value": 0.95 }`
-- `{ "price": 0.95 }`
+- `0.95`  
+- `"0.95"`  
+- `{ "value": 0.95 }`  
+- `{ "price": 0.95 }`  
 
-📌 Recommended example:
-
-
-other/nordpool.yaml
-
+📌 Recommended example:  
+[`other/nordpool.yaml`](other/nordpool.yaml)
 
 ✔ Works with:
-- Official Nord Pool integration
-- PumpSteer 2.0.0
+- Official Nord Pool integration + my example (see above) ⚠️
+
+---
+
+### ℹ️ About `pump_packages.yaml`
+
+The file:  
+[`other/pump_packages.yaml`](other/pump_packages.yaml)
+
+is **not a full Home Assistant package** like in earlier versions (e.g. 1.6.6).
+
+It now mainly contains:
+
+- Template sensors  
+- Example configurations  
+- Helper logic used by PumpSteer  
+
+⚠️ Important:
+
+- It is **not intended to be used as a complete drop-in package**  
+- It does **not configure the full system automatically**  
+- You should **not expect it to replace the integration setup**  
+
+👉 Use it as a **reference or optional add-on**, not as a full configuration  
+
+---
+
+### Migration note (from 1.6.6)
+
+If you previously used full package files:
+
+- PumpSteer 2.0.0 no longer relies on package-based configuration  
+- The integration now handles:
+  - control logic  
+  - entities  
+  - settings  
+
+You may still use `pump_packages.yaml` for:
+- additional sensors  
+- custom templates  
+- extended functionality  
+
+But the **core control is now inside the integration**  
 
 ---
 
 ## Weather Support
 
 Examples:
-- `weather.smhi_home`
-- `weather.yr_home`
+- `weather.smhi_home`  
+- `weather.yr_home`  
+- `weather.openweather`  
 
-⚠️ Must be selected in:
-Settings → Devices → PumpSteer → Configure
+⚠️ Must be selected in:  
+Settings → Devices → PumpSteer → Configure  
 
 ---
 
@@ -183,6 +250,74 @@ Settings → Devices → PumpSteer → Configure
 
 ---
 
+## Lovelace Dashboard (mini-graph-card & apexcharts-card)
+
+📁 See [`/dashboards/`](dashboards/) folder for ready-to-use examples  
+
+PumpSteer includes example Lovelace configurations using `mini-graph-card` and `apexcharts-card`.
+
+These dashboards show:
+- Indoor temperature  
+- Target temperature  
+- Virtual outdoor temperature  
+- Price behavior and system response  
+
+---
+
+### ⚠️ Requirement
+
+You must install:
+
+- **mini-graph-card**  
+- **apexcharts-card**  
+
+Available via HACS:
+- Frontend → `mini-graph-card`  
+- Frontend → `apexcharts-card`  
+
+---
+
+### 📥 How to use the provided templates
+
+1. Go to your Home Assistant dashboard  
+2. Click **Edit dashboard**  
+3. Click the **pencil icon (✏️)**  
+4. Click the **three dots (⋮)**  
+5. Select **Edit dashboard (Raw configuration editor)**  
+6. Paste the YAML  
+7. Save  
+
+⚠️ Note:  
+Pasting a full view may overwrite your existing dashboard.  
+
+---
+
+### 🧠 Important
+
+- These templates are **YAML-based**  
+- They are **not built via UI**  
+- Some may replace the entire view  
+
+---
+
+### 🔧 Common adjustments
+
+After pasting, check:
+
+- `sensor.pumpsteer`  
+- temperature sensors  
+- custom entities  
+
+---
+
+### 💡 Tips
+
+- No graph → check entity IDs  
+- Card not loading → check installation  
+- Debug via Developer Tools → States  
+
+---
+
 ## Upgrade from 1.6.6
 
 ### Required
@@ -202,11 +337,11 @@ Settings → Devices → PumpSteer → Configure
 
 ---
 
-### Test
+### Testing
 
-- Check `mode`
-- Check `brake_factor`
-- Observe expensive period
+- Check `mode`  
+- Check `brake_factor`  
+- Observe expensive periods  
 
 ---
 
@@ -215,26 +350,26 @@ Settings → Devices → PumpSteer → Configure
 ### Safe mode
 
 Cause:
-- missing price data
+- Missing price data  
 
 Fix:
-- check `today/raw_today`
-- check `tomorrow/raw_tomorrow`
+- Check `today/raw_today`  
+- Check `tomorrow/raw_tomorrow`  
 
 ---
 
 ### No braking
 
 Cause:
-- not expensive
-- comfort protection
+- Price is not in the expensive range  
+- Comfort protection is active  
 
 ---
 
 ### Wrong price category
 
 Cause:
-- bad data format
+- Invalid data format  
 
 ---
 
@@ -268,42 +403,41 @@ You use this integration at your own risk.
 Heating is a critical system.
 
 Do not use if:
-- system is unstable
-- you don’t understand behavior
+- system is unstable  
+- you do not understand the behavior  
 
 Always monitor:
-- indoor temperature
-- system response
+- indoor temperature  
+- system response  
 
 ---
 
 ## Recorder Requirement
 
 Requires:
-- 72 hours of price history
-- stored in recorder
+- 72 hours of price history  
 
 If missing:
-- classification fails
-- safe mode may trigger
+- classification fails  
+- safe mode may trigger  
 
 ---
 
 ## Note
 
 This is a hobby project built with:
-- ChatGPT
-- Copilot
-- patience 🙂
+- ChatGPT  
+- Copilot  
+- patience 🙂  
 
-Feedback is welcome!
+Feedback is welcome — if you see something weird, don’t just complain, help fix it 🙂
 
 ---
 
-## Links
+## 🔗 Links
 
-- GitHub repository  
-- Create Issue  
+- 🔗 [GitHub repository](https://github.com/JohanAlvedal/PumpSteer)  
+- 🐞 [Create an issue](https://github.com/JohanAlvedal/PumpSteer/issues)  
 
 ---
 
