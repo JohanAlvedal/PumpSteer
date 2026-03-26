@@ -1,61 +1,62 @@
-# 🔥 PumpSteer 2.0.0 (Svenska)
+# 🔥 PumpSteer 2.0.0
 
-➡️ English version: [README (English)](README.md)
+➡️ English version: [README](README.md)
 
-> ⚠️ Detta är en stor omskrivning. Läs uppgraderingsguiden innan installation.
+> ⚠️ Detta är en större omskrivning. Läs uppgraderingsguiden innan installation.
 
-PumpSteer är en Home Assistant-integration som optimerar din värmepump genom att justera den **virtuella utomhustemperaturen**.
+PumpSteer är en Home Assistant custom integration som optimerar din värmepump genom att dynamiskt justera den **virtuella utomhustemperaturen**.
 
-Den minskar energikostnader när elen är dyr — utan att försämra inomhuskomforten.
+Den minskar energikostnaden när elen är dyr — samtidigt som komforten inomhus bibehålls.
 
 ---
 
 ## 📘 Dokumentation
 
-- [Viktig information om uppgradering](#important--not-a-drop-in-upgrade)
+- [Varning vid uppgradering](#important--inte-en-drop-in-uppgradering-)
 - [Nyheter i 2.0.0](#whats-new-in-200)
 - [Breaking Changes](#breaking-changes)
 - [Elprissensor](#price-sensor-support)
 - [Väderstöd](#weather-support)
 - [Ny installation](#new-installation)
+- [Dashboard (Lovelace)](#lovelace-dashboard-mini-graph-card)
 - [Uppgradering från 1.6.6](#upgrade-from-166)
 - [Felsökning](#troubleshooting)
-- [Inställningar (Tuning)](#tuning-quick-guide)
+- [Trimning](#tuning-quick-guide)
 - [Säkerhet](#safety--disclaimer)
 
 ---
 
-## Important – Not a Drop-in Upgrade ⚠️
+## Important – Inte en drop-in uppgradering ⚠️
 
 PumpSteer 2.0.0 är **inte en mindre uppdatering**.  
-Det är en **helt ny version av styrlogiken**.
+Det är en **total omskrivning av styrningen**.
 
-👉 Se detta som en **ny installation**, inte en uppgradering.
+👉 Se detta som en **ny integration**, inte en uppgradering.
 
-### Vad betyder det?
+### Vad detta innebär
 
-- ❌ Gamla dashboards fungerar inte likadant  
-- ❌ Automations kan sluta fungera  
-- ❌ Gamla helpers styr inte längre systemet  
-- ❌ Elprislogiken är helt förändrad  
-
----
-
-### Vad du behöver göra efter uppgradering
-
-- Bygga om Lovelace-kort  
-- Uppdatera automations  
-- Kontrollera elprissensor (today + tomorrow)  
-- Koppla om till nya PumpSteer-entiteter  
-- Justera inställningar  
+- ❌ Gamla dashboards beter sig annorlunda  
+- ❌ Automationer kan sluta fungera  
+- ❌ Gamla helpers används inte längre som primär styrning  
+- ❌ Elprislogiken är helt omgjord  
 
 ---
 
-### Beteendet är annorlunda
+### Krävs efter uppgradering
+
+- Bygg om Lovelace-kort  
+- Uppdatera automationer  
+- Verifiera elpriser (idag + imorgon)  
+- Koppla om till nya entiteter  
+- Trimma inställningar  
+
+---
+
+### Beteendet är förändrat
 
 - PI-reglering istället för heuristik  
 - Mjuk bromsning (ramp)  
-- Prognos påverkar beslut  
+- Prognosbaserade beslut  
 
 ➡️ Förvänta dig inte samma beteende som 1.6.6
 
@@ -71,25 +72,29 @@ Det är en **helt ny version av styrlogiken**.
 
 ## What's New in 2.0.0
 
-- 🧠 PI-reglering (ersätter heuristik)
-- ⚡ Elprisklasser (`cheap / normal / expensive`)
-- 🔁 State machine (förutsägbart beteende)
-- 🧊 Smart bromsning (ramp + hold + filtrering)
-- 🌦 Prognosbaserad styrning (valfri)
-- 🏠 Integration skapar egna entiteter
-- 🔒 Helt lokal drift
+- 🧠 PI-baserad reglering (ersätter heuristik)
+- ⚡ Smart prisindelning (`cheap / normal / expensive`)
+- 🔁 Tillståndsmaskin (förutsägbart beteende)
+- 🧊 Dynamisk bromsning (ramp + hold + filtrering)
+- 🌦 Prognosbaserad styrning (valbar)
+- 🏠 Integration hanterar egna entiteter
+- 🔒 Körs helt lokalt
 
 ---
 
 ## Breaking Changes
 
-### Elpriskategorier ändrade
+### Prisnivåer ändrade
 
-Gamla:
-- `very_cheap`, `very_expensive`, `extreme`
+Tidigare:
+- `very_cheap`
+- `very_expensive`
+- `extreme`
 
-Nya:
-- `cheap`, `normal`, `expensive`
+Nu:
+- `cheap`
+- `normal`
+- `expensive`
 
 ---
 
@@ -101,23 +106,23 @@ Måste stödja:
 
 ---
 
-### Ny styrlogik
+### Styrsystem omskrivet
 
 - Tidigare: heuristik  
 - Nu: PI + state machine  
 
 ---
 
-### Ny bromslogik
+### Bromsning omgjord
 
 - rampning
-- hold över korta dippar
-- filtrering av toppar
+- hold-logik
+- peak-filtrering
 - komfortskydd
 
 ---
 
-### Integration skapar egna entiteter
+### Integration äger entiteter
 
 - number
 - switch
@@ -131,7 +136,7 @@ Måste stödja:
 
 ---
 
-## Price Sensor Support
+## Elprissensor
 
 Stödda format:
 
@@ -142,9 +147,7 @@ Stödda format:
 
 📌 Rekommenderat exempel:
 
-
-other/nordpool.yaml
-
+[`other/nordpool.yaml`](other/nordpool.yaml)
 
 ✔ Fungerar med:
 - Officiella Nord Pool-integrationen
@@ -152,18 +155,18 @@ other/nordpool.yaml
 
 ---
 
-## Weather Support
+## Väderstöd
 
 Exempel:
 - `weather.smhi_home`
 - `weather.yr_home`
 
-⚠️ Måste väljas i:
-Inställningar → Enheter → PumpSteer → Konfigurera
+⚠️ Måste väljas i:  
+Inställningar → Enheter & Tjänster → PumpSteer → Konfigurera
 
 ---
 
-## New Installation
+## Ny installation
 
 ### Steg-för-steg
 
@@ -183,62 +186,85 @@ Inställningar → Enheter → PumpSteer → Konfigurera
 
 ---
 
-## Upgrade from 1.6.6
+## 📊 Lovelace Dashboard (mini-graph-card)
 
-### Måste göras
+📁 Se [`/dashboards/`](dashboards/) för färdiga exempel
 
-- Uppdatera priskategorier  
-- Lägg till tomorrow-pris  
-- Uppdatera automations  
+PumpSteer innehåller exempel på Lovelace-konfigurationer med `mini-graph-card`.
+
+---
+
+### ⚠️ Krav
+
+Installera:
+
+- **mini-graph-card** via HACS
+
+---
+
+### 📥 Så använder du mallarna
+
+1. Gå till din dashboard  
+2. Klicka på **Redigera dashboard**  
+3. Klicka på **pennan (✏️)** på vyn  
+4. Klicka på **tre prickar (⋮)** uppe till höger  
+5. Välj **Redigera i YAML**  
+6. Klistra in koden  
+7. Spara  
+
+⚠️ OBS:  
+Detta kan ersätta hela vyn – ta backup först.
+
+---
+
+### Viktigt
+
+- Detta är **YAML**, inte klickbara kort  
+- Du kan behöva ändra entitetsnamn  
+
+---
+
+## Uppgradering från 1.6.6
+
+### Krävs
+
+- Uppdatera prisnivåer  
+- Lägg till morgondagens pris  
+- Uppdatera automationer  
 - Ta bort ML  
 
 ---
 
-### Bör kontrolleras
+### Rekommenderas
 
-- Elprisdata finns  
-- Väder är konfigurerat  
-- Holiday automations  
-
----
-
-### Test
-
-- Kontrollera `mode`
-- Kontrollera `brake_factor`
-- Följ en dyr period
+- Kontrollera prisdata  
+- Lägg till väderentitet  
+- Uppdatera holiday-logik  
 
 ---
 
-## Troubleshooting
+### Testa
+
+- Kontrollera `mode`  
+- Kontrollera `brake_factor`  
+- Se beteende vid dyr el  
+
+---
+
+## Felsökning
 
 ### Safe mode
 
 Orsak:
-- saknad prisdata
+- saknar prisdata  
 
-Lösning:
+Åtgärd:
 - kontrollera `today/raw_today`
 - kontrollera `tomorrow/raw_tomorrow`
 
 ---
 
-### Ingen bromsning
-
-Orsak:
-- ej `expensive`
-- komfortskydd aktivt
-
----
-
-### Fel priskategori
-
-Orsak:
-- fel dataformat
-
----
-
-## Tuning (Quick Guide)
+## Trimning
 
 ### Aggressivitet
 
@@ -249,67 +275,14 @@ Orsak:
 
 ---
 
-### Tröghet (inertia)
+## Säkerhet
 
-- Låg → snabb respons  
-- Hög → långsam respons  
-
-Typiskt:
-- Lägenhet → låg  
-- Hus → medel  
-- Tungt hus → hög  
-
----
-
-## Safety & Disclaimer
-
-Du använder denna integration på egen risk.
-
-Uppvärmning är ett kritiskt system.
-
-Använd inte om:
-- systemet är instabilt
-- du inte förstår hur det fungerar
+Använd på egen risk.
 
 Övervaka alltid:
-- inomhustemperatur
+- innetemperatur
 - systemets beteende
 
 ---
-
-## Recorder Requirement
-
-Kräver:
-- minst 72 timmars elprisdata
-- lagrat i recorder
-
-Om detta saknas:
-- klassificering kan misslyckas
-- systemet kan gå i safe mode
-
----
-
-## Note
-
-Detta är ett hobbyprojekt byggt med:
-- ChatGPT
-- Copilot
-- tålamod 🙂
-
-Feedback välkomnas!
-
----
-
-## Links
-
-- GitHub repository  
-- Create Issue  
-
----
-
-## License
-
-- ≥ v1.6.2 → AGPL-3.0  
-- ≤ v1.5.1 → Apache 2.0  
 
 © Johan Älvedal
