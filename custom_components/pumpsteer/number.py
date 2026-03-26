@@ -78,8 +78,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up PumpSteer number entities."""
     entities = [
-        PumpSteerNumberEntity(entry, description)
-        for description in NUMBER_ENTITIES
+        PumpSteerNumberEntity(entry, description) for description in NUMBER_ENTITIES
     ]
     _LOGGER.debug("Adding %s PumpSteer number entities", len(entities))
     async_add_entities(entities)

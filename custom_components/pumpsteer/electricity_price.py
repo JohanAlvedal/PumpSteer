@@ -1,6 +1,6 @@
 import logging
 from datetime import timedelta
-from typing import List, Optional
+from typing import List
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.history import get_significant_states
@@ -45,9 +45,7 @@ def classify_price(price: float, p30: float, p80: float) -> str:
     return PRICE_EXPENSIVE
 
 
-def classify_price_list(
-    prices: List[float], p30: float, p80: float
-) -> List[str]:
+def classify_price_list(prices: List[float], p30: float, p80: float) -> List[str]:
     """Classify a list of prices."""
     return [classify_price(p, p30, p80) for p in prices]
 
@@ -60,7 +58,11 @@ def compute_price_thresholds(
     Compute P30 and P80 thresholds.
     Uses history_prices if enough samples exist, otherwise falls back to today's prices.
     """
-    prices = history_prices if len(history_prices) >= MIN_SAMPLES_FOR_CLASSIFICATION else fallback_prices
+    prices = (
+        history_prices
+        if len(history_prices) >= MIN_SAMPLES_FOR_CLASSIFICATION
+        else fallback_prices
+    )
     if not prices:
         return 0.0, 0.0
     p30 = _percentile(prices, PRICE_PERCENTILE_CHEAP)
@@ -106,7 +108,10 @@ async def async_get_price_thresholds(
     p30, p80 = compute_price_thresholds(history_prices, current_prices)
     _LOGGER.debug(
         "Price thresholds: P30=%.3f P80=%.3f (from %d history + %d today)",
-        p30, p80, len(history_prices), len(current_prices),
+        p30,
+        p80,
+        len(history_prices),
+        len(current_prices),
     )
     return p30, p80
 
@@ -123,6 +128,7 @@ def filter_short_peaks(
 ) -> List[str]:
     """Replace expensive spikes shorter than min_duration with surrounding category."""
     import math
+
     if not categories or interval_minutes <= 0:
         return list(categories)
 

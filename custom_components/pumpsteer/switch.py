@@ -1,4 +1,5 @@
 """Switch entities for PumpSteer."""
+
 from __future__ import annotations
 import logging
 from homeassistant.components.switch import SwitchEntity
@@ -10,6 +11,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

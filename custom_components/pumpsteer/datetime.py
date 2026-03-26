@@ -1,4 +1,5 @@
 """Datetime entities for PumpSteer."""
+
 from __future__ import annotations
 import logging
 from datetime import datetime
@@ -15,18 +16,21 @@ _LOGGER = logging.getLogger(__name__)
 
 DATETIME_ENTITIES = [
     ("holiday_start", "Holiday Start", "mdi:calendar-arrow-right"),
-    ("holiday_end",   "Holiday End",   "mdi:calendar-arrow-left"),
+    ("holiday_end", "Holiday End", "mdi:calendar-arrow-left"),
 ]
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    async_add_entities([
-        PumpSteerDateTimeEntity(entry, key, name, icon)
-        for key, name, icon in DATETIME_ENTITIES
-    ])
+    async_add_entities(
+        [
+            PumpSteerDateTimeEntity(entry, key, name, icon)
+            for key, name, icon in DATETIME_ENTITIES
+        ]
+    )
 
 
 class PumpSteerDateTimeEntity(RestoreEntity, DateTimeEntity):

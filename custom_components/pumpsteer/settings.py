@@ -32,7 +32,9 @@ PRICE_PERCENTILE_CHEAP: Final[float] = 30.0
 PRICE_PERCENTILE_EXPENSIVE: Final[float] = 80.0
 DEFAULT_TRAILING_HOURS: Final[int] = 72
 MIN_SAMPLES_FOR_CLASSIFICATION: Final[int] = 5
-ABSOLUTE_CHEAP_LIMIT: Final[float] = 0.60   # SEK/kWh — always cheap regardless of history
+ABSOLUTE_CHEAP_LIMIT: Final[float] = (
+    0.60  # SEK/kWh — always cheap regardless of history
+)
 MAX_PRICE_WARNING_THRESHOLD: Final[float] = 3.0
 
 # === COMFORT FLOOR PER AGGRESSIVENESS ===
@@ -61,8 +63,8 @@ BRAKE_DELTA_C: Final[float] = 10.0
 # Example with 15-minute prices and inertia=3:
 # 1 category jump × 3 × 10 = 30 minutes = 2 price slots
 RAMP_SCALE: Final[float] = 10.0
-RAMP_MIN_MINUTES: Final[float] = 20.0   # at least 1 price slot (15-min prices)
-RAMP_MAX_MINUTES: Final[float] = 60.0   # max 4 price slots
+RAMP_MIN_MINUTES: Final[float] = 20.0  # at least 1 price slot (15-min prices)
+RAMP_MAX_MINUTES: Final[float] = 60.0  # max 4 price slots
 
 # Preheating: extra boost applied during the preheat window (°C)
 PREHEAT_BOOST_C: Final[float] = 4.0
@@ -102,6 +104,7 @@ MIN_REASONABLE_TEMP: Final[float] = -30.0
 MAX_REASONABLE_TEMP: Final[float] = 30.0
 MIN_REASONABLE_PRICE: Final[float] = -2.0
 MAX_REASONABLE_PRICE: Final[float] = 15.0
+
 
 def validate_core_settings() -> None:
     errors = []

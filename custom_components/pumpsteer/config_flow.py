@@ -11,6 +11,7 @@ from .options_flow import PumpSteerOptionsFlowHandler
 _LOGGER = logging.getLogger(__name__)
 DOMAIN = "pumpsteer"
 
+
 class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for PumpSteer."""
 
@@ -43,15 +44,11 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(
                         "electricity_price_entity",
                         default="sensor.elpris_today",
-                    ): selector(
-                        {"entity": {"domain": "sensor"}}
-                    ),
+                    ): selector({"entity": {"domain": "sensor"}}),
                     vol.Required(
                         "price_tomorrow_entity",
                         default="sensor.elpris_tomorrow",
-                    ): selector(
-                        {"entity": {"domain": "sensor"}}
-                    ),
+                    ): selector({"entity": {"domain": "sensor"}}),
                 }
             ),
             errors=errors,

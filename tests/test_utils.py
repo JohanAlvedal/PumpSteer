@@ -16,6 +16,7 @@ def test_get_version_reads_manifest():
 def test_get_version_missing_manifest(monkeypatch):
     def fake_open(*args, **kwargs):
         raise FileNotFoundError
+
     monkeypatch.setattr(builtins, "open", fake_open)
     assert get_version() == "unknown"
 

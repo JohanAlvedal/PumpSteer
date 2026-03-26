@@ -15,9 +15,15 @@ CLEARED_YEAR = 1970
 
 def _get_entity_ids(hass: HomeAssistant, entry_id: str) -> tuple:
     registry = er.async_get(hass)
-    boolean = registry.async_get_entity_id("switch",   "pumpsteer", f"{entry_id}_holiday_mode")
-    start   = registry.async_get_entity_id("datetime", "pumpsteer", f"{entry_id}_holiday_start")
-    end     = registry.async_get_entity_id("datetime", "pumpsteer", f"{entry_id}_holiday_end")
+    boolean = registry.async_get_entity_id(
+        "switch", "pumpsteer", f"{entry_id}_holiday_mode"
+    )
+    start = registry.async_get_entity_id(
+        "datetime", "pumpsteer", f"{entry_id}_holiday_start"
+    )
+    end = registry.async_get_entity_id(
+        "datetime", "pumpsteer", f"{entry_id}_holiday_end"
+    )
     return boolean, start, end
 
 
@@ -85,16 +91,12 @@ async def async_update_holiday(hass: HomeAssistant, entry_id: str) -> bool:
     """Called every sensor update cycle. Returns True if holiday mode is active."""
     boolean_entity, start_entity, end_entity = _get_entity_ids(hass, entry_id)
 
-    now        = dt_util.now()
+    now = dt_util.now()
     boolean_on = _is_boolean_on(hass, boolean_entity)
-    start_dt   = _get_datetime(hass, start_entity)
-    end_dt     = _get_datetime(hass, end_entity)
+    start_dt = _get_datetime(hass, start_entity)
+    end_dt = _get_datetime(hass, end_entity)
 
-    dates_valid = (
-        start_dt is not None
-        and end_dt is not None
-        and end_dt > start_dt
-    )
+    dates_valid = start_dt is not None and end_dt is not None and end_dt > start_dt
 
     if dates_valid and not boolean_on and now >= start_dt and now < end_dt:
         _LOGGER.info("Holiday mode: auto-activating (start time reached)")
