@@ -211,17 +211,31 @@ Available via HACS:
 
 ### 📥 How to use the provided templates
 
-The Lovelace examples in this repository are written as **full YAML cards**.
+The Lovelace examples in this repository are written as **full YAML cards or views**.
 
 To use them:
 
 1. Go to your Home Assistant dashboard  
 2. Click **Edit dashboard**  
-3. Click the **three dots (⋮)** in the top right corner  
-4. Select **Edit dashboard (Raw configuration editor)**  
-   *(or add a Manual card depending on your setup)*  
-5. Paste the provided YAML code  
-6. Save  
+3. Click the **pencil icon (✏️)** on the view/tab you want to edit  
+4. Click the **three dots (⋮)** in the top right corner  
+5. Select **Edit dashboard (Raw configuration editor)**  
+   *(or “Edit in YAML” depending on your HA version)*  
+6. Paste the provided YAML code  
+7. Save  
+
+⚠️ Note:
+If you paste a full view configuration, it may overwrite the existing view.
+Make sure to back up your dashboard before pasting.
+
+---
+
+### 🧠 Important
+
+- These templates are **not UI cards you click together**
+- They must be **pasted as YAML**
+- Some templates may replace the entire view
+- You may need to adjust entity names to match your setup
 
 ---
 
