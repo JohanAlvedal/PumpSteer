@@ -624,7 +624,7 @@ class PumpSteerSensor(RestoreEntity):
             )
             return
 
-        holiday = await async_update_holiday(self.hass, self._config_entry.entry_id)
+        holiday = await async_update_holiday(self.hass, self._config_entry.entry_id, self._config_entry)
         if holiday:
             target = HOLIDAY_TEMP
 
