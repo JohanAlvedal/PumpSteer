@@ -18,6 +18,7 @@ It reduces energy cost when electricity is expensive — while protecting indoor
 - [Price Sensors](#price-sensor-support)
 - [Weather Support](#weather-support)
 - [New Installation](#new-installation)
+- [Dashboard (Lovelace)](#-lovelace-dashboard-mini-graph-card)
 - [Upgrade Guide](#upgrade-from-166)
 - [Troubleshooting](#troubleshooting)
 - [Tuning](#tuning-quick-guide)
@@ -180,6 +181,81 @@ Settings → Devices → PumpSteer → Configure
 - `status = ok`  
 - `price_category` changes  
 - `mode` behaves logically  
+
+---
+
+## 📊 Lovelace Dashboard (mini-graph-card)
+
+📁 See `/other/` folder for ready-to-use examples
+
+PumpSteer includes example Lovelace configurations using `mini-graph-card` for visualization.
+
+These dashboards show:
+- Indoor temperature
+- Target temperature
+- Fake outdoor temperature
+- Price behavior and system response
+
+---
+
+### ⚠️ Requirement
+
+You must install:
+
+- **mini-graph-card**
+
+Available via HACS:
+- Frontend → `mini-graph-card`
+
+---
+
+### 📥 How to use the provided templates
+
+The Lovelace examples in this repository are written as **full YAML cards**.
+
+To use them:
+
+1. Go to your Home Assistant dashboard  
+2. Click **Edit dashboard**  
+3. Click the **three dots (⋮)** in the top right corner  
+4. Select **Edit dashboard (Raw configuration editor)**  
+   *(or add a Manual card depending on your setup)*  
+5. Paste the provided YAML code  
+6. Save  
+
+---
+
+### 🧠 Important
+
+- These templates are **not UI cards you click together**
+- They are meant to be **pasted directly as YAML**
+- You may need to adjust entity names to match your setup
+
+---
+
+### 🔧 Common adjustments
+
+After pasting, check:
+
+- `sensor.pumpsteer`
+- temperature sensors
+- any custom entities
+
+---
+
+### 💡 Tips
+
+- If graph shows no data → check entity IDs  
+- If card does not load → verify `mini-graph-card` is installed  
+- Use Developer Tools → States to debug  
+
+---
+
+### 📌 Notes
+
+These dashboards are optimized for PumpSteer 2.0.0.
+
+They may not work correctly with older versions (e.g. 1.6.6).
 
 ---
 
