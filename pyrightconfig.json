@@ -1,0 +1,6 @@
+{
+  "python.analysis.extraPaths": [],
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "reportArgumentType": false
+}
