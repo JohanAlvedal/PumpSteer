@@ -165,11 +165,55 @@ Supported formats:
 
 ---
 
+### ℹ️ About `pump_packages.yaml`
+
+The file:
+
+[`other/pump_packages.yaml`](other/pump_packages.yaml)
+
+is **not a full Home Assistant package** like in earlier versions (e.g. 1.6.6).
+
+It now mainly contains:
+
+- Template sensors  
+- Example configurations  
+- Helper logic used by PumpSteer  
+
+⚠️ Important:
+
+- It is **not intended to be used as a complete drop-in package**
+- It does **not configure the full system automatically**
+- You should **not expect it to replace the integration setup**
+
+👉 Use it as a **reference or optional addon**, not as a full configuration
+
+---
+
+### Migration note (from 1.6.6)
+
+If you previously used full package files:
+
+- PumpSteer 2.0.0 no longer relies on package-based configuration  
+- The integration now handles:
+  - control logic  
+  - entities  
+  - settings  
+
+You may still use `pump_packages.yaml` for:
+- additional sensors
+- custom templates
+- extended functionality
+
+But the **core control is now inside the integration**
+
+---
+
 ## Weather Support
 
 Examples:
 - `weather.smhi_home`
 - `weather.yr_home`
+- - `weather.openweather`
 
 ⚠️ Must be selected in:  
 Settings → Devices → PumpSteer → Configure
@@ -196,7 +240,7 @@ Settings → Devices → PumpSteer → Configure
 
 ---
 
-## Lovelace Dashboard (mini-graph-card)
+## Lovelace Dashboard (mini-graph-card) (apex-chart)
 
 📁 See [`/dashboards/`](dashboards/) folder for ready-to-use examples
 
@@ -215,10 +259,11 @@ These dashboards show:
 You must install:
 
 - **mini-graph-card**
+- **apexcharts-card**
 
 Available via HACS:
 - Frontend → `mini-graph-card`
-
+- Frontend → `apexcharts-card`
 ---
 
 ### 📥 How to use the provided templates
