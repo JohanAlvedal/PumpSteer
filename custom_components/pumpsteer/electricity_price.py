@@ -94,7 +94,7 @@ async def async_get_price_thresholds(
             try:
                 if s.state not in ("unknown", "unavailable"):
                     history_prices.append(float(s.state))
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
 
     except Exception as err:
