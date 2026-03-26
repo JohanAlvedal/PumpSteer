@@ -18,7 +18,7 @@ It reduces energy cost when electricity is expensive — while protecting indoor
 - [Price Sensors](#price-sensor-support)
 - [Weather Support](#weather-support)
 - [New Installation](#new-installation)
-- [Dashboard (Lovelace)](#-lovelace-dashboard-mini-graph-card)
+- [Dashboard (Lovelace)](#lovelace-dashboard-mini-graph-card)
 - [Upgrade Guide](#upgrade-from-166)
 - [Troubleshooting](#troubleshooting)
 - [Tuning](#tuning-quick-guide)
@@ -35,28 +35,28 @@ It is a **complete rewrite of the control system**.
 
 ### What this means
 
-- ❌ Old dashboards will not behave the same  
-- ❌ Automations may break  
-- ❌ Old helpers are no longer primary  
-- ❌ Price logic is completely changed  
+- ❌ Old dashboards will not behave the same
+- ❌ Automations may break
+- ❌ Old helpers are no longer primary
+- ❌ Price logic is completely changed
 
 ---
 
 ### Required after upgrade
 
-- Rebuild Lovelace cards  
-- Update automations  
-- Verify price sensors (today + tomorrow)  
-- Reconnect to new entities  
-- Retune settings  
+- Rebuild Lovelace cards
+- Update automations
+- Verify price sensors (today + tomorrow)
+- Reconnect to new entities
+- Retune settings
 
 ---
 
 ### Behavior is different
 
-- PI control instead of heuristics  
-- Ramped braking  
-- Forecast-aware decisions  
+- PI control instead of heuristics
+- Ramped braking
+- Forecast-aware decisions
 
 ➡️ Do not expect 1.6.6 behavior
 
@@ -64,9 +64,9 @@ It is a **complete rewrite of the control system**.
 
 ### Recommendation
 
-1. Install 2.0.0  
-2. Observe for 24–48h  
-3. Then migrate fully  
+1. Install 2.0.0
+2. Observe for 24–48h
+3. Then migrate fully
 
 ---
 
@@ -87,10 +87,14 @@ It is a **complete rewrite of the control system**.
 ### Price categories changed
 
 Old:
-- `very_cheap`, `very_expensive`, `extreme`
+- `very_cheap`
+- `very_expensive`
+- `extreme`
 
 New:
-- `cheap`, `normal`, `expensive`
+- `cheap`
+- `normal`
+- `expensive`
 
 ---
 
@@ -104,8 +108,8 @@ Must support:
 
 ### Control system rewritten
 
-- Old: heuristic logic  
-- New: PI + state machine  
+- Old: heuristic logic
+- New: PI + state machine
 
 ---
 
@@ -143,9 +147,7 @@ Supported formats:
 
 📌 Recommended example:
 
-
-other/nordpool.yaml
-
+[`other/nordpool.yaml`](other/nordpool.yaml)
 
 ✔ Works with:
 - Official Nord Pool integration
@@ -159,7 +161,7 @@ Examples:
 - `weather.smhi_home`
 - `weather.yr_home`
 
-⚠️ Must be selected in:
+⚠️ Must be selected in:  
 Settings → Devices → PumpSteer → Configure
 
 ---
@@ -168,25 +170,25 @@ Settings → Devices → PumpSteer → Configure
 
 ### Step-by-step
 
-1. Install via HACS or manually  
-2. Restart Home Assistant  
-3. Add integration  
-4. Select required sensors  
+1. Install via HACS or manually
+2. Restart Home Assistant
+3. Add integration
+4. Select required sensors
 
 ---
 
 ### First validation
 
-- `sensor.pumpsteer` active  
-- `status = ok`  
-- `price_category` changes  
-- `mode` behaves logically  
+- `sensor.pumpsteer` active
+- `status = ok`
+- `price_category` changes
+- `mode` behaves logically
 
 ---
 
-## 📊 Lovelace Dashboard (mini-graph-card)
+## Lovelace Dashboard (mini-graph-card)
 
-📁 See `/other/` folder for ready-to-use examples
+📁 See [`/dashboards/`](dashboards/) folder for ready-to-use examples
 
 PumpSteer includes example Lovelace configurations using `mini-graph-card` for visualization.
 
@@ -215,17 +217,17 @@ The Lovelace examples in this repository are written as **full YAML cards or vie
 
 To use them:
 
-1. Go to your Home Assistant dashboard  
-2. Click **Edit dashboard**  
-3. Click the **pencil icon (✏️)** on the view/tab you want to edit  
-4. Click the **three dots (⋮)** in the top right corner  
-5. Select **Edit dashboard (Raw configuration editor)**  
-   *(or “Edit in YAML” depending on your HA version)*  
-6. Paste the provided YAML code  
-7. Save  
+1. Go to your Home Assistant dashboard
+2. Click **Edit dashboard**
+3. Click the **pencil icon (✏️)** on the view/tab you want to edit
+4. Click the **three dots (⋮)** in the top right corner
+5. Select **Edit dashboard (Raw configuration editor)**
+   *(or “Edit in YAML” depending on your HA version)*
+6. Paste the provided YAML code
+7. Save
 
-⚠️ Note:
-If you paste a full view configuration, it may overwrite the existing view.
+⚠️ Note:  
+If you paste a full view configuration, it may overwrite the existing view.  
 Make sure to back up your dashboard before pasting.
 
 ---
@@ -235,14 +237,6 @@ Make sure to back up your dashboard before pasting.
 - These templates are **not UI cards you click together**
 - They must be **pasted as YAML**
 - Some templates may replace the entire view
-- You may need to adjust entity names to match your setup
-
----
-
-### 🧠 Important
-
-- These templates are **not UI cards you click together**
-- They are meant to be **pasted directly as YAML**
 - You may need to adjust entity names to match your setup
 
 ---
@@ -259,9 +253,9 @@ After pasting, check:
 
 ### 💡 Tips
 
-- If graph shows no data → check entity IDs  
-- If card does not load → verify `mini-graph-card` is installed  
-- Use Developer Tools → States to debug  
+- If graph shows no data → check entity IDs
+- If card does not load → verify `mini-graph-card` is installed
+- Use Developer Tools → States to debug
 
 ---
 
@@ -277,18 +271,18 @@ They may not work correctly with older versions (e.g. 1.6.6).
 
 ### Required
 
-- Update price categories  
-- Configure tomorrow price  
-- Update automations  
-- Remove ML  
+- Update price categories
+- Configure tomorrow price
+- Update automations
+- Remove ML
 
 ---
 
 ### Recommended
 
-- Verify price attributes  
-- Configure weather entity  
-- Update holiday automations  
+- Verify price attributes
+- Configure weather entity
+- Update holiday automations
 
 ---
 
@@ -332,22 +326,22 @@ Cause:
 
 ### Aggressiveness
 
-- 0 → no price control  
-- 1–2 → mild  
-- 3–4 → balanced  
-- 5 → aggressive  
+- 0 → no price control
+- 1–2 → mild
+- 3–4 → balanced
+- 5 → aggressive
 
 ---
 
 ### Inertia
 
-- Low → fast system  
-- High → slow system  
+- Low → fast system
+- High → slow system
 
 Typical:
-- Apartment → low  
-- House → medium  
-- Heavy house → high  
+- Apartment → low
+- House → medium
+- Heavy house → high
 
 ---
 
@@ -392,14 +386,14 @@ Feedback is welcome!
 
 ## Links
 
-- GitHub repository  
-- Create Issue  
+- GitHub repository
+- Create Issue
 
 ---
 
 ## License
 
-- ≥ v1.6.2 → AGPL-3.0  
-- ≤ v1.5.1 → Apache 2.0  
+- ≥ v1.6.2 → AGPL-3.0
+- ≤ v1.5.1 → Apache 2.0
 
 © Johan Älvedal
