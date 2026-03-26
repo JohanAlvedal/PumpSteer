@@ -16,9 +16,9 @@ It reduces energy cost when electricity is expensive — while protecting indoor
 
 # PumpSteer
 
-| ![PumpSteer Drift & Status](docs/img/01.png) | ![PumpSteer Chart](docs/img/02.png) |
+| ![PumpSteer 1](docs/img/01.png) | ![PumpSteer 1](docs/img/02.png) |
 | -------------------------------------------- | ----------------------------------- |
-| ![PumpSteer Troubleshooting](docs/img/03.png) | ![PumpSteer Templates](docs/img/04.png) |
+| ![PumpSteer 3](docs/img/03.png) | ![PumpSteer 4](docs/img/04.png) |
 
 
 ---
