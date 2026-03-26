@@ -1,0 +1,161 @@
+type: sections
+max_columns: 4
+title: Charts
+path: data
+sections:
+  - cards:
+      - type: custom:apexcharts-card
+        graph_span: 24h
+        update_interval: 5min
+        header:
+          show: true
+          title: PumpSteer – Braking vs Price & P80
+          show_states: true
+          colorize_states: true
+        grid_options:
+          columns: full
+        apex_config:
+          chart:
+            height: 300
+          stroke:
+            curve: smooth
+        yaxis:
+          - id: price
+            min: 0
+            max: auto
+            decimals: 2
+            apex_config:
+              tickAmount: 5
+              title:
+                text: Price (SEK/kWh)
+              labels:
+                formatter: |
+                  EVAL:function(val) {
+                    return val != null ? val.toFixed(2) + ' SEK' : '';
+                  }
+          - id: brake
+            min: 0
+            max: 1
+            decimals: 2
+            opposite: true
+            apex_config:
+              tickAmount: 5
+              title:
+                text: Brake Factor
+              labels:
+                formatter: |
+                  EVAL:function(val) {
+                    return val != null ? (val * 100).toFixed(0) + '%' : '';
+                  }
+        series:
+          - entity: sensor.elpris_spot_avgifter
+            name: Price
+            type: area
+            yaxis_id: price
+            color: "#378ADD"
+            stroke_width: 2
+            unit: " SEK/kWh"
+            extend_to: now
+            statistics:
+              type: mean
+              period: hour
+          - entity: sensor.pumpsteer
+            name: P80
+            type: line
+            yaxis_id: price
+            color: "#E24B4A"
+            stroke_width: 1
+            unit: " SEK/kWh"
+            data_generator: |
+              const raw = entity?.attributes?.p80;
+              const p80 = Number(String(raw).replace(',', '.'));
+              if (!isFinite(p80)) return [];
+
+              const span = 24 * 60 * 60 * 1000;
+              return [[Date.now() - span, p80], [Date.now(), p80]];
+          - entity: sensor.pumpsteer
+            name: Brake Factor
+            attribute: brake_factor
+            type: area
+            yaxis_id: brake
+            color: "#639922"
+            stroke_width: 2
+            extend_to: now
+            unit: x
+
+      - type: custom:apexcharts-card
+        graph_span: 24h
+        update_interval: 5min
+        header:
+          show: true
+          title: PumpSteer – Temperature Delta vs Price & P80
+          show_states: true
+          colorize_states: true
+        grid_options:
+          columns: full
+        apex_config:
+          chart:
+            height: 300
+          stroke:
+            curve: smooth
+        yaxis:
+          - id: price
+            min: 0
+            max: auto
+            decimals: 2
+            apex_config:
+              tickAmount: 5
+              title:
+                text: Price (SEK/kWh)
+              labels:
+                formatter: |
+                  EVAL:function(val) {
+                    return val != null ? val.toFixed(2) + ' SEK' : '';
+                  }
+          - id: delta
+            decimals: 2
+            opposite: true
+            apex_config:
+              tickAmount: 5
+              title:
+                text: Temperature Delta
+              labels:
+                formatter: |
+                  EVAL:function(val) {
+                    return val != null ? val.toFixed(1) + ' °C' : '';
+                  }
+        series:
+          - entity: sensor.elpris_spot_avgifter
+            name: Price
+            type: area
+            yaxis_id: price
+            color: "#378ADD"
+            stroke_width: 2
+            unit: " SEK/kWh"
+            extend_to: now
+            statistics:
+              type: mean
+              period: hour
+          - entity: sensor.pumpsteer
+            name: P80
+            type: line
+            yaxis_id: price
+            color: "#E24B4A"
+            stroke_width: 1
+            unit: " SEK/kWh"
+            data_generator: |
+              const raw = entity?.attributes?.p80;
+              const p80 = Number(String(raw).replace(',', '.'));
+              if (!isFinite(p80)) return [];
+
+              const span = 24 * 60 * 60 * 1000;
+              return [[Date.now() - span, p80], [Date.now(), p80]];
+          - entity: sensor.pumpsteer_fake_temp_delta
+            name: Temperature Delta
+            type: area
+            yaxis_id: delta
+            stroke_width: 2
+            extend_to: now
+            unit: " °C"
+    column_span: 2
+cards: []
