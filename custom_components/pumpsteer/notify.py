@@ -4,6 +4,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,6 +21,20 @@ WATCHED = {
 }
 
 
+def _notifications_enabled(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Return True if the notifications switch is on (or missing — fail open)."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "switch", "pumpsteer", f"{entry.entry_id}_notifications_enabled"
+    )
+    if not entity_id:
+        return True  # switch not yet registered — allow notification
+    state = hass.states.get(entity_id)
+    if state is None:
+        return True  # unknown state — allow notification
+    return state.state == "on"
+
+
 @callback
 def async_setup_notifications(hass: HomeAssistant, entry: ConfigEntry):
     """Call from __init__.py async_setup_entry. Returns unsubscribe callable."""
@@ -32,6 +47,10 @@ def async_setup_notifications(hass: HomeAssistant, entry: ConfigEntry):
 
         if new != "True" or old == "True":
             return  # only fire on False → True
+
+        if not _notifications_enabled(hass, entry):
+            _LOGGER.debug("PumpSteer notifications disabled — skipping %s", entity_id)
+            return
 
         title, message = WATCHED[entity_id]
         hass.async_create_task(
