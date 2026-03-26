@@ -1,151 +1,234 @@
 # PumpSteer Lovelace Cards
 
-type: entities
-title: 🔧 PumpSteer – Drift & Status
-show_header_toggle: false
-entities:
-  - entity: sensor.pumpsteer
-    name: Fejkad utetemperatur
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_ml_analysis
-  - entity: sensor.pumpsteer_operating_mode
-    name: Driftläge
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_preboosting
-    name: Preboost aktiv
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_braking
-    name: Broms aktiv
-    secondary_info: last-changed
-  - type: divider
-  - entity: sensor.real_outdoor_temperature
-    name: Outdoor
-    secondary_info: last-changed
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: indoor_temperature
-    name: Indoor
-    suffix: °C
-  - entity: sensor.pumpsteer_current_price_level
-    name: Elprisnivå
-    icon: mdi:chart-bell-curve-cumulative
-    secondary_info: last-changed
-  - type: divider
-  - entity: input_number.house_inertia
-    secondary_info: last-changed
-  - entity: input_number.pumpsteer_aggressiveness
-    secondary_info: last-changed
-  - entity: input_number.indoor_target_temperature
-  - entity: input_number.pumpsteer_summer_threshold
-  - entity: input_text.hourly_forecast_temperatures
-    name: Forecast Data (raw)
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_price_category
-  - entity: sensor.pumpsteer_status_summary
-  - entity: sensor.pumpsteer_efficiency_score
-  - entity: input_boolean.autotune_inertia
-  - entity: input_boolean.pumpsteer_preboost_enabled
-  - entity: input_select.pumpsteer_price_model
-state_color: true
+type: sections
+sections:
+  - type: grid
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: entity
+            entity: sensor.pumpsteer
+            name: PumpSteer
+            icon: mdi:thermostat-box
+            state_color: true
+            card_mod:
+              style: |
+                ha-card { font-size: 1.2em; font-weight: bold; }
+          - type: glance
+            show_name: true
+            show_icon: true
+            show_state: true
+            columns: 3
+            entities:
+              - entity: sensor.pumpsteer_operating_mode
+                name: Mode
+              - entity: sensor.pumpsteer_price_category
+                name: Price
+              - entity: sensor.pumpsteer_is_saving
+                name: Saving
+                icon: mdi:piggy-bank
+          - type: entities
+            title: Settings
+            show_header_toggle: false
+            entities:
+              - entity: number.pumpsteer_target_temperature
+                name: Target temperature
+                icon: mdi:thermometer
+              - entity: number.pumpsteer_saving_level
+                name: Saving level (0 = off, 5 = max)
+                icon: mdi:lightning-bolt-circle
+              - entity: number.pumpsteer_summer_mode_threshold
+                name: Summer threshold
+                icon: mdi:weather-sunny
+              - entity: number.pumpsteer_house_thermal_mass
+                name: House thermal mass
+                icon: mdi:home-thermometer
+              - entity: switch.pumpsteer_holiday_mode
+                name: Holiday mode
+                icon: mdi:beach
+              - entity: sensor.pumpsteer_holiday_status
+                name: Holiday status
+                icon: mdi:beach
+              - entity: datetime.pumpsteer_holiday_start
+                name: Holiday start
+                icon: mdi:calendar-arrow-right
+              - entity: datetime.pumpsteer_holiday_end
+                name: Holiday end
+                icon: mdi:calendar-arrow-left
+          - type: entities
+            title: Status details
+            show_header_toggle: false
+            entities:
+              - entity: sensor.pumpsteer_price_thresholds
+                name: Price thresholds (P30/P80)
+                icon: mdi:chart-bell-curve
+              - entity: sensor.pumpsteer_temperature_difference
+                name: Indoor vs target diff
+                icon: mdi:delta
+              - entity: sensor.pumpsteer_fake_temp_delta
+                name: Fake temp vs real outdoor
+                icon: mdi:swap-horizontal-bold
+              - entity: sensor.pumpsteer_brake_factor
+                name: Brake factor
+                icon: mdi:car-brake-alert
+              - type: attribute
+                entity: sensor.pumpsteer
+                attribute: heating_demand_c
+                name: Heating demand
+                icon: mdi:fire
+              - type: attribute
+                entity: sensor.pumpsteer
+                attribute: p30
+                name: P30 threshold
+                icon: mdi:cash-minus
+              - type: attribute
+                entity: sensor.pumpsteer
+                attribute: p80
+                name: P80 threshold
+                icon: mdi:cash-plus
+      - type: custom:mini-graph-card
+        name: PumpSteer vs SVOTC
+        icon: mdi:home-thermometer
+        entities:
+          - entity: sensor.pumpsteer
+            name: Pumpsteer
+            color: "#43a047"
+            show_state: true
+          - entity: sensor.svotc_virtual_outdoor_temperature
+            name: SVOTC
+            color: "#ef5350"
+            show_line: true
+            show_points: false
+            show_state: true
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        smoothing: true
+        show:
+          labels: true
+          points: false
+          legend: true
+          fill: fade
+  - type: grid
+    cards:
+      - type: entities
+        title: PumpSteer Status
+        entities:
+          - entity: sensor.pumpsteer
+            name: Fake Outdoor Temp
+            icon: mdi:thermometer-chevron-down
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: outdoor_temperature
+            name: Outdoor Temp
+            suffix: °C
+            icon: mdi:thermometer
+          - entity: sensor.svotc_virtual_outdoor_temperature
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: status
+            name: Status
+            icon: mdi:check-circle
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: mode
+            name: Mode
+            icon: mdi:cog
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: indoor_temperature
+            name: Indoor Temp
+            suffix: °C
+            icon: mdi:home-thermometer
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: target_temperature
+            name: Target Temp
+            suffix: °C
+            icon: mdi:target
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: heating_demand_c
+            name: Heating Demand
+            suffix: °C
+            icon: mdi:fire
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: price_category
+            name: Price Category
+            icon: mdi:tag
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: aggressiveness
+            name: Aggressiveness
+            icon: mdi:speedometer
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: p30
+            name: Price P30
+            suffix: SEK/kWh
+            icon: mdi:chart-bell-curve
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: p80
+            name: Price P80
+            suffix: SEK/kWh
+            icon: mdi:chart-bell-curve
+          - entity: sensor.elpris_spot_avgifter
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: last_updated
+            name: Last Updated
+            icon: mdi:clock-outline
+      - type: custom:mini-graph-card
+        name: Virtual outdoor temperature
+        icon: mdi:thermometer-lines
+        entities:
+          - entity: sensor.pumpsteer
+            name: Fake temp
+            color: "#e87d0d"
+            show_state: true
+          - entity: sensor.temperatur_nu
+            name: Real outdoor
+            color: "#44739e"
+            show_state: true
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        smoothing: true
+        show:
+          labels: true
+          points: false
+          legend: true
+          fill: fade
+      - type: custom:mini-graph-card
+        name: Indoor vs target
+        icon: mdi:home-thermometer
+        entities:
+          - entity: sensor.pumpsteer
+            attribute: indoor_temperature
+            name: Indoor
+            color: "#43a047"
+            show_state: true
+          - entity: number.pumpsteer_target_temperature
+            name: Target
+            color: "#ef5350"
+            show_line: true
+            show_points: false
+            show_state: true
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        smoothing: true
+        show:
+          labels: true
+          points: false
+          legend: true
+          fill: fade
+max_columns: 4
+title: Main
+cards: []
 
-
-###### Attributes #####
-
-type: entities
-title: PumpSteer Attribute
-entities:
-  - entity: sensor.pumpsteer
-    name: Status
-    attribute: status
-    icon: mdi:check-circle
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: mode
-    name: Mode
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: fake_outdoor_temperature
-    name: Fake Outdoor Temp
-    suffix: °C
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: price_category
-    name: Price Category
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: current_price
-    name: Current Price
-    suffix: SEK/kWh
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: max_price
-    name: Max Price
-    suffix: SEK/kWh
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: aggressiveness
-    name: Aggressiveness
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: inertia
-    name: Inertia
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: target_temperature
-    name: Target Temp
-    suffix: °C
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: indoor_temperature
-    name: Indoor Temp
-    suffix: °C
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: outdoor_temperature
-    name: Outdoor Temp
-    suffix: °C
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: braking_threshold_percent
-    name: Braking Threshold
-    suffix: "%"
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: price_factor_percent
-    name: Price Factor
-    suffix: "%"
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: holiday_mode
-    name: Holiday Mode
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: last_updated
-    name: Last Updated
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: temp_error_c
-    name: Temp Error
-    suffix: °C
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: to_summer_threshold_c
-    name: To Summer Threshold
-    suffix: °C
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: saving_potential_sek_per_kwh
-    name: Saving Potential
-    suffix: SEK/kWh
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: next_3_hours_prices
-    name: Next 3h Prices
-    suffix: SEK/kWh
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: decision_reason
-    name: Decision Reason
 
 ####### Apexchart #####
 
@@ -211,560 +294,5 @@ series:
 
 ####
 
-type: entities
-title: 🔧 PumpSteer – Semster
-show_header_toggle: false
-entities:
-  - entity: input_boolean.holiday_mode
-  - entity: input_datetime.holiday_start
-  - entity: input_datetime.holiday_end
-###################
-
-
-## 1. Enkel huvudstatus
-
-type: entities
-title: 🔧 PumpSteer – Drift & Status (Enkel)
-show_header_toggle: false
-entities:
-  - entity: sensor.pumpsteer
-    name: Fejkad utetemperatur
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_status_summary
-    name: Status
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_preboosting
-    name: Preboost aktiv
-    secondary_info: last-changed
-  - entity: sensor.pumpsteer_is_braking
-    name: Broms aktiv
-    secondary_info: last-changed
-  - entity: sensor.real_outdoor_temperature
-    name: Ute
-    secondary_info: last-changed
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: indoor_temperature
-    name: Inomhus Temp
-    suffix: °C
-  - entity: input_number.pumpsteer_aggressiveness
-    name: Aggrevisitet
-  - entity: input_number.indoor_target_temperature
-    name: Måltemperatur
-  - entity: input_number.pumpsteer_summer_threshold
-    name: Sommartröskel
-  - entity: input_number.house_inertia
-    name: Husets Tröghet
-    secondary_info: last-changed
-  - entity: input_boolean.autotune_inertia
-    name: Autotune aktiverat
-  - entity: input_boolean.pumpsteer_preboost_enabled
-  - entity: sensor.pumpsteer_data_quality
-
-## Fortsättning, enkel. 
-
-type: vertical-stack
-cards:
-  - type: entities
-    title: 🔧 PumpSteer – Semster
-    show_header_toggle: false
-    entities:
-      - entity: input_boolean.holiday_mode
-      - entity: input_datetime.holiday_start
-      - entity: input_datetime.holiday_end
-  - type: markdown
-    content: |
-      ### 🏖️ Semestermode
-      <small>
-      Styr som om ingen är hemma:
-
-      - Måltemp: **16 °C**  
-      - Värmer bara vid **låga elpriser**  
-      Aktivera i god tid innan hemkomst!
-      </small>
-      ### ⚙️ Inställningar
-      <small>
-      **Aggressivitet (0–5)**  
-      Hur mycket systemet prioriterar besparing:
-
-      - `0` = Ingen optimering  
-      - `3` = Balanserad  
-      - `5` = Max besparing
-
-      **Tröghet (0.1–5.0)**  
-      Hur snabbt huset reagerar:
-
-      - Lågt = Snabbt hus  
-      - Högt = Trögt hus
-
-
-## 2. Temperaturer
-
-type: entities
-title: 🌡️ Temperaturer
-show_header_toggle: false
-entities:
-  - entity: sensor.pumpsteer
-    name: Fake Utomhustemperatur
-    icon: mdi:thermometer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Indoor Temperature
-    name: Inomhustemperatur
-    icon: mdi:home-thermometer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Target Temperature
-    name: Måltemperatur
-    icon: mdi:target
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Outdoor Temperature
-    name: Verklig Utomhustemperatur
-    icon: mdi:weather-partly-cloudy
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Temp Error (°C)
-    name: Temperaturfel
-    icon: mdi:thermometer-alert
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Summer Threshold
-    name: Sommartröskel
-    icon: mdi:weather-sunny
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: To Summer Threshold (°C)
-    name: Till Sommartröskel
-    icon: mdi:thermometer-lines
-
-
-## 3. Elpriser och ekonomi
-
-type: entities
-title: ⚡ Elpriser
-show_header_toggle: false
-entities:
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Current Price
-    name: Aktuellt Pris (kr/kWh)
-    icon: mdi:flash
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Max Price
-    name: Max Pris Idag
-    icon: mdi:flash-alert
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Saving Potential (SEK/kWh)
-    name: Besparingspotential
-    icon: mdi:piggy-bank
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Price Factor (%)
-    name: Prisfaktor
-    icon: mdi:percent
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Price Category
-    name: Kategori Nu
-    icon: mdi:tag
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Current Hour
-    name: Aktuell Timme
-    icon: mdi:clock
-```
-
-## 4. Inställningar och kontroller
-
-```yaml
-type: entities
-title: 🎛️ Kontroller
-show_header_toggle: false
-entities:
-  - entity: input_number.pumpsteer_aggressiveness
-    name: Aggressivitet
-  - entity: input_number.house_inertia
-    name: Husets Tröghet
-  - entity: input_number.indoor_target_temperature
-    name: Måltemperatur
-  - entity: input_number.pumpsteer_summer_threshold
-    name: Sommartröskel
-  - entity: input_select.pumpsteer_price_model
-    name: Prismodell
-  - entity: input_boolean.holiday_mode
-    name: Semesterläge
-  - entity: input_boolean.autotune_inertia
-    name: Auto-Tune ML
-  - type: divider
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Aggressiveness
-    name: Nuvarande Aggressivitet
-    icon: mdi:speedometer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Inertia
-    name: Nuvarande Tröghet
-    icon: mdi:home-analytics
-```
-
-## 5. ML och Analys
-
-```yaml
-type: entities
-title: 🤖 Maskininlärning
-show_header_toggle: false
-entities:
-  - entity: sensor.pumpsteer_ml_analysis
-    name: ML Analys Status
-    icon: mdi:brain
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: success_rate
-    name: Framgångsgrad
-    icon: mdi:chart-line
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: avg_heating_duration
-    name: Snitt Uppvärmningstid
-    icon: mdi:clock
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: most_used_aggressiveness
-    name: Mest Använd Aggressivitet
-    icon: mdi:gauge
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: total_heating_sessions
-    name: Antal Uppvärmningar
-    icon: mdi:fire
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: auto_tune_active
-    name: Auto-Tune Aktiv
-    icon: mdi:robot
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: last_updated
-    name: Senast Uppdaterad
-    icon: mdi:clock-outline
-```
-
-## 6. Detaljerad info
-
-```yaml
-type: entities
-title: 📊 Detaljerad Status
-show_header_toggle: false
-entities:
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Decision Reason
-    name: Beslutorsak
-    icon: mdi:lightbulb
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Braking Threshold (%)
-    name: Bromsningströskel
-    icon: mdi:speedometer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: To Summer Threshold (°C)
-    name: Till Sommartröskel
-    icon: mdi:weather-sunny
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Holiday Mode
-    name: Semesterläge
-    icon: mdi:airplane
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Last Updated
-    name: Senast Uppdaterad
-    icon: mdi:clock
-```
-
-## 7. Nästa timmar och prisprognoser
-
-```yaml
-type: entities
-title: 🔮 Prisprognoser
-show_header_toggle: false
-entities:
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Next 3 Hours Prices
-    name: Nästa 3h Priser
-    icon: mdi:clock-fast
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Current Hour
-    name: Aktuell Timme
-    icon: mdi:clock
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Price Categories All Hours
-    name: Alla Dagens Kategorier
-    icon: mdi:view-list
-  - type: section
-    label: Datakvalitet
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Data Quality
-    name: Data Quality Info
-    icon: mdi:database-check
-```
-
-## 8. Enkel glance-översikt
-
-```yaml
-type: glance
-title: PumpSteer Snabböversikt
-entities:
-  - entity: sensor.pumpsteer
-    name: Fake Temp
-  - entity: input_number.pumpsteer_aggressiveness
-    name: Aggressivitet
-  - entity: input_number.house_inertia
-    name: Tröghet
-  - entity: input_boolean.holiday_mode
-    name: Semester
-```
-
-## 9. Gauge för temperaturfel (verkliga värden)
-
-```yaml
-type: gauge
-entity: sensor.pumpsteer
-name: Temperaturfel
-attribute: Temp Error (°C)
-min: -5
-max: 5
-severity:
-  green: -1
-  yellow: -2
-  red: -3
-needle: true
-```
-
-## 17. Sommarläge Status
-
-```yaml
-type: entities
-title: ☀️ Sommarläge Aktiv
-show_header_toggle: false
-entities:
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Mode
-    name: Nuvarande Läge
-    icon: mdi:weather-sunny
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Outdoor Temperature
-    name: Utomhustemperatur
-    icon: mdi:thermometer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Summer Threshold
-    name: Sommartröskel
-    icon: mdi:thermometer-lines
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: To Summer Threshold (°C)
-    name: Över Tröskel Med
-    icon: mdi:arrow-up-thick
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Decision Reason
-    name: Systemets Beslut
-    icon: mdi:lightbulb
-```
-
-## 10. Historia-graf för fake temperatur
-
-```yaml
-type: history-graph
-title: PumpSteer Temperatur Historik
-entities:
-  - entity: sensor.pumpsteer
-    name: Fake Temperatur
-hours_to_show: 24
-refresh_interval: 60
-```
-
-## 11. Markdown-kort med sammanfattning
-
-```yaml
-type: markdown
-title: 📋 PumpSteer Sammanfattning
-content: >
-  **Aktuellt läge:** {{ state_attr('sensor.pumpsteer', 'Mode') }}
-  
-  **Fake temperatur:** {{ states('sensor.pumpsteer') }}°C
-  
-  **Priskategori:** {{ state_attr('sensor.pumpsteer', 'Price Category') }}
-  
-  **Temperaturfel:** {{ state_attr('sensor.pumpsteer', 'Temp Error (°C)') }}°C
-  
-  **Aggressivitet:** {{ states('input_number.pumpsteer_aggressiveness') }}
-  
-  **Husets tröghet:** {{ states('input_number.house_inertia') }}
-  
-  ---
-  
-  *Senast uppdaterad: {{ state_attr('sensor.pumpsteer', 'Last Updated') }}*
-```
-
-## 12. Kompakt statuskort
-
-```yaml
-type: entities
-title: 🚀 PumpSteer Kompakt
-show_header_toggle: false
-entities:
-  - entity: sensor.pumpsteer
-    name: Fake Temperatur
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Mode
-    name: Läge
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Current Price
-    name: Elpris nu
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Price Category
-    name: Priskategori
-  - entity: input_number.pumpsteer_aggressiveness
-    name: Aggressivitet
-  - entity: input_boolean.holiday_mode
-    name: Semester
-```
-
-## 14. ML Rekommendationer (separat kort)
-
-```yaml
-type: entities
-title: 💡 ML Rekommendationer
-show_header_toggle: false
-entities:
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: recommendations
-    name: AI Råd
-    icon: mdi:lightbulb
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: success_rate
-    name: Nuvarande Framgång
-    icon: mdi:percent
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: most_used_aggressiveness
-    name: Din Aggressivitet
-    icon: mdi:speedometer
-  - entity: input_boolean.autotune_inertia
-    name: Auto-Tune Aktivera
-    icon: mdi:robot
-```
-
-## 15. ML Statistik
-
-```yaml
-type: entities
-title: 📈 ML Statistik
-show_header_toggle: false
-entities:
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: total_heating_sessions
-    name: Totalt Antal Uppvärmningar
-    icon: mdi:counter
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: avg_heating_duration
-    name: Genomsnittlig Tid
-    icon: mdi:timer
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: success_rate
-    name: Framgångsgrad
-    icon: mdi:chart-donut
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: most_used_aggressiveness
-    name: Populäraste Inställning
-    icon: mdi:trending-up
-  - type: section
-    label: System
-  - entity: sensor.pumpsteer_ml_analysis
-    name: ML Status
-    icon: mdi:brain
-  - type: attribute
-    entity: sensor.pumpsteer_ml_analysis
-    attribute: auto_tune_active
-    name: Auto-Tune
-    icon: mdi:robot
-```
-
-```yaml
-type: entities
-title: 🔍 Alla PumpSteer Attribut
-show_header_toggle: false
-entities:
-  - type: section
-    label: Temperaturer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Indoor Temperature
-    name: Inne
-    icon: mdi:home-thermometer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Outdoor Temperature
-    name: Ute (verklig)
-    icon: mdi:thermometer
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Target Temperature
-    name: Mål
-    icon: mdi:target
-
-  - type: section
-    label: Priser
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Current Price
-    name: Nu
-    icon: mdi:flash
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Max Price
-    name: Max idag
-    icon: mdi:flash-alert
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Saving Potential (SEK/kWh)
-    name: Besparing
-    icon: mdi:piggy-bank
-
-  - type: section
-    label: System
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Mode
-    name: Läge
-    icon: mdi:cog
-  - type: attribute
-    entity: sensor.pumpsteer
-    attribute: Decision Reason
-    name: Anledning
-    icon: mdi:lightbulb
-```
 
 Tack för rättelsen! Nu ska alla kort fungera perfekt med rätt syntax.
