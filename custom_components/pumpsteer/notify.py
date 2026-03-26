@@ -34,7 +34,9 @@ def async_setup_notifications(hass: HomeAssistant, entry: ConfigEntry):
             return  # only fire on False → True
 
         title, message = WATCHED[entity_id]
-        hass.async_create_task(_send(hass, entry, title, message))
+        hass.async_create_task(
+            async_send_notification(hass, entry, title, message, "pumpsteer_price")
+        )
 
     unsubs = [
         async_track_state_change_event(hass, [eid], _on_change) for eid in WATCHED
@@ -43,7 +45,14 @@ def async_setup_notifications(hass: HomeAssistant, entry: ConfigEntry):
     return lambda: [u() for u in unsubs]
 
 
-async def _send(hass: HomeAssistant, entry: ConfigEntry, title: str, message: str):
+async def async_send_notification(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    title: str,
+    message: str,
+    notification_id: str = "pumpsteer",
+) -> None:
+    """Send via notify_service (from options), or fall back to persistent_notification."""
     service = {**entry.data, **entry.options}.get("notify_service", "")
 
     if service:
@@ -63,5 +72,5 @@ async def _send(hass: HomeAssistant, entry: ConfigEntry, title: str, message: st
     await hass.services.async_call(
         "persistent_notification",
         "create",
-        {"title": title, "message": message, "notification_id": "pumpsteer_price"},
+        {"title": title, "message": message, "notification_id": notification_id},
     )
