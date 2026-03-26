@@ -125,6 +125,14 @@ class PumpSteerSensor(RestoreEntity):
 
         self._attr_unique_id = config_entry.entry_id
         self._forecast_available_last: Optional[bool] = None
+        self._safe_mode_warned: bool = False
+        self._helper_fallback_issues: Dict[str, Optional[str]] = {
+            "target_temperature": None,
+            "summer_threshold": None,
+            "aggressiveness": None,
+            "house_inertia": None,
+        }
+        self._price_issue: Optional[str] = None
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
         self._attr_state_class = "measurement"
@@ -297,20 +305,134 @@ class PumpSteerSensor(RestoreEntity):
         )
 
     def _aggressiveness(self, cfg: Dict[str, Any]) -> int:
-        raw = cfg.get("aggressiveness") or self._read_entity(
-            self._number_entity_id("aggressiveness")
+        value = self._helper_value_with_fallback(
+            helper_key="aggressiveness",
+            cfg=cfg,
+            default=float(DEFAULT_AGGRESSIVENESS),
         )
-        if raw is None:
-            return int(DEFAULT_AGGRESSIVENESS)
-        return max(0, min(5, int(round(float(raw)))))
+        return max(0, min(5, int(round(float(value)))))
 
     def _house_inertia(self, cfg: Dict[str, Any]) -> float:
-        raw = cfg.get("house_inertia") or self._read_entity(
-            self._number_entity_id("house_inertia")
+        value = self._helper_value_with_fallback(
+            helper_key="house_inertia",
+            cfg=cfg,
+            default=float(DEFAULT_HOUSE_INERTIA),
         )
-        if raw is None:
-            return float(DEFAULT_HOUSE_INERTIA)
-        return max(0.5, min(10.0, float(raw)))
+        return max(0.5, min(10.0, float(value)))
+
+    def _set_helper_issue(self, helper_key: str, issue: str, message: str) -> None:
+        """Warn once per helper issue and downgrade repeats to debug."""
+        previous = self._helper_fallback_issues.get(helper_key)
+        if previous != issue:
+            _LOGGER.warning(message)
+            self._helper_fallback_issues[helper_key] = issue
+        else:
+            _LOGGER.debug(message)
+
+    def _clear_helper_issue(self, helper_key: str, entity_id: Optional[str]) -> None:
+        """Log helper recovery once when a fallback issue clears."""
+        previous = self._helper_fallback_issues.get(helper_key)
+        if previous is not None:
+            _LOGGER.info(
+                "PumpSteer helper '%s' recovered and now uses %s",
+                helper_key,
+                entity_id or "configured option value",
+            )
+            self._helper_fallback_issues[helper_key] = None
+
+    def _helper_value_with_fallback(
+        self,
+        helper_key: str,
+        cfg: Dict[str, Any],
+        default: float,
+    ) -> float:
+        """Read helper value with warn-once fallback logging."""
+        cfg_raw = cfg.get(helper_key)
+        if cfg_raw is not None:
+            parsed_cfg = safe_float(cfg_raw)
+            if parsed_cfg is not None:
+                self._clear_helper_issue(helper_key, None)
+                return parsed_cfg
+            self._set_helper_issue(
+                helper_key,
+                "invalid_option",
+                (
+                    f"PumpSteer helper '{helper_key}' has invalid configured value "
+                    f"'{cfg_raw}', falling back to default {default}"
+                ),
+            )
+            return default
+
+        entity_id = self._number_entity_id(helper_key)
+        if not entity_id:
+            self._set_helper_issue(
+                helper_key,
+                "missing_entity",
+                (
+                    f"PumpSteer helper '{helper_key}' has no number entity "
+                    f"(entry_id={self._config_entry.entry_id}), falling back to default "
+                    f"{default}"
+                ),
+            )
+            return default
+
+        state_obj = self.hass.states.get(entity_id)
+        if state_obj is None:
+            self._set_helper_issue(
+                helper_key,
+                "entity_not_found",
+                (
+                    f"PumpSteer helper '{helper_key}' entity '{entity_id}' not found, "
+                    f"falling back to default {default}"
+                ),
+            )
+            return default
+
+        state_raw = state_obj.state
+        if state_raw in ("unknown", "unavailable", None):
+            self._set_helper_issue(
+                helper_key,
+                "temporarily_unavailable",
+                (
+                    f"PumpSteer helper '{helper_key}' entity '{entity_id}' is "
+                    f"temporarily unavailable (state={state_raw}), falling back to "
+                    f"default {default}"
+                ),
+            )
+            return default
+
+        parsed = safe_float(state_raw)
+        if parsed is None:
+            self._set_helper_issue(
+                helper_key,
+                "invalid_state",
+                (
+                    f"PumpSteer helper '{helper_key}' entity '{entity_id}' has invalid "
+                    f"state '{state_raw}', falling back to default {default}"
+                ),
+            )
+            return default
+
+        self._clear_helper_issue(helper_key, entity_id)
+        return parsed
+
+    def _set_price_issue(self, issue: str, message: str) -> None:
+        """Warn once per price issue and downgrade repeats to debug."""
+        if self._price_issue != issue:
+            _LOGGER.warning(message)
+            self._price_issue = issue
+        else:
+            _LOGGER.debug(message)
+
+    def _clear_price_issue(self, today_entity_id: str, tomorrow_entity_id: str) -> None:
+        """Log price data recovery once when an issue clears."""
+        if self._price_issue is not None:
+            _LOGGER.info(
+                "PumpSteer price data recovered for today='%s', tomorrow='%s'",
+                today_entity_id,
+                tomorrow_entity_id,
+            )
+            self._price_issue = None
 
     def _comfort_floor(self, target: float, aggressiveness: int) -> float:
         drop = COMFORT_FLOOR_BY_AGGRESSIVENESS[aggressiveness]
@@ -481,10 +603,14 @@ class PumpSteerSensor(RestoreEntity):
         outdoor: Optional[float],
         now: datetime,
     ) -> None:
-        _LOGGER.warning(
-            "PumpSteer SAFE MODE: %s — optimization paused, sending real outdoor temp",
-            reason,
-        )
+        if not self._safe_mode_warned:
+            _LOGGER.warning(
+                "PumpSteer entered SAFE MODE: %s — optimization paused, sending real outdoor temp",
+                reason,
+            )
+            self._safe_mode_warned = True
+        else:
+            _LOGGER.debug("PumpSteer safe mode still active: %s", reason)
 
         self._pi.reset(now)
         self._brake_ramp = 0.0
@@ -597,13 +723,16 @@ class PumpSteerSensor(RestoreEntity):
 
         indoor = safe_float(get_state(self.hass, cfg.get("indoor_temp_entity")))
         outdoor = safe_float(get_state(self.hass, cfg.get("real_outdoor_entity")))
-        target = self._read_entity(self._number_entity_id("target_temperature"))
-        if target is None:
-            target = float(DEFAULT_TARGET_TEMP)
-
-        summer_threshold = self._read_entity(self._number_entity_id("summer_threshold"))
-        if summer_threshold is None:
-            summer_threshold = float(DEFAULT_SUMMER_THRESHOLD)
+        target = self._helper_value_with_fallback(
+            helper_key="target_temperature",
+            cfg=cfg,
+            default=float(DEFAULT_TARGET_TEMP),
+        )
+        summer_threshold = self._helper_value_with_fallback(
+            helper_key="summer_threshold",
+            cfg=cfg,
+            default=float(DEFAULT_SUMMER_THRESHOLD),
+        )
         aggressiveness = self._aggressiveness(cfg)
         house_inertia = self._house_inertia(cfg)
 
@@ -934,40 +1063,102 @@ class PumpSteerSensor(RestoreEntity):
         tomorrow_entity_id = cfg.get("price_tomorrow_entity") or today_entity_id
 
         if not today_entity_id:
+            self._set_price_issue(
+                "missing_today_entity",
+                "PumpSteer price fetch failed: electricity_price_entity is not configured",
+            )
             return [], [], 60, 0
 
+        today_attr = get_attr(self.hass, today_entity_id, "today")
+        today_raw_attr = get_attr(self.hass, today_entity_id, "raw_today")
         raw_today = (
-            get_attr(self.hass, today_entity_id, "today")
-            or get_attr(self.hass, today_entity_id, "raw_today")
-            or []
+            today_attr if isinstance(today_attr, list)
+            else today_raw_attr if isinstance(today_raw_attr, list)
+            else []
         )
 
+        tomorrow_attr = get_attr(self.hass, tomorrow_entity_id, "tomorrow")
+        tomorrow_raw_attr = get_attr(self.hass, tomorrow_entity_id, "raw_tomorrow")
+        fallback_tomorrow_attr = get_attr(self.hass, today_entity_id, "tomorrow")
+        fallback_tomorrow_raw_attr = get_attr(self.hass, today_entity_id, "raw_tomorrow")
         raw_tomorrow = (
-            get_attr(self.hass, tomorrow_entity_id, "tomorrow")
-            or get_attr(self.hass, tomorrow_entity_id, "raw_tomorrow")
-            or get_attr(self.hass, today_entity_id, "tomorrow")
-            or get_attr(self.hass, today_entity_id, "raw_tomorrow")
-            or []
+            tomorrow_attr if isinstance(tomorrow_attr, list)
+            else tomorrow_raw_attr if isinstance(tomorrow_raw_attr, list)
+            else fallback_tomorrow_attr if isinstance(fallback_tomorrow_attr, list)
+            else fallback_tomorrow_raw_attr if isinstance(fallback_tomorrow_raw_attr, list)
+            else []
         )
 
         prices_raw = [*raw_today, *raw_tomorrow]
 
         if not prices_raw:
-            _LOGGER.warning(
-                "No price data from today entity '%s' and tomorrow entity '%s'",
-                today_entity_id,
-                tomorrow_entity_id,
-            )
+            if (
+                today_attr is None
+                and today_raw_attr is None
+                and tomorrow_attr is None
+                and tomorrow_raw_attr is None
+                and fallback_tomorrow_attr is None
+                and fallback_tomorrow_raw_attr is None
+            ):
+                self._set_price_issue(
+                    "missing_price_attributes",
+                    (
+                        "PumpSteer price fetch failed: no price list attributes found "
+                        f"(today='{today_entity_id}', tomorrow='{tomorrow_entity_id}', "
+                        "checked today/raw_today/tomorrow/raw_tomorrow)"
+                    ),
+                )
+            else:
+                unsupported_types = []
+                for label, value in (
+                    ("today", today_attr),
+                    ("raw_today", today_raw_attr),
+                    ("tomorrow", tomorrow_attr),
+                    ("raw_tomorrow", tomorrow_raw_attr),
+                    ("fallback_tomorrow", fallback_tomorrow_attr),
+                    ("fallback_raw_tomorrow", fallback_tomorrow_raw_attr),
+                ):
+                    if value is not None and not isinstance(value, list):
+                        unsupported_types.append(f"{label}={type(value).__name__}")
+                self._set_price_issue(
+                    "unsupported_price_format",
+                    (
+                        "PumpSteer price fetch failed: unsupported price sensor format "
+                        f"(today='{today_entity_id}', tomorrow='{tomorrow_entity_id}', "
+                        f"details={unsupported_types or ['no list entries']})"
+                    ),
+                )
             return [], [], 60, 0
 
         prices: List[float] = []
+        invalid_entries = 0
         for item in prices_raw:
             value = PumpSteerSensor._extract_price(item)
             if value is not None and math.isfinite(value):
                 prices.append(value)
+            else:
+                invalid_entries += 1
 
         if not prices:
+            self._set_price_issue(
+                "no_usable_prices",
+                (
+                    "PumpSteer price parsing failed: received raw entries but parsed 0 "
+                    f"usable numeric prices (today='{today_entity_id}', "
+                    f"tomorrow='{tomorrow_entity_id}', raw_count={len(prices_raw)}, "
+                    f"invalid_count={invalid_entries})"
+                ),
+            )
             return [], [], 60, 0
+        self._clear_price_issue(today_entity_id, tomorrow_entity_id)
+
+        if invalid_entries > 0:
+            _LOGGER.debug(
+                "PumpSteer price parsing skipped %d invalid entries (today='%s', tomorrow='%s')",
+                invalid_entries,
+                today_entity_id,
+                tomorrow_entity_id,
+            )
 
         today_prices: List[float] = []
         for item in raw_today:
@@ -1053,6 +1244,12 @@ class PumpSteerSensor(RestoreEntity):
         extra: Dict[str, Any],
         now: datetime,
     ) -> None:
+        if self._safe_mode_warned and mode != MODE_SAFE:
+            _LOGGER.info(
+                "PumpSteer exited SAFE MODE and returned to normal control (mode=%s)",
+                mode,
+            )
+            self._safe_mode_warned = False
         self._state = round(fake_temp, 1)
         self._attributes = {
             "mode": mode,
