@@ -1,59 +1,59 @@
 import logging
 import math
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
+import homeassistant.util.dt as dt_util
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-import homeassistant.util.dt as dt_util
+from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.typing import StateType
 
 from .control import PIController
-from .holiday import async_update_holiday
 from .electricity_price import (
+    PRICE_EXPENSIVE,
+    PRICE_NORMAL,
     async_get_price_thresholds,
     classify_price_list,
     filter_short_peaks,
     price_category_index,
-    PRICE_NORMAL,
-    PRICE_EXPENSIVE,
 )
+from .holiday import async_update_holiday
 from .settings import (
-    MIN_FAKE_TEMP,
-    MAX_FAKE_TEMP,
-    PRECOOL_LOOKAHEAD,
-    PRECOOL_MARGIN,
-    PID_KP,
-    PID_KI,
-    PID_KD,
-    PID_INTEGRAL_CLAMP,
-    PID_OUTPUT_CLAMP,
-    COMFORT_FLOOR_BY_AGGRESSIVENESS,
-    RAMP_SCALE,
-    RAMP_MIN_MINUTES,
-    RAMP_MAX_MINUTES,
-    PREHEAT_BOOST_C,
-    PEAK_FILTER_MIN_DURATION_MINUTES,
-    PRICE_LOOKAHEAD_HOURS,
-    DEFAULT_SUMMER_THRESHOLD,
-    DEFAULT_AGGRESSIVENESS,
-    DEFAULT_HOUSE_INERTIA,
-    DEFAULT_TARGET_TEMP,
-    HOLIDAY_TEMP,
     BRAKE_DELTA_C,
     BRAKE_HOLD_MINUTES,
+    COMFORT_FLOOR_BY_AGGRESSIVENESS,
+    DEFAULT_AGGRESSIVENESS,
+    DEFAULT_HOUSE_INERTIA,
+    DEFAULT_SUMMER_THRESHOLD,
+    DEFAULT_TARGET_TEMP,
+    HOLIDAY_TEMP,
+    MAX_FAKE_TEMP,
+    MIN_FAKE_TEMP,
+    PEAK_FILTER_MIN_DURATION_MINUTES,
+    PID_INTEGRAL_CLAMP,
+    PID_KD,
+    PID_KI,
+    PID_KP,
+    PID_OUTPUT_CLAMP,
+    PRECOOL_LOOKAHEAD,
+    PRECOOL_MARGIN,
+    PREHEAT_BOOST_C,
     PREHEAT_ON_MISSING_FORECAST,
+    PRICE_LOOKAHEAD_HOURS,
+    RAMP_MAX_MINUTES,
+    RAMP_MIN_MINUTES,
+    RAMP_SCALE,
 )
 from .utils import (
-    safe_float,
-    get_state,
-    get_attr,
-    get_version,
-    detect_price_interval_minutes,
     compute_price_slot_index,
+    detect_price_interval_minutes,
+    get_attr,
+    get_state,
+    get_version,
+    safe_float,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -357,8 +357,7 @@ class PumpSteerSensor(RestoreEntity):
                 )
             else:
                 _LOGGER.debug(
-                    "PumpSteer forecast returned no usable temperatures "
-                    "(weather=%s, price=%s)",
+                    "PumpSteer forecast returned no usable temperatures (weather=%s, price=%s)",
                     weather_entity,
                     price_entity,
                 )
@@ -569,7 +568,9 @@ class PumpSteerSensor(RestoreEntity):
             )
             return
 
-        holiday = await async_update_holiday(self.hass, self._config_entry.entry_id)
+        holiday = await async_update_holiday(
+            self.hass, self._config_entry.entry_id, self._config_entry
+        )
         if holiday:
             target = HOLIDAY_TEMP
 
