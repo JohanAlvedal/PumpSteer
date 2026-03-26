@@ -209,7 +209,7 @@ def parse_datetime(value: str):
         return None
     try:
         return _dt.datetime.fromisoformat(value)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
