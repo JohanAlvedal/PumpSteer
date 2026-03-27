@@ -1,52 +1,36 @@
-import voluptuous as vol
 import logging
 
+import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.selector import selector
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.helpers.selector import selector
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
 
-HARDCODED_ENTITIES = {
-    "target_temp_entity": "input_number.indoor_target_temperature",
-    "summer_threshold_entity": "input_number.pumpsteer_summer_threshold",
-    "holiday_mode_boolean_entity": "input_boolean.holiday_mode",
-    "holiday_start_datetime_entity": "input_datetime.holiday_start",
-    "holiday_end_datetime_entity": "input_datetime.holiday_end",
-    "auto_tune_inertia_entity": "input_boolean.autotune_inertia",
-    "hourly_forecast_temperatures_entity": "input_text.hourly_forecast_temperatures",
-}
-
 
 class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        super().__init__(config_entry)
-        self._entry_id = config_entry.entry_id
+    """Handle options flow for PumpSteer."""
 
     async def async_step_init(self, user_input=None):
         """Manage the options flow."""
         errors = {}
 
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        entry = self.config_entry
+        current_data = {**entry.data, **entry.options}
 
         if user_input is not None:
-            combined_data = {**user_input, **HARDCODED_ENTITIES}
-            errors = await self._validate_entities(combined_data)
+            try:
+                entity_errors = self._validate_entities(user_input)
+                errors = {**entity_errors}
 
-            if not errors:
-                updated_data = entry.data.copy()
-                updated_data.update(combined_data)
+                if not errors:
+                    return self.async_create_entry(title="", data={**user_input})
 
-                self.hass.config_entries.async_update_entry(
-                    entry, data=updated_data
-                )
-
-                return self.async_create_entry(title="", data={})
-
-        current_data = entry.data
+            except Exception as err:
+                _LOGGER.exception("Options flow save failed: %s", err)
+                errors["base"] = "unknown"
 
         return self.async_show_form(
             step_id="init",
@@ -64,72 +48,80 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     ): selector(
                         {"entity": {"domain": "sensor", "device_class": "temperature"}}
                     ),
+                    vol.Optional(
+                        "weather_entity",
+                        default=current_data.get("weather_entity"),
+                    ): selector({"entity": {"domain": "weather"}}),
                     vol.Required(
                         "electricity_price_entity",
-                        default=current_data.get("electricity_price_entity"),
+                        default=current_data.get(
+                            "electricity_price_entity",
+                            "sensor.elpris_today",
+                        ),
                     ): selector({"entity": {"domain": "sensor"}}),
+                    vol.Required(
+                        "price_tomorrow_entity",
+                        default=current_data.get(
+                            "price_tomorrow_entity",
+                            "sensor.elpris_tomorrow",
+                        ),
+                    ): selector({"entity": {"domain": "sensor"}}),
+                    vol.Optional(
+                        "notify_service",
+                        default=current_data.get("notify_service", ""),
+                    ): selector({"text": {}}),
+                    vol.Optional(
+                        "preheat_boost_enabled",
+                        default=current_data.get("preheat_boost_enabled", True),
+                    ): selector({"boolean": {}}),
                 }
             ),
             errors=errors,
         )
 
-    async def _validate_entities(self, user_input):
+    def _validate_entities(self, user_input):
         """Validate that entities exist and are available."""
         errors = {}
 
-        user_configurable_entities = {
+        required_entities = {
             "indoor_temp_entity": "Indoor temperature sensor",
             "real_outdoor_entity": "Outdoor temperature sensor",
             "electricity_price_entity": "Electricity price sensor",
+            "price_tomorrow_entity": "Tomorrow electricity price sensor",
         }
 
-        hardcoded_entities = {
-            "hourly_forecast_temperatures_entity": "Temperature forecast input_text",
-            "target_temp_entity": "Target temperature input_number",
-            "summer_threshold_entity": "Summer threshold input_number",
-            "holiday_mode_boolean_entity": "Holiday mode boolean",
-            "holiday_start_datetime_entity": "Holiday start datetime",
-            "holiday_end_datetime_entity": "Holiday end datetime",
-            "auto_tune_inertia_entity": "Autotune inertia boolean",
-        }
-
-        for field, description in user_configurable_entities.items():
+        for field, description in required_entities.items():
             entity_id = user_input.get(field)
             if not entity_id:
-                errors[field] = f"Required: {description}"
+                errors[field] = "required"
                 continue
+            if not self._entity_exists(entity_id):
+                _LOGGER.warning("%s not found: %s", description, entity_id)
+                errors[field] = "entity_not_found"
+                continue
+            if not self._entity_available(entity_id):
+                _LOGGER.warning("%s unavailable: %s", description, entity_id)
+                errors[field] = "entity_unavailable"
 
-            if not await self._entity_exists(entity_id):
-                errors[field] = f"Entity not found: {entity_id}"
-            elif not await self._entity_available(entity_id):
-                errors[field] = f"Entity unavailable: {entity_id}"
-
-        for field, description in hardcoded_entities.items():
-            entity_id = user_input.get(field)
-            if entity_id:
-                if not await self._entity_exists(entity_id):
-                    _LOGGER.warning(
-                        f"Hardcoded entity not found: {entity_id} ({description}) - Check package configuration"
-                    )
-                elif not await self._entity_available(entity_id):
-                    _LOGGER.warning(
-                        f"Hardcoded entity unavailable: {entity_id} ({description}) - Check package configuration"
-                    )
+        # weather_entity är valfri — validera bara om den är ifylld
+        weather = user_input.get("weather_entity")
+        if weather and not self._entity_exists(weather):
+            errors["weather_entity"] = "entity_not_found"
 
         return errors
 
-    async def _entity_exists(self, entity_id: str) -> bool:
-        """Check if entity exists."""
+    def _entity_exists(self, entity_id: str) -> bool:
+        """Return True if the entity exists."""
         return self.hass.states.get(entity_id) is not None
 
-    async def _entity_available(self, entity_id: str) -> bool:
-        """Check if entity is available."""
+    def _entity_available(self, entity_id: str) -> bool:
+        """Return True if the entity is available."""
         entity = self.hass.states.get(entity_id)
         if not entity:
             return False
-        return entity.state not in [
+        return entity.state not in {
             STATE_UNAVAILABLE,
             STATE_UNKNOWN,
             "unavailable",
             "unknown",
-        ]
+        }

@@ -1,187 +1,130 @@
-from typing import List, Final
 import logging
+from typing import Final, List
 
 _LOGGER = logging.getLogger(__name__)
 
-# === VERSION INFO ===
-PUMPSTEER_VERSION: Final[str] = "1.2.1"
+PUMPSTEER_VERSION: Final[str] = "2.0.0"
 
-# === HOUSE CONTROL SETTINGS ===
-DEFAULT_HOUSE_INERTIA: Final[float] = 1.0  # Default house thermal inertia
+# === FAKE TEMPERATURE LIMITS ===
+MIN_FAKE_TEMP: Final[float] = -20.0
+MAX_FAKE_TEMP: Final[float] = 25.0
 
-# === HOLIDAY MODE SETTINGS ===
-HOLIDAY_TEMP: Final[float] = 16.0  # °C - Target temperature when holiday mode is active
+# === SUMMER / PRECOOL SETTINGS ===
+PRECOOL_LOOKAHEAD: Final[int] = 24
+PRECOOL_MARGIN: Final[float] = 3.0
+# These legacy constants are no longer used by sensor.py
+# WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0
+# WINTER_BRAKE_THRESHOLD: Final[float] = 7.0
 
-# === TEMPERATURE CONTROL SETTINGS ===
-BRAKING_MODE_TEMP: Final[float] = (
-    25.0  # °C - Virtual outdoor temperature when braking due to high price
-)
-PREBOOST_OUTPUT_TEMP: Final[float] = (
-    -15.0
-)  # °C - Virtual outdoor temperature when pre-boosting
-AGGRESSIVENESS_SCALING_FACTOR: Final[float] = (
-    0.5  # Factor for aggressiveness in normal mode
-)
-PREBOOST_MAX_OUTDOOR_TEMP: Final[float] = (
-    10.0  # °C - Max outdoor temp for pre-boost to be considered
-)
+# === PI CONTROLLER ===
+PID_KP: Final[float] = 2.4
+PID_KI: Final[float] = 0.035
+PID_KD: Final[float] = 0.0
+PID_INTEGRAL_CLAMP: Final[float] = 6.0
+PID_OUTPUT_CLAMP: Final[float] = 12.0
 
-# === TEMPERATURE CONTROL LOGIC ===
-MIN_FAKE_TEMP: Final[float] = -25.0
-MAX_FAKE_TEMP: Final[float] = 30.0
-BRAKE_FAKE_TEMP: Final[float] = 25.0
-
-# === ELECTRICITY PRICE CLASSIFICATION ===
-DEFAULT_PERCENTILES: Final[List[int]] = [
-    10,
-    30,
-    85,
-    95,
-]  # Percentiles for 5-category classification
-DEFAULT_EXTREME_MULTIPLIER: Final[float] = 1.5  # Multiplier for extreme price detection
-MIN_SAMPLES_FOR_CLASSIFICATION: Final[int] = 5  # Minimum number of price samples needed
-PRICE_CATEGORIES: Final[List[str]] = [  # Price categories in ascending order
-    "very_cheap",
-    "cheap",
-    "normal",
-    "expensive",
-    "very_expensive",
-]
+# === PRICE CLASSIFICATION ===
+# Default thresholds use P30/P80 and a 72-hour trailing history window.
+# cheap     = below P30
+# normal    = P30 to P80
+# expensive = above P80
+PRICE_PERCENTILE_CHEAP: Final[float] = 30.0
+PRICE_PERCENTILE_EXPENSIVE: Final[float] = 80.0
+DEFAULT_TRAILING_HOURS: Final[int] = 72
+MIN_SAMPLES_FOR_CLASSIFICATION: Final[int] = 5
 ABSOLUTE_CHEAP_LIMIT: Final[float] = (
-    0.60  # SEK/kWh - Absolute threshold for cheap prices
+    0.50  # SEK/kWh — always cheap regardless of history
 )
-DEFAULT_TRAILING_HOURS: Final[int] = 72  # Hours of historical data to consider
-MAX_PRICE_WARNING_THRESHOLD: Final[float] = (
-    3.0  # SEK/kWh - Log warning for extremely high prices
-)
+MAX_PRICE_WARNING_THRESHOLD: Final[float] = 3.0
 
-# === HYBRID CLASSIFICATION THRESHOLDS ===
-VERY_CHEAP_MULTIPLIER: Final[float] = 0.60  # 60% of average price
-CHEAP_MULTIPLIER: Final[float] = 0.90  # 90% of average price
-NORMAL_MULTIPLIER: Final[float] = 1.40  # 140% of average price
-EXPENSIVE_MULTIPLIER: Final[float] = 1.60  # 160% of average price
+# === COMFORT FLOOR PER AGGRESSIVENESS ===
+# How many °C below target each level tolerates before releasing the brake
+# Index 0 = aggressiveness 0 (no price control), index 5 = max saving
+COMFORT_FLOOR_BY_AGGRESSIVENESS: Final[List[float]] = [
+    0.0,  # 0 — pure PI, no price logic
+    0.5,  # 1 — very gentle
+    1.0,  # 2 — mild
+    1.5,  # 3 — normal / balanced
+    2.0,  # 4 — aggressive
+    3.0,  # 5 — maximum saving, can get cold
+]
 
-# === PRE-BOOST STRATEGY SETTINGS ===
-MIN_PRICE_THRESHOLD_RATIO: Final[float] = 0.5
-MAX_PRICE_THRESHOLD_RATIO: Final[float] = 0.9
-PREBOOST_AGGRESSIVENESS_SCALING_FACTOR: Final[float] = 0.04
-BASE_PRICE_THRESHOLD_RATIO: Final[float] = 0.9
-MAX_PREBOOST_HOURS: Final[int] = 6  # How many hours ahead to look for pre-boost
-PREBOOST_TEMP_THRESHOLD: Final[float] = (
-    2.0  # °C - How many degrees colder than target to trigger pre-boost
-)
+# === BRAKE TARGET OFFSET ===
+# Full-brake target:
+# fake outdoor temperature = real outdoor temperature + BRAKE_DELTA_C
+# Higher value = stronger braking, because the heat pump sees a warmer outdoor temperature.
+# Typical: 10–15°C. 10°C is conservative, while 15°C gives very strong braking
+# for many heating systems.
+BRAKE_DELTA_C: Final[float] = 10.0
 
-# === IMPROVED PRE-BOOST TIMING CONSTANTS ===
-PREBOOST_MIN_ADVANCE_FACTOR: Final[float] = 0.5  # Min advance = inertia * 0.5
-PREBOOST_MAX_ADVANCE_FACTOR: Final[float] = 1.2  # Max advance = inertia * 1.2
-PREBOOST_MIN_ADVANCE_HOURS: Final[float] = 1.0  # Absolute minimum advance time
-PREBOOST_MAX_ADVANCE_HOURS: Final[float] = 3.0  # Absolute maximum advance time
-SEVERITY_ADJUSTMENT_FACTOR: Final[float] = 0.3  # How much severity affects timing
+# === RAMP TIMING ===
+# Ramp duration scales with price-category jump severity and house inertia,
+# then gets clamped between RAMP_MIN_MINUTES and RAMP_MAX_MINUTES.
+# Example with 15-minute prices and inertia=3:
+# 1 category jump × 3 × 10 = 30 minutes = 2 price slots
+RAMP_SCALE: Final[float] = 10.0
+RAMP_MIN_MINUTES: Final[float] = 20.0  # at least 1 price slot (15-min prices)
+RAMP_MAX_MINUTES: Final[float] = 60.0  # max 4 price slots
 
-# === NEW PRE-BOOST REQUIREMENTS ===
-PREBOOST_REQUIRE_VERY_CHEAP_NOW: Final[bool] = (
-    True  # Enable requirement for very cheap prices right now
-)
-PREBOOST_MIN_DURATION_HOURS: Final[int] = (
-    2  # Minimum peak duration required to trigger preboost
-)
-PREBOOST_CHEAP_NOW_MULTIPLIER: Final[float] = (
-    0.6  # E.g. 60% of max price = "very cheap"
-)
+# Preheating: extra boost applied during the preheat window (°C)
+PREHEAT_BOOST_C: Final[float] = 4.0
 
-# === VALIDATION CONSTANTS ===
-MIN_REASONABLE_TEMP: Final[float] = -50.0  # °C - Minimum reasonable temperature
-MAX_REASONABLE_TEMP: Final[float] = 50.0  # °C - Maximum reasonable temperature
-MIN_REASONABLE_PRICE: Final[float] = (
-    -2.0
-)  # SEK/kWh - Minimum reasonable electricity price (negative prices occur)
-MAX_REASONABLE_PRICE: Final[float] = (
-    15.0  # SEK/kWh - Maximum reasonable electricity price
-)
+# Peak filter: ignore expensive spikes shorter than this
+PEAK_FILTER_MIN_DURATION_MINUTES: Final[int] = 30
 
-# === PRE-BOOST SEVERITY CALCULATION CONSTANTS ===
-TEMP_SEVERITY_DIVISOR: Final[float] = (
-    3.0  # Divisor for temperature severity calculation
-)
-PRICE_SEVERITY_BASE: Final[float] = (
-    0.7  # Base threshold for price severity (70% of max)
-)
-PRICE_SEVERITY_DIVISOR: Final[float] = 0.2  # Divisor for price severity calculation
-DURATION_SEVERITY_DIVISOR: Final[float] = (
-    3.0  # Divisor for duration severity calculation
-)
-MAX_TEMP_SEVERITY: Final[float] = 2.0  # Maximum temperature severity score
-MAX_PRICE_SEVERITY: Final[float] = 2.0  # Maximum price severity score
-MAX_DURATION_SEVERITY: Final[float] = 1.5  # Maximum duration severity score
-DEFAULT_PRICE_RATIO: Final[float] = 0.5  # Default price ratio when max_price is invalid
-MAX_DURATION_LOOKAHEAD: Final[int] = 4  # Max hours to look ahead for peak duration
-MIN_ADVANCE_SAFETY_MARGIN: Final[float] = (
-    0.5  # Safety margin when min > max advance time
-)
-EXTREME_PRICE_ERROR_THRESHOLD: Final[int] = (
-    5  # Max extreme values before validation fails
-)
+# How many hours ahead to scan for upcoming expensive periods
+PRICE_LOOKAHEAD_HOURS: Final[int] = 6
+
+# BRAKE HOLD TIME: keep brake active this many minutes after price drops
+# to avoid rapid on/off cycling over short cheap dips within an expensive block.
+# E.g. 30 min = holds brake across 2 cheap 15-min slots before releasing.
+BRAKE_HOLD_MINUTES: Final[float] = 30.0
+
+# === PREHEATING FORECAST BEHAVIOR ===
+# Controls what _forecast_is_cold() returns when the forecast entity has no data.
+#
+# False (default, recommended):
+#   No preheating is triggered when forecast data is missing.
+#   Safer behavior — avoids unnecessary preheating if the forecast entity is misconfigured.
+#
+# True:
+#   Missing forecast data is treated as cold weather, so preheating may trigger.
+#   This may be useful in climates where cold weather is the default assumption.
+PREHEAT_ON_MISSING_FORECAST: Final[bool] = False
+
+# === DEFAULTS ===
+DEFAULT_SUMMER_THRESHOLD: Final[float] = 18.0
+DEFAULT_AGGRESSIVENESS: Final[float] = 3.0
+DEFAULT_HOUSE_INERTIA: Final[float] = 2.0
+DEFAULT_TARGET_TEMP: Final[float] = 21.0
+HOLIDAY_TEMP: Final[float] = 16.0
+
+# === SANITY BOUNDS ===
+MIN_REASONABLE_TEMP: Final[float] = -30.0
+MAX_REASONABLE_TEMP: Final[float] = 30.0
+MIN_REASONABLE_PRICE: Final[float] = -2.0
+MAX_REASONABLE_PRICE: Final[float] = 15.0
 
 
-# Basic validation of settings
 def validate_core_settings() -> None:
-    """Validate core settings for consistency and logical values."""
     errors = []
-
-    # Validate percentiles
-    if len(DEFAULT_PERCENTILES) != 4:
-        errors.append("Exactly 4 percentiles required for 5-category classification")
-
-    if not all(0 <= p <= 100 for p in DEFAULT_PERCENTILES):
-        errors.append("Percentiles must be between 0 and 100")
-
-    if DEFAULT_PERCENTILES != sorted(DEFAULT_PERCENTILES):
-        errors.append("Percentiles must be in ascending order")
-
-    # Validate price categories
-    if len(PRICE_CATEGORIES) != 5:
-        errors.append("Exactly 5 price categories required")
-
-    # Validate temperature range
     if MIN_FAKE_TEMP >= MAX_FAKE_TEMP:
-        errors.append("Min fake temp must be less than max fake temp")
-
-    # Validate multipliers are in logical order
-    multipliers = [
-        VERY_CHEAP_MULTIPLIER,
-        CHEAP_MULTIPLIER,
-        NORMAL_MULTIPLIER,
-        EXPENSIVE_MULTIPLIER,
-    ]
-    if multipliers != sorted(multipliers):
-        errors.append("Price multipliers must be in ascending order")
-
-    # Validate pre-boost timing constants
-    if PREBOOST_MIN_ADVANCE_FACTOR >= PREBOOST_MAX_ADVANCE_FACTOR:
-        errors.append("Min advance factor must be less than max advance factor")
-
-    if PREBOOST_MIN_ADVANCE_HOURS >= PREBOOST_MAX_ADVANCE_HOURS:
-        errors.append("Min advance hours must be less than max advance hours")
-
-    # Validate reasonable values
-    if MIN_REASONABLE_TEMP >= MAX_REASONABLE_TEMP:
-        errors.append("Min reasonable temp must be less than max reasonable temp")
-
-    if MIN_REASONABLE_PRICE >= MAX_REASONABLE_PRICE:
-        errors.append("Min reasonable price must be less than max reasonable price")
-
+        errors.append("MIN_FAKE_TEMP must be less than MAX_FAKE_TEMP")
+    if len(COMFORT_FLOOR_BY_AGGRESSIVENESS) != 6:
+        errors.append("COMFORT_FLOOR_BY_AGGRESSIVENESS must have 6 entries (0-5)")
+    if not (0 < PRICE_PERCENTILE_CHEAP < PRICE_PERCENTILE_EXPENSIVE < 100):
+        errors.append("Price percentiles must be 0 < P_cheap < P_expensive < 100")
+    if RAMP_MIN_MINUTES >= RAMP_MAX_MINUTES:
+        errors.append("RAMP_MIN_MINUTES must be less than RAMP_MAX_MINUTES")
+    if BRAKE_DELTA_C <= 0:
+        errors.append("BRAKE_DELTA_C must be positive")
+    if BRAKE_HOLD_MINUTES < 0:
+        errors.append("BRAKE_HOLD_MINUTES must be >= 0")
     if errors:
-        error_msg = f"Settings validation failed: {'; '.join(errors)}"
-        _LOGGER.error(error_msg)
-        raise ValueError(error_msg)
+        msg = f"Settings validation failed: {'; '.join(errors)}"
+        _LOGGER.error(msg)
+        raise ValueError(msg)
 
 
-# Run validation on import
-try:
-    validate_core_settings()
-    _LOGGER.debug(
-        f"PumpSteer core settings loaded successfully (version {PUMPSTEER_VERSION})"
-    )
-except Exception as e:
-    _LOGGER.error(f"Failed to load PumpSteer settings: {e}")
-    raise
+validate_core_settings()
+_LOGGER.debug("PumpSteer settings loaded (version %s)", PUMPSTEER_VERSION)

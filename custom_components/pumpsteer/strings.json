@@ -2,35 +2,64 @@
   "config": {
     "step": {
       "user": {
-        "title": "config.step.user.title",
+        "title": "PumpSteer setup",
         "data": {
-          "indoor_temp_entity": "config.step.user.data.indoor_temp_entity",
-          "real_outdoor_entity": "config.step.user.data.real_outdoor_entity",
-          "electricity_price_entity": "config.step.user.data.electricity_price_entity"
+          "indoor_temp_entity": "Indoor temperature sensor",
+          "real_outdoor_entity": "Outdoor temperature sensor",
+          "electricity_price_entity": "Electricity price sensor"
         }
       }
     },
     "error": {
-      "required": "config.error.required",
-      "entity_not_found": "config.error.entity_not_found",
-      "entity_unavailable": "config.error.entity_unavailable"
+      "required": "This field is required",
+      "entity_not_found": "Entity not found",
+      "entity_unavailable": "Entity unavailable",
+      "unknown": "An unknown error occurred"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "options.step.init.title",
+        "title": "PumpSteer settings",
         "data": {
-          "indoor_temp_entity": "options.step.init.data.indoor_temp_entity",
-          "real_outdoor_entity": "options.step.init.data.real_outdoor_entity",
-          "electricity_price_entity": "options.step.init.data.electricity_price_entity"
+          "indoor_temp_entity": "Indoor temperature sensor",
+          "real_outdoor_entity": "Outdoor temperature sensor",
+          "electricity_price_entity": "Electricity price sensor",
+          "pid_kp": "Temperature response strength (Kp)",
+          "pid_ki": "Long-term correction strength (Ki)",
+          "pid_kd": "Rapid-change damping (Kd)",
+          "pid_integral_clamp": "Long-term correction limit",
+          "pid_output_clamp": "Maximum temperature adjustment",
+          "pid_integrator_on_brake": "Integrator behavior during brake",
+          "pid_decay_per_minute_on_brake": "Decay per minute",
+          "pi_price_feedforward_gain": "Price feedforward gain",
+          "pi_forecast_feedforward_gain": "Forecast feedforward gain",
+          "brake_ramp_in_minutes": "Brake ramp-in time",
+          "brake_ramp_out_minutes": "Brake ramp-out time",
+          "min_brake_strength": "Minimum brake strength",
+          "max_brake_strength": "Maximum brake strength",
+          "experimental_ml_enabled": "Enable Experimental ML",
+          "price_tomorrow_entity": "Tomorrow electricity price sensor"
+        },
+        "data_description": {
+          "pid_kp": "How strongly PumpSteer reacts to current temperature error. Typical range: 2.0 to 5.0.",
+          "pid_ki": "How much PumpSteer corrects long-term drift. Typical range: 0.01 to 0.05.",
+          "pid_integral_clamp": "Limits built-up long-term correction to reduce windup. Typical range: 5.0 to 10.0.",
+          "pid_output_clamp": "Caps how many degrees PumpSteer may adjust the setpoint.",
+          "pid_integrator_on_brake": "What happens to the 'memory' when the price is high? 'Freeze' is usually safest.",
+          "pi_price_feedforward_gain": "How much the electricity price affects the pump before a temp drop occurs.",
+          "brake_ramp_in_minutes": "How many minutes to transition from normal operation to full brake. Protects the compressor.",
+          "experimental_ml_enabled": "Uses historical data to learn your house's thermal inertia automatically.",
+          "pid_kd": "How much PumpSteer reacts to fast temperature changes. Keep at 0.0 unless you tune it intentionally."
         }
       }
     },
     "error": {
-      "required": "options.error.required",
-      "entity_not_found": "options.error.entity_not_found",
-      "entity_unavailable": "options.error.entity_unavailable"
+      "required": "This field is required",
+      "entity_not_found": "Entity not found",
+      "entity_unavailable": "Entity unavailable",
+      "invalid_range": "Min brake strength cannot be higher than max brake strength",
+      "unknown": "An unknown error occurred"
     }
   }
 }
