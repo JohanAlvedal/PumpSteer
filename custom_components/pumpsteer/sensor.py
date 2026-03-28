@@ -647,6 +647,7 @@ class PumpSteerSensor(RestoreEntity):
             dt_seconds = 60.0
         else:
             dt_seconds = max((now - self._brake_last_t).total_seconds(), 1.0)
+            dt_seconds = min(dt_seconds, 60.0)
 
         self._brake_last_t = now
 
