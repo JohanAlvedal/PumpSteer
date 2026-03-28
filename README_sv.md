@@ -1,4 +1,4 @@
-# 🔥 PumpSteer 2.0.0 – Smart styrning av värmepump
+# 🔥 PumpSteer 2.0 – Smart styrning av värmepump
 
 ➡️ Engelsk version: [README](README.md)
 
