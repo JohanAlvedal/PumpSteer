@@ -1,52 +1,76 @@
-# 🔥 PumpSteer 2.0.0 (Svenska)
+# 🔥 PumpSteer 2.0.0 – Smart styrning av värmepump
 
-➡️ English version: [README (English)](README.md)
+➡️ Engelsk version: [README](README.md)
 
-> ⚠️ Detta är en stor omskrivning. Läs uppgraderingsguiden innan installation.
+> ⚠️ Detta är en större omskrivning. Läs uppgraderingsinformationen innan installation.
 
-PumpSteer är en Home Assistant-integration som optimerar din värmepump genom att justera den **virtuella utomhustemperaturen**.
+PumpSteer är en Home Assistant-integration som optimerar din värmepump genom att dynamiskt justera den **virtuella utomhustemperaturen**.
 
-Den minskar energikostnader när elen är dyr — utan att försämra inomhuskomforten.
+Den minskar energikostnaden när elen är dyr — samtidigt som inomhuskomforten bibehålls.
+
+<a href="https://www.buymeacoffee.com/alvjo" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 200px !important;">
+</a>
+
+---
+
+## 📸 Dashboard – exempel
+
+![PumpSteer 1](docs/img/01.png)
+![PumpSteer 2](docs/img/02.png)
+![PumpSteer 3](docs/img/03.png)
+![PumpSteer 4](docs/img/04.png)
 
 ---
 
 ## 📘 Dokumentation
 
-- [Viktig information om uppgradering](#important--not-a-drop-in-upgrade)
-- [Nyheter i 2.0.0](#whats-new-in-200)
+- [Viktigt – inte en vanlig uppgradering](#viktigt--inte-en-vanlig-uppgradering-)
+- [Nyheter i 2.0.0](#nyheter-i-200)
 - [Breaking Changes](#breaking-changes)
-- [Elprissensor](#price-sensor-support)
-- [Väderstöd](#weather-support)
-- [Ny installation](#new-installation)
-- [Uppgradering från 1.6.6](#upgrade-from-166)
-- [Felsökning](#troubleshooting)
-- [Inställningar (Tuning)](#tuning-quick-guide)
-- [Säkerhet](#safety--disclaimer)
+- [Elsensorer](#elsensorer)
+- [Väderstöd](#väderstöd)
+- [Ny installation](#ny-installation)
+- [Dashboard (Lovelace)](#dashboard-lovelace)
+- [Uppgradering från 1.6.6](#uppgradering-från-166)
+- [Felsökning](#felsökning)
+- [Trimning](#trimning)
+- [Säkerhet](#säkerhet)
 
 ---
 
-## Important – Not a Drop-in Upgrade ⚠️
+## Viktigt – inte en vanlig uppgradering ⚠️
 
-PumpSteer 2.0.0 är **inte en mindre uppdatering**.  
-Det är en **helt ny version av styrlogiken**.
+PumpSteer 2.0.0 är **inte en liten uppdatering**.  
+Det är en **helt ny kontrollmodell**.
 
-👉 Se detta som en **ny installation**, inte en uppgradering.
+👉 Se det som en **ny integration**, inte en uppgradering.
 
-### Vad betyder det?
+### Vad det innebär
 
-- ❌ Gamla dashboards fungerar inte likadant  
+- ❌ Gamla dashboards kommer inte fungera likadant  
 - ❌ Automations kan sluta fungera  
-- ❌ Gamla helpers styr inte längre systemet  
-- ❌ Elprislogiken är helt förändrad  
+- ❌ Helpers används inte på samma sätt  
+- ❌ Prislogiken är helt omgjord  
 
 ---
 
-### Vad du behöver göra efter uppgradering
+## ⚠️ Ansvarsfriskrivning
 
-- Bygga om Lovelace-kort  
+Du använder denna integration på egen risk. Uppvärmning är en kritisk funktion i hemmet, och felaktiga inställningar kan leda till obehag eller skador.
+
+Använd inte PumpSteer om ditt värmesystem inte fungerar som det ska.
+
+Använd endast PumpSteer om du förstår hur det fungerar och har verifierat att det fungerar korrekt i din installation. Följ alltid upp inomhustemperatur och systemets beteende efter installation.
+
+---
+
+### Krävs efter uppgradering
+
+- Bygg om Lovelace-kort  
 - Uppdatera automations  
-- Kontrollera elprissensor (today + tomorrow)  
-- Koppla om till nya PumpSteer-entiteter  
+- Verifiera elsensorer (idag + imorgon)  
+- Koppla om till nya entiteter  
 - Justera inställningar  
 
 ---
@@ -54,10 +78,10 @@ Det är en **helt ny version av styrlogiken**.
 ### Beteendet är annorlunda
 
 - PI-reglering istället för heuristik  
-- Mjuk bromsning (ramp)  
-- Prognos påverkar beslut  
+- Mjuk bromsning (rampning)  
+- Prognosbaserade beslut  
 
-➡️ Förvänta dig inte samma beteende som 1.6.6
+➡️ Förvänta dig inte samma beteende som i 1.6.6  
 
 ---
 
@@ -65,43 +89,49 @@ Det är en **helt ny version av styrlogiken**.
 
 1. Installera 2.0.0  
 2. Observera i 24–48 timmar  
-3. Migrera fullt därefter  
+3. Migrera därefter fullt ut  
 
 ---
 
-## What's New in 2.0.0
+## Nyheter i 2.0.0
 
-- 🧠 PI-reglering (ersätter heuristik)
-- ⚡ Elprisklasser (`cheap / normal / expensive`)
-- 🔁 State machine (förutsägbart beteende)
-- 🧊 Smart bromsning (ramp + hold + filtrering)
-- 🌦 Prognosbaserad styrning (valfri)
-- 🏠 Integration skapar egna entiteter
-- 🔒 Helt lokal drift
+PumpSteer 2.0.0 introducerar ett helt nytt styrsystem med fokus på stabilitet, förutsägbarhet och kostnadsoptimering.
+
+- 🧠 PI-baserad reglering  
+- ⚡ Förenklad prislogik (`cheap / normal / expensive`)  
+- 🔁 State machine (förutsägbart beteende)  
+- 🧊 Dynamisk bromsning (ramp + hold + filtrering)  
+- 🌦 Prognosbaserad styrning (valfri)  
+- 🏠 Integration skapar egna entiteter  
+- 🔒 Helt lokal (ingen cloud)  
 
 ---
 
 ## Breaking Changes
 
-### Elpriskategorier ändrade
+### Nya priskategorier
 
-Gamla:
-- `very_cheap`, `very_expensive`, `extreme`
+Tidigare:
+- `very_cheap`
+- `very_expensive`
+- `extreme`
 
-Nya:
-- `cheap`, `normal`, `expensive`
+Nu:
+- `cheap`
+- `normal`
+- `expensive`
 
 ---
 
-### Krav på elprissensor
+### Krav på elsensor
 
 Måste stödja:
-- `today/raw_today`
-- `tomorrow/raw_tomorrow`
+- `today/raw_today`  
+- `tomorrow/raw_tomorrow`  
 
 ---
 
-### Ny styrlogik
+### Ny styrmodell
 
 - Tidigare: heuristik  
 - Nu: PI + state machine  
@@ -110,62 +140,90 @@ Måste stödja:
 
 ### Ny bromslogik
 
-- rampning
-- hold över korta dippar
-- filtrering av toppar
-- komfortskydd
+- Rampning  
+- Hold-logik  
+- Filtrering av toppar  
+- Komfortskydd  
 
 ---
 
-### Integration skapar egna entiteter
+### Integration hanterar entiteter
 
-- number
-- switch
-- datetime
+- numbers  
+- switch  
+- datetime  
 
 ---
 
 ### ML borttaget
 
-- används inte längre i runtime
-
 ---
 
-## Price Sensor Support
+## Elsensorer
 
 Stödda format:
 
-- `0.95`
-- `"0.95"`
-- `{ "value": 0.95 }`
-- `{ "price": 0.95 }`
+- `0.95`  
+- `"0.95"`  
+- `{ "value": 0.95 }`  
+- `{ "price": 0.95 }`  
 
-📌 Rekommenderat exempel:
-
-
-other/nordpool.yaml
-
+📌 Rekommenderat exempel:  
+[`other/nordpool.yaml`](other/nordpool.yaml)
 
 ✔ Fungerar med:
-- Officiella Nord Pool-integrationen
-- PumpSteer 2.0.0
+- Officiella Nord Pool-integrationen  + mitt exempel (se ovan) OBS !
 
 ---
 
-## Weather Support
+### ℹ️ Om `pump_packages.yaml`
+
+Filen:  
+[`other/pump_packages.yaml`](other/pump_packages.yaml)
+
+är **inte längre ett komplett paket** som i tidigare versioner.
+
+Den innehåller främst:
+
+- Templatesensorer  
+- Exempel  
+- Hjälplogik  
+
+⚠️ Viktigt:
+
+- Inte en komplett lösning  
+- Konfigurerar inte hela systemet  
+- Ersätter inte integrationen  
+
+👉 Använd som referens eller tillägg  
+
+---
+
+### Migrering från 1.6.6
+
+- PumpSteer använder inte längre paket  
+- Integration hanterar:
+  - logik  
+  - entiteter  
+  - inställningar  
+
+Du kan fortfarande använda `pump_packages.yaml` för extra funktioner.
+
+---
+
+## Väderstöd
 
 Exempel:
-- `weather.smhi_home`
-- `weather.yr_home`
+- `weather.smhi_home`  
+- `weather.yr_home`  
+- `weather.openweather`  
 
-⚠️ Måste väljas i:
-Inställningar → Enheter → PumpSteer → Konfigurera
+⚠️ Väljs i:  
+Inställningar → Enheter → PumpSteer → Konfigurera  
 
 ---
 
-## New Installation
-
-### Steg-för-steg
+## Ny installation
 
 1. Installera via HACS eller manuellt  
 2. Starta om Home Assistant  
@@ -174,7 +232,7 @@ Inställningar → Enheter → PumpSteer → Konfigurera
 
 ---
 
-### Första kontroll
+### Kontrollera att det fungerar
 
 - `sensor.pumpsteer` aktiv  
 - `status = ok`  
@@ -183,131 +241,149 @@ Inställningar → Enheter → PumpSteer → Konfigurera
 
 ---
 
-## Upgrade from 1.6.6
+## Dashboard (Lovelace)
+
+📁 Se [`/dashboards/`](dashboards/)  
+
+Visar:
+- Temperatur  
+- Måltemperatur  
+- Virtuell utetemperatur  
+- Pris och respons  
+
+---
+
+### Krav
+
+Installera:
+
+- mini-graph-card  
+- apexcharts-card  
+
+---
+
+### Hur man använder
+
+1. Gå till dashboard  
+2. Edit  
+3. YAML-läge  
+4. Klistra in  
+5. Spara  
+
+⚠️ Kan skriva över befintlig vy  
+
+---
+
+### Tips
+
+- Ingen data → kolla entity  
+- Kort laddar inte → installera card  
+- Debug → Developer Tools  
+
+---
+
+## Uppgradering från 1.6.6
 
 ### Måste göras
 
-- Uppdatera priskategorier  
-- Lägg till tomorrow-pris  
+- Uppdatera prislogik  
+- Lägg till morgondagens priser  
 - Uppdatera automations  
 - Ta bort ML  
 
 ---
 
-### Bör kontrolleras
+### Rekommenderat
 
-- Elprisdata finns  
-- Väder är konfigurerat  
-- Holiday automations  
-
----
-
-### Test
-
-- Kontrollera `mode`
-- Kontrollera `brake_factor`
-- Följ en dyr period
+- Kontrollera attribut  
+- Lägg till väder  
+- Uppdatera holiday  
 
 ---
 
-## Troubleshooting
+### Testa
+
+- Mode  
+- Brake factor  
+- Dyra perioder  
+
+---
+
+## Felsökning
 
 ### Safe mode
 
 Orsak:
-- saknad prisdata
+- Saknade prisdata  
 
 Lösning:
-- kontrollera `today/raw_today`
-- kontrollera `tomorrow/raw_tomorrow`
+- Kontrollera today/raw_today  
+- Kontrollera tomorrow/raw_tomorrow  
 
 ---
 
 ### Ingen bromsning
 
 Orsak:
-- ej `expensive`
-- komfortskydd aktivt
+- Inte dyrt  
+- Komfortskydd aktivt  
 
 ---
 
-### Fel priskategori
-
-Orsak:
-- fel dataformat
-
----
-
-## Tuning (Quick Guide)
+## Trimning
 
 ### Aggressivitet
 
-- 0 → ingen prisstyrning  
+- 0 → ingen styrning  
 - 1–2 → mild  
 - 3–4 → balanserad  
 - 5 → aggressiv  
 
 ---
 
-### Tröghet (inertia)
+### Tröghet
 
-- Låg → snabb respons  
-- Hög → långsam respons  
-
-Typiskt:
-- Lägenhet → låg  
-- Hus → medel  
-- Tungt hus → hög  
+- Låg → snabb  
+- Hög → långsam  
 
 ---
 
-## Safety & Disclaimer
+## Säkerhet
 
-Du använder denna integration på egen risk.
+Använd på egen risk.
 
-Uppvärmning är ett kritiskt system.
-
-Använd inte om:
-- systemet är instabilt
-- du inte förstår hur det fungerar
-
-Övervaka alltid:
-- inomhustemperatur
-- systemets beteende
+Följ alltid:
+- temperatur  
+- systemets beteende  
 
 ---
 
-## Recorder Requirement
+## Recorder
 
 Kräver:
-- minst 72 timmars elprisdata
-- lagrat i recorder
-
-Om detta saknas:
-- klassificering kan misslyckas
-- systemet kan gå i safe mode
+- minst 72h historik  
 
 ---
 
-## Note
+## Notering
 
 Detta är ett hobbyprojekt byggt med:
-- ChatGPT
-- Copilot
-- tålamod 🙂
+- ChatGPT  
+- Copilot  
+- tålamod 🙂  
 
-Feedback välkomnas!
-
----
-
-## Links
-
-- GitHub repository  
-- Create Issue  
+Feedback uppskattas — ser du något som är knas, hjälp gärna till att förbättra eller fixa det istället för att bara påpeka 🙂
 
 ---
 
-## License
+## 🔗 Länkar
+
+- 🔗 [GitHub repo](https://github.com/JohanAlvedal/PumpSteer)  
+- 🐞 [Skapa issue](https://github.com/JohanAlvedal/PumpSteer/issues)  
+
+---
+
+## Licens
 
 - ≥ v1.6.2 → AGPL-3.0  
 - ≤ v1.5.1 → Apache 2.0  

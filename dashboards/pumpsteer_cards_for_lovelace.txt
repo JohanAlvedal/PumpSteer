@@ -1,19 +1,9 @@
-# PumpSteer Lovelace Cards
-
 type: sections
 sections:
   - type: grid
     cards:
       - type: vertical-stack
         cards:
-          - type: entity
-            entity: sensor.pumpsteer
-            name: PumpSteer
-            icon: mdi:thermostat-box
-            state_color: true
-            card_mod:
-              style: |
-                ha-card { font-size: 1.2em; font-weight: bold; }
           - type: glance
             show_name: true
             show_icon: true
@@ -22,7 +12,7 @@ sections:
             entities:
               - entity: sensor.pumpsteer_operating_mode
                 name: Mode
-              - entity: sensor.pumpsteer_price_category
+              - entity: sensor.pumpsteer_price
                 name: Price
               - entity: sensor.pumpsteer_is_saving
                 name: Saving
@@ -32,103 +22,83 @@ sections:
             show_header_toggle: false
             entities:
               - entity: number.pumpsteer_target_temperature
-                name: Target temperature
+                name: Target Temperature
                 icon: mdi:thermometer
               - entity: number.pumpsteer_saving_level
-                name: Saving level (0 = off, 5 = max)
+                name: Saving Level (0 = Off, 5 = Max)
                 icon: mdi:lightning-bolt-circle
               - entity: number.pumpsteer_summer_mode_threshold
-                name: Summer threshold
+                name: Summer Threshold
                 icon: mdi:weather-sunny
               - entity: number.pumpsteer_house_thermal_mass
-                name: House thermal mass
+                name: House Thermal Mass
                 icon: mdi:home-thermometer
+              - entity: switch.pumpsteer_notifications
+                name: Notifications
+                icon: mdi:bell
               - entity: switch.pumpsteer_holiday_mode
-                name: Holiday mode
+                name: Holiday Mode
                 icon: mdi:beach
               - entity: sensor.pumpsteer_holiday_status
-                name: Holiday status
+                name: Holiday Status
                 icon: mdi:beach
               - entity: datetime.pumpsteer_holiday_start
-                name: Holiday start
+                name: Holiday Start
                 icon: mdi:calendar-arrow-right
               - entity: datetime.pumpsteer_holiday_end
-                name: Holiday end
+                name: Holiday End
                 icon: mdi:calendar-arrow-left
           - type: entities
-            title: Status details
+            title: Status Details
             show_header_toggle: false
             entities:
               - entity: sensor.pumpsteer_price_thresholds
-                name: Price thresholds (P30/P80)
+                name: Price Thresholds (P30/P80)
                 icon: mdi:chart-bell-curve
               - entity: sensor.pumpsteer_temperature_difference
-                name: Indoor vs target diff
+                name: Indoor vs Target Difference
                 icon: mdi:delta
               - entity: sensor.pumpsteer_fake_temp_delta
-                name: Fake temp vs real outdoor
+                name: Virtual vs Real Outdoor Temp
                 icon: mdi:swap-horizontal-bold
               - entity: sensor.pumpsteer_brake_factor
-                name: Brake factor
+                name: Brake Factor
                 icon: mdi:car-brake-alert
               - type: attribute
                 entity: sensor.pumpsteer
                 attribute: heating_demand_c
-                name: Heating demand
+                name: Heating Demand
                 icon: mdi:fire
               - type: attribute
                 entity: sensor.pumpsteer
                 attribute: p30
-                name: P30 threshold
+                name: P30 Threshold
                 icon: mdi:cash-minus
               - type: attribute
                 entity: sensor.pumpsteer
                 attribute: p80
-                name: P80 threshold
+                name: P80 Threshold
                 icon: mdi:cash-plus
-      - type: custom:mini-graph-card
-        name: PumpSteer vs SVOTC
-        icon: mdi:home-thermometer
-        entities:
-          - entity: sensor.pumpsteer
-            name: Pumpsteer
-            color: "#43a047"
-            show_state: true
-          - entity: sensor.svotc_virtual_outdoor_temperature
-            name: SVOTC
-            color: "#ef5350"
-            show_line: true
-            show_points: false
-            show_state: true
-        hours_to_show: 24
-        points_per_hour: 4
-        line_width: 2
-        smoothing: true
-        show:
-          labels: true
-          points: false
-          legend: true
-          fill: fade
   - type: grid
     cards:
       - type: entities
         title: PumpSteer Status
         entities:
           - entity: sensor.pumpsteer
-            name: Fake Outdoor Temp
             icon: mdi:thermometer-chevron-down
+            name: Virtual Outdoor Temperature
           - type: attribute
             entity: sensor.pumpsteer
             attribute: outdoor_temperature
-            name: Outdoor Temp
+            name: Outdoor Temperature
             suffix: °C
             icon: mdi:thermometer
-          - entity: sensor.svotc_virtual_outdoor_temperature
           - type: attribute
             entity: sensor.pumpsteer
-            attribute: status
-            name: Status
-            icon: mdi:check-circle
+            attribute: indoor_temperature
+            name: Indoor Temperature
+            suffix: °C
+            icon: mdi:home-thermometer
           - type: attribute
             entity: sensor.pumpsteer
             attribute: mode
@@ -136,16 +106,9 @@ sections:
             icon: mdi:cog
           - type: attribute
             entity: sensor.pumpsteer
-            attribute: indoor_temperature
-            name: Indoor Temp
-            suffix: °C
-            icon: mdi:home-thermometer
-          - type: attribute
-            entity: sensor.pumpsteer
-            attribute: target_temperature
-            name: Target Temp
-            suffix: °C
-            icon: mdi:target
+            attribute: status
+            name: Status
+            icon: mdi:check-circle
           - type: attribute
             entity: sensor.pumpsteer
             attribute: heating_demand_c
@@ -159,11 +122,6 @@ sections:
             icon: mdi:tag
           - type: attribute
             entity: sensor.pumpsteer
-            attribute: aggressiveness
-            name: Aggressiveness
-            icon: mdi:speedometer
-          - type: attribute
-            entity: sensor.pumpsteer
             attribute: p30
             name: Price P30
             suffix: SEK/kWh
@@ -175,21 +133,22 @@ sections:
             suffix: SEK/kWh
             icon: mdi:chart-bell-curve
           - entity: sensor.elpris_spot_avgifter
+            name: Price
           - type: attribute
             entity: sensor.pumpsteer
             attribute: last_updated
             name: Last Updated
             icon: mdi:clock-outline
       - type: custom:mini-graph-card
-        name: Virtual outdoor temperature
+        name: Virtual Outdoor Temperature
         icon: mdi:thermometer-lines
         entities:
           - entity: sensor.pumpsteer
-            name: Fake temp
+            name: Virtual Temperature
             color: "#e87d0d"
             show_state: true
           - entity: sensor.temperatur_nu
-            name: Real outdoor
+            name: Outdoor Temperature
             color: "#44739e"
             show_state: true
         hours_to_show: 24
@@ -202,97 +161,28 @@ sections:
           legend: true
           fill: fade
       - type: custom:mini-graph-card
-        name: Indoor vs target
-        icon: mdi:home-thermometer
-        entities:
-          - entity: sensor.pumpsteer
-            attribute: indoor_temperature
-            name: Indoor
-            color: "#43a047"
-            show_state: true
-          - entity: number.pumpsteer_target_temperature
-            name: Target
-            color: "#ef5350"
-            show_line: true
-            show_points: false
-            show_state: true
-        hours_to_show: 24
+        name: Price vs P30 / P80 (12h)
+        hours_to_show: 12
         points_per_hour: 4
-        line_width: 2
-        smoothing: true
+        line_width: 3
+        font_size: 75
+        animate: true
         show:
-          labels: true
-          points: false
+          labels: false
           legend: true
-          fill: fade
+          icon: false
+        entities:
+          - entity: sensor.elpris_spot_avgifter
+            name: Price
+            show_state: true
+          - entity: sensor.pumpsteer
+            attribute: p30
+            name: P30
+            show_state: true
+          - entity: sensor.pumpsteer
+            attribute: p80
+            name: P80
+            show_state: true
 max_columns: 4
-title: Main
+title: PumpSteer Dashboard
 cards: []
-
-
-####### Apexchart #####
-
-type: custom:apexcharts-card
-graph_span: 24h
-header:
-  show: true
-  title: 24 Timmar - Temperatur & Elpris
-  show_states: true
-yaxis:
-  - id: temp
-    min: auto
-    max: auto
-    decimals: 1
-    apex_config:
-      tickAmount: 5
-      labels:
-        formatter: |
-          EVAL:function(val) {
-            return val.toFixed(1) + ' °C';
-          }
-      title:
-        text: Temperatur (°C)
-  - id: price
-    min: auto
-    max: auto
-    decimals: 2
-    opposite: true
-    apex_config:
-      tickAmount: 5
-      labels:
-        formatter: |
-          EVAL:function(val) {
-            return val.toFixed(2) + ' öre';
-          }
-      title:
-        text: Elpris (öre/kWh)
-series:
-  - entity: sensor.pumpsteer
-    name: Pumpstyrning
-    type: line
-    yaxis_id: temp
-    color: "#00bcd4"
-    stroke_width: 2
-  - entity: sensor.yttertemp_no
-    name: Temperatur Nu
-    type: line
-    yaxis_id: temp
-    color: "#ff9800"
-    stroke_width: 2
-  - entity: sensor.shelly_h_t_temp_temperature
-    name: Temp Hall Nere
-    type: line
-    yaxis_id: temp
-    color: "#4caf50"
-    stroke_width: 2
-  - entity: sensor.nordpool_kwh_se3_sek_3_10_025
-    name: Nordpool Tibber
-    type: line
-    yaxis_id: price
-    color: "#f44336"
-    stroke_width: 2
-
-####
-
-
-Tack för rättelsen! Nu ska alla kort fungera perfekt med rätt syntax.

@@ -1,81 +1,6 @@
-# packages/pumpsteer.yaml
 # ═══════════════════════════════════════════════════════════
-# INPUT ENTITIES
+# TEMPLATE SENSORS packages/pumpsteer.yaml
 # ═══════════════════════════════════════════════════════════
-
-input_number:
-  indoor_target_temperature:
-    name: "Target Temperature"
-    min: 16
-    max: 27
-    step: 0.5
-    unit_of_measurement: "°C"
-    icon: mdi:thermometer
-    mode: slider
-
-  pumpsteer_summer_threshold:
-    name: "Summer Mode Threshold"
-    min: 10
-    max: 30
-    step: 0.5
-    unit_of_measurement: "°C"
-    icon: mdi:weather-sunny
-    mode: slider
-
-  pumpsteer_aggressiveness:
-    name: "Saving Level"
-    min: 0
-    max: 5
-    step: 1
-    icon: mdi:lightning-bolt-circle
-    mode: slider
-    # 0 = no price control, pure comfort
-    # 1 = very gentle, barely noticeable
-    # 2 = mild saving
-    # 3 = balanced (recommended)
-    # 4 = aggressive saving
-    # 5 = maximum saving, can get cold
-
-  pumpsteer_house_inertia:
-    name: "House Thermal Mass"
-    min: 0.5
-    max: 10.0
-    step: 0.5
-    icon: mdi:home-thermometer
-    mode: slider
-    # Low  (0.5–2)  = lightweight house, reacts quickly
-    # Mid  (2–4)    = typical house
-    # High (4–10)   = heavy house, stone/concrete, slow to heat/cool
-
-input_text:
-  hourly_forecast_temperatures:
-    name: "Hourly Forecast Temperatures"
-    max: 255
-    initial: ""
-
-input_boolean:
-  pumpsteer_holiday_mode:
-    name: "Holiday Mode"
-    icon: mdi:beach
-    initial: false
-
-input_datetime:
-  pumpsteer_holiday_start:
-    name: "Holiday Start"
-    has_date: true
-    has_time: true
-    icon: mdi:calendar-arrow-right
-
-  pumpsteer_holiday_end:
-    name: "Holiday End"
-    has_date: true
-    has_time: true
-    icon: mdi:calendar-arrow-left
-
-# ═══════════════════════════════════════════════════════════
-# TEMPLATE SENSORS
-# ═══════════════════════════════════════════════════════════
-
 template:
   - sensor:
       - name: "PumpSteer Operating Mode"
@@ -197,9 +122,9 @@ template:
       - name: "PumpSteer Holiday Status"
         unique_id: ps_holiday_status
         state: >
-          {% set active = is_state('input_boolean.pumpsteer_holiday_mode', 'on') %}
-          {% set start = states('input_datetime.pumpsteer_holiday_start') %}
-          {% set end = states('input_datetime.pumpsteer_holiday_end') %}
+          {% set active = is_state('switch.pumpsteer_holiday_mode', 'on') %}
+          {% set start = states('datetime.pumpsteer_holiday_start') %}
+          {% set end = states('datetime.pumpsteer_holiday_end') %}
           {% if active %}
             {% if end not in ['unknown','unavailable',''] %}
               🏖️ Active until {{ as_datetime(end).strftime('%d/%m %H:%M') }}
@@ -228,71 +153,3 @@ template:
             Calculating...
           {% endif %}
         icon: mdi:chart-bell-curve
-
-      - name: "Forecast Temperatures"
-        unique_id: ps_forecast_temps
-        state: >
-          {{ states('input_text.hourly_forecast_temperatures') | truncate(50) }}
-        attributes:
-          values: >
-            {% set raw = states('input_text.hourly_forecast_temperatures') | default('') | trim %}
-            {% if raw in ['', 'unknown', 'unavailable'] %}
-              []
-            {% else %}
-              {% set ns = namespace(numbers=[]) %}
-              {% for item in raw.split(',') %}
-                {% if item | trim != '' %}
-                  {% set ns.numbers = ns.numbers + [item | trim | float(0)] %}
-                {% endif %}
-              {% endfor %}
-              {{ ns.numbers }}
-            {% endif %}
-        icon: mdi:thermometer-lines
-
-# ═══════════════════════════════════════════════════════════
-# AUTOMATIONS
-# ═══════════════════════════════════════════════════════════
-
-automation:
-  - alias: "PumpSteer - Expensive Price Alert"
-    id: pumpsteer_expensive_price_alert
-    description: "Notify when PumpSteer starts saving due to expensive electricity"
-    mode: single
-    trigger:
-      - platform: state
-        entity_id: sensor.pumpsteer_is_saving
-        to: "True"
-    action:
-      - service: notify.persistent_notification
-        data:
-          title: "💰 PumpSteer is saving"
-          message: >
-            Electricity is expensive — PumpSteer has activated saving mode.
-
-            💰 Price category: {{ states('sensor.pumpsteer_price') }}
-            🏠 Current mode: {{ states('sensor.pumpsteer_operating_mode') }}
-            🌡️ Indoor: {{ state_attr('sensor.pumpsteer', 'indoor_temperature') | default('N/A') }}°C
-            🎯 Target: {{ state_attr('sensor.pumpsteer', 'target_temperature') | default('N/A') }}°C
-
-  - alias: "PumpSteer - Back to Normal"
-    id: pumpsteer_back_to_normal
-    description: "Notify when saving mode ends"
-    mode: single
-    trigger:
-      - platform: state
-        entity_id: sensor.pumpsteer_is_saving
-        to: "False"
-        for:
-          minutes: 5
-    condition:
-      - condition: template
-        value_template: >
-          {{ trigger.from_state.state == 'True' }}
-    action:
-      - service: notify.persistent_notification
-        data:
-          title: "✅ PumpSteer back to normal"
-          message: >
-            Electricity price is back to normal — PumpSteer is regulating as usual.
-
-            🏠 Current mode: {{ states('sensor.pumpsteer_operating_mode') }}

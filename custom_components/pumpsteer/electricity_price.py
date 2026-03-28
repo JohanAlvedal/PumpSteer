@@ -1,3 +1,4 @@
+""electicity_price for PumpSteer."""
 import logging
 from datetime import timedelta
 from typing import List

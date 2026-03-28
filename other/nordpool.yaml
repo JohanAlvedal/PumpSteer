@@ -1,5 +1,5 @@
 ###############################################################################
-## PACKAGE: SVOTC + Nordpool Price (SE3)
+## PACKAGE: Nordpool Price (SE3)
 ##
 ## Sensorer:
 ##   sensor.elpris_today      state=aktuellt pris, attr.raw=prisl ista idag
