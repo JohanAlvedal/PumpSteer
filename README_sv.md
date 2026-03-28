@@ -40,6 +40,11 @@ Den minskar energikostnaden när elen är dyr — samtidigt som inomhuskomforten
 
 ---
 
+## Configuration
+- 🇸🇪 [Konfiguration](docs/konfiguration.md)
+
+___
+
 ## Viktigt – inte en vanlig uppgradering ⚠️
 
 PumpSteer 2.0.0 är **inte en liten uppdatering**.  
