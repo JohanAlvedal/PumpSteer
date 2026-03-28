@@ -16,11 +16,19 @@ Den minskar energikostnaden när elen är dyr — samtidigt som inomhuskomforten
 
 ## 📸 Dashboard – exempel
 
-![PumpSteer 1](docs/img/01.png)
-![PumpSteer 2](docs/img/02.png)
-![PumpSteer 3](docs/img/03.png)
-![PumpSteer 4](docs/img/04.png)
-![PumpSteer 5](docs/img/05.png)
+<table>
+  <tr>
+    <td><img src="docs/img/01.png"/></td>
+    <td><img src="docs/img/02.png"/></td>
+    <td><img src="docs/img/03.png"/></td>
+  </tr>
+  <tr>
+    <td><img src="docs/img/04.png"/></td>
+    <td><img src="docs/img/05.png"/></td>
+    <td></td>
+  </tr>
+</table>
+
 
 ---
 
