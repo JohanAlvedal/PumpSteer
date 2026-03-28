@@ -91,6 +91,66 @@ Only use PumpSteer if you understand how it works and have verified that it func
 2. Observe for 24–48h  
 3. Then migrate fully  
 
+
+---
+## 🔧 How PumpSteer Controls Your Heat Pump
+
+PumpSteer does **not** control your heat pump via Modbus, cloud APIs, or thermostat setpoints.
+
+Instead, it works by influencing the **outdoor temperature sensor input**.
+
+This approach is commonly used to influence heat pump behavior without modifying internal firmware or control systems.
+
+In setups like mine, this is done using an external device such as  
+👉 Ohmigo Ohm On WiFi Plus  
+🔗 [Ohmigo Ohm On WiFi Plus](https://www.ohmigo.io/en/product-page/ohmigo-ohm-on-wifi)
+
+This device is connected to the heat pump’s outdoor temperature sensor circuit and allows Home Assistant to adjust the **resistance** seen by the heat pump.
+
+By changing the resistance, the device simulates a different outdoor temperature for the heat pump.
+
+---
+
+### 🧠 How it works
+
+PumpSteer calculates a **virtual outdoor temperature** based on:
+
+- Indoor temperature  
+- Target temperature  
+- Electricity price  
+- Weather forecast  
+- Selected aggressiveness level  
+
+This calculated value is then sent to the external device (e.g. Ohm On WiFi Plus), which manipulates the sensor signal.
+
+👉 The heat pump believes the outdoor temperature has changed  
+👉 And adjusts heating accordingly  
+
+---
+
+### ⚡ What this enables
+
+- Reduce heating during expensive electricity hours  
+- Preheat when electricity is cheap  
+- Maintain indoor comfort as top priority  
+- Optimize without modifying the heat pump’s internal control  
+
+---
+
+### 🏠 Example system architecture
+
+1. Home Assistant runs PumpSteer  
+2. PumpSteer calculates virtual outdoor temperature  
+3. Ohm On WiFi Plus adjusts resistance  
+4. Heat pump reacts automatically  
+
+---
+
+### ⚠️ Important
+
+- This method requires hardware capable of influencing the outdoor sensor signal  
+- Installation depends on your heat pump model  
+- Always verify wiring and safety before use  
 ---
 
 ## What's New in 2.0.0
