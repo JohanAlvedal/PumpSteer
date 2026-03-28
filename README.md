@@ -40,6 +40,12 @@ It reduces energy cost when electricity is expensive — while protecting indoor
 
 ---
 
+## Configuration
+- 🇸🇪 [docs/konfiguration.md](docs/konfiguration.md)
+- 🇬🇧 [docs/configuration.md](docs/configuration.md)
+
+___
+
 ## Important – Not a Drop-in Upgrade ⚠️
 
 PumpSteer 2.0.0 is **not a minor update**.  
