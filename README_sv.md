@@ -102,7 +102,7 @@ Denna metod används ofta för att påverka värmepumpens beteende utan att änd
 
 I min setup görs detta med en extern enhet som  
 👉 Ohmigo Ohm On WiFi Plus  
-🔗 [Ohmigo Ohm On WiFi Plus]([https://www.ohmigo.io/en/product-page/ohmigo-ohm-on-wifi](https://www.ohmigo.io/product-page/ohm-on-wifi-plus )
+🔗 [Ohmigo Ohm On WiFi Plus](https://www.ohmigo.io/product-page/ohm-on-wifi-plus)
 
 Enheten kopplas in på värmepumpens utetemperaturgivare och gör det möjligt för Home Assistant att justera det **motstånd** som värmepumpen ser.
 
