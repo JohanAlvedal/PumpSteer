@@ -21,12 +21,10 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    async_add_entities(
-        [
-            PumpSteerHolidaySwitch(entry),
-            PumpSteerNotificationsSwitch(entry),
-        ]
-    )
+    async_add_entities([
+        PumpSteerHolidaySwitch(entry),
+        PumpSteerNotificationsSwitch(entry),
+    ])
 
 
 class PumpSteerHolidaySwitch(RestoreEntity, SwitchEntity):

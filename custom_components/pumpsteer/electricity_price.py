@@ -8,11 +8,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util.dt import now as dt_now
 
 from .settings import (
-    PRICE_PERCENTILE_CHEAP,
-    PRICE_PERCENTILE_EXPENSIVE,
+    ABSOLUTE_CHEAP_LIMIT,
     DEFAULT_TRAILING_HOURS,
     MIN_SAMPLES_FOR_CLASSIFICATION,
-    ABSOLUTE_CHEAP_LIMIT,
+    PRICE_PERCENTILE_CHEAP,
+    PRICE_PERCENTILE_EXPENSIVE,
 )
 
 _LOGGER = logging.getLogger(__name__)
