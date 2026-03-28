@@ -20,6 +20,7 @@ It reduces energy cost when electricity is expensive — while protecting indoor
 ![PumpSteer 2](docs/img/02.png)
 ![PumpSteer 3](docs/img/03.png)
 ![PumpSteer 4](docs/img/04.png)
+![PumpSteer 5](docs/img/05.png)
 
 ---
 
