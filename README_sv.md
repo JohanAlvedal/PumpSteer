@@ -41,7 +41,7 @@ Den minskar energikostnaden när elen är dyr — samtidigt som inomhuskomforten
 ---
 
 ## Configuration
-- 🇸🇪 [Konfiguration](docs/konfiguration.md)
+- 🇸🇪 [Här](docs/Configuration_sv.md)
 
 ___
 
