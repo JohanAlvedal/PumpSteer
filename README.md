@@ -41,7 +41,7 @@ It reduces energy cost when electricity is expensive — while protecting indoor
 ---
 
 ## Configuration
-- 🇬🇧 [Here](docs/configuration.md)
+- 🇬🇧 [Here](docs/Configuration.md)
 
 ___
 
