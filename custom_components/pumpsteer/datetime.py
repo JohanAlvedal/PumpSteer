@@ -1,15 +1,16 @@
-"""Datetime entities for PumpSteer."""
-
 from __future__ import annotations
+
 import logging
 from datetime import datetime
+
+import homeassistant.util.dt as dt_util
 from homeassistant.components.datetime import DateTimeEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
-import homeassistant.util.dt as dt_util
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
