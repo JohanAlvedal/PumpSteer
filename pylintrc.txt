@@ -1,0 +1,11 @@
+[FORMAT]
+max-line-length=120
+
+[MASTER]
+# TODO: Enable the following checks when code is cleaned up
+disable=C0114,C0115,C0116,R0801,R0911,R0914,R0912
+ignore-paths=^tests/.*$
+score=no
+
+[REPORTS]
+output-format=colorized

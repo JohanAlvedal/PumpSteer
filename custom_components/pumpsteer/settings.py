@@ -1,9 +1,9 @@
-from typing import List, Final
 import logging
+from typing import Final, List
 
 _LOGGER = logging.getLogger(__name__)
 
-PUMPSTEER_VERSION: Final[str] = "2.0.1"
+PUMPSTEER_VERSION: Final[str] = "2.0.2"
 
 # === FAKE TEMPERATURE LIMITS ===
 MIN_FAKE_TEMP: Final[float] = -20.0
@@ -33,7 +33,7 @@ PRICE_PERCENTILE_EXPENSIVE: Final[float] = 80.0
 DEFAULT_TRAILING_HOURS: Final[int] = 72
 MIN_SAMPLES_FOR_CLASSIFICATION: Final[int] = 5
 ABSOLUTE_CHEAP_LIMIT: Final[float] = (
-    0.60  # SEK/kWh — always cheap regardless of history
+    0.50  # SEK/kWh — always cheap regardless of history
 )
 MAX_PRICE_WARNING_THRESHOLD: Final[float] = 3.0
 

@@ -1,5 +1,3 @@
-"""Switch entities for PumpSteer."""
-
 from __future__ import annotations
 
 import logging

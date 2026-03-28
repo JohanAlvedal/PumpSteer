@@ -70,6 +70,10 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "notify_service",
                         default=current_data.get("notify_service", ""),
                     ): selector({"text": {}}),
+                    vol.Optional(
+                        "preheat_boost_enabled",
+                        default=current_data.get("preheat_boost_enabled", True),
+                    ): selector({"boolean": {}}),
                 }
             ),
             errors=errors,

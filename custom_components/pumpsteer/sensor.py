@@ -71,6 +71,10 @@ MODE_HOLIDAY = "holiday"
 MODE_ERROR = "error"
 MODE_SAFE = "safe_mode"
 
+_RESTORE_BRAKE_RAMP = "brake_ramp"
+_RESTORE_BRAKE_LAST_T = "brake_last_t"
+_RESTORE_BRAKE_LAST_EXPENSIVE_T = "brake_last_expensive_t"
+
 
 class PumpSteerSensor(RestoreEntity):
     """
@@ -121,6 +125,14 @@ class PumpSteerSensor(RestoreEntity):
 
         self._attr_unique_id = config_entry.entry_id
         self._forecast_available_last: Optional[bool] = None
+        self._safe_mode_warned: bool = False
+        self._helper_fallback_issues: Dict[str, Optional[str]] = {
+            "target_temperature": None,
+            "summer_threshold": None,
+            "aggressiveness": None,
+            "house_inertia": None,
+        }
+        self._price_issue: Optional[str] = None
         self._attr_unit_of_measurement = "°C"
         self._attr_device_class = "temperature"
         self._attr_state_class = "measurement"
@@ -168,6 +180,36 @@ class PumpSteerSensor(RestoreEntity):
     def should_poll(self) -> bool:
         return True
 
+    @property
+    def extra_restore_state_data(self):
+        """Persist brake ramp state across restarts."""
+        from homeassistant.helpers.restore_state import ExtraStoredData
+
+        class _BrakeData(ExtraStoredData):
+            def __init__(self_, brake_ramp, brake_last_t, brake_last_expensive_t):
+                self_.brake_ramp = brake_ramp
+                self_.brake_last_t = brake_last_t
+                self_.brake_last_expensive_t = brake_last_expensive_t
+
+            def as_dict(self_):
+                return {
+                    _RESTORE_BRAKE_RAMP: self_.brake_ramp,
+                    _RESTORE_BRAKE_LAST_T: (
+                        self_.brake_last_t.isoformat() if self_.brake_last_t else None
+                    ),
+                    _RESTORE_BRAKE_LAST_EXPENSIVE_T: (
+                        self_.brake_last_expensive_t.isoformat()
+                        if self_.brake_last_expensive_t
+                        else None
+                    ),
+                }
+
+        return _BrakeData(
+            self._brake_ramp,
+            self._brake_last_t,
+            self._brake_last_expensive_t,
+        )
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
 
@@ -175,6 +217,7 @@ class PumpSteerSensor(RestoreEntity):
             self.async_options_update_listener
         )
 
+        # Restore basic state (fake temp + attributes).
         last = await self.async_get_last_state()
         if last is not None:
             restored = safe_float(last.state)
@@ -185,6 +228,32 @@ class PumpSteerSensor(RestoreEntity):
                     for key, value in last.attributes.items()
                     if key != "friendly_name"
                 }
+
+        # Restore brake ramp state so braking survives HA restarts.
+        extra = await self.async_get_last_extra_data()
+        if extra is not None:
+            data = extra.as_dict()
+            self._brake_ramp = float(data.get(_RESTORE_BRAKE_RAMP, 0.0))
+            raw_last_t = data.get(_RESTORE_BRAKE_LAST_T)
+            raw_last_exp = data.get(_RESTORE_BRAKE_LAST_EXPENSIVE_T)
+            try:
+                self._brake_last_t = (
+                    datetime.fromisoformat(raw_last_t) if raw_last_t else None
+                )
+            except (ValueError, TypeError):
+                self._brake_last_t = None
+            try:
+                self._brake_last_expensive_t = (
+                    datetime.fromisoformat(raw_last_exp) if raw_last_exp else None
+                )
+            except (ValueError, TypeError):
+                self._brake_last_expensive_t = None
+            _LOGGER.debug(
+                "PumpSteer restored brake state: ramp=%.3f last_t=%s last_exp=%s",
+                self._brake_ramp,
+                self._brake_last_t,
+                self._brake_last_expensive_t,
+            )
 
         # Wait until Home Assistant is fully started before the first real update.
         self.hass.bus.async_listen_once(
@@ -236,20 +305,134 @@ class PumpSteerSensor(RestoreEntity):
         )
 
     def _aggressiveness(self, cfg: Dict[str, Any]) -> int:
-        raw = cfg.get("aggressiveness") or self._read_entity(
-            self._number_entity_id("aggressiveness")
+        value = self._helper_value_with_fallback(
+            helper_key="aggressiveness",
+            cfg=cfg,
+            default=float(DEFAULT_AGGRESSIVENESS),
         )
-        if raw is None:
-            return int(DEFAULT_AGGRESSIVENESS)
-        return max(0, min(5, int(round(float(raw)))))
+        return max(0, min(5, int(round(float(value)))))
 
     def _house_inertia(self, cfg: Dict[str, Any]) -> float:
-        raw = cfg.get("house_inertia") or self._read_entity(
-            self._number_entity_id("house_inertia")
+        value = self._helper_value_with_fallback(
+            helper_key="house_inertia",
+            cfg=cfg,
+            default=float(DEFAULT_HOUSE_INERTIA),
         )
-        if raw is None:
-            return float(DEFAULT_HOUSE_INERTIA)
-        return max(0.5, min(10.0, float(raw)))
+        return max(0.5, min(10.0, float(value)))
+
+    def _set_helper_issue(self, helper_key: str, issue: str, message: str) -> None:
+        """Warn once per helper issue and downgrade repeats to debug."""
+        previous = self._helper_fallback_issues.get(helper_key)
+        if previous != issue:
+            _LOGGER.warning(message)
+            self._helper_fallback_issues[helper_key] = issue
+        else:
+            _LOGGER.debug(message)
+
+    def _clear_helper_issue(self, helper_key: str, entity_id: Optional[str]) -> None:
+        """Log helper recovery once when a fallback issue clears."""
+        previous = self._helper_fallback_issues.get(helper_key)
+        if previous is not None:
+            _LOGGER.info(
+                "PumpSteer helper '%s' recovered and now uses %s",
+                helper_key,
+                entity_id or "configured option value",
+            )
+            self._helper_fallback_issues[helper_key] = None
+
+    def _helper_value_with_fallback(
+        self,
+        helper_key: str,
+        cfg: Dict[str, Any],
+        default: float,
+    ) -> float:
+        """Read helper value with warn-once fallback logging."""
+        cfg_raw = cfg.get(helper_key)
+        if cfg_raw is not None:
+            parsed_cfg = safe_float(cfg_raw)
+            if parsed_cfg is not None:
+                self._clear_helper_issue(helper_key, None)
+                return parsed_cfg
+            self._set_helper_issue(
+                helper_key,
+                "invalid_option",
+                (
+                    f"PumpSteer helper '{helper_key}' has invalid configured value "
+                    f"'{cfg_raw}', falling back to default {default}"
+                ),
+            )
+            return default
+
+        entity_id = self._number_entity_id(helper_key)
+        if not entity_id:
+            self._set_helper_issue(
+                helper_key,
+                "missing_entity",
+                (
+                    f"PumpSteer helper '{helper_key}' has no number entity "
+                    f"(entry_id={self._config_entry.entry_id}), falling back to default "
+                    f"{default}"
+                ),
+            )
+            return default
+
+        state_obj = self.hass.states.get(entity_id)
+        if state_obj is None:
+            self._set_helper_issue(
+                helper_key,
+                "entity_not_found",
+                (
+                    f"PumpSteer helper '{helper_key}' entity '{entity_id}' not found, "
+                    f"falling back to default {default}"
+                ),
+            )
+            return default
+
+        state_raw = state_obj.state
+        if state_raw in ("unknown", "unavailable", None):
+            self._set_helper_issue(
+                helper_key,
+                "temporarily_unavailable",
+                (
+                    f"PumpSteer helper '{helper_key}' entity '{entity_id}' is "
+                    f"temporarily unavailable (state={state_raw}), falling back to "
+                    f"default {default}"
+                ),
+            )
+            return default
+
+        parsed = safe_float(state_raw)
+        if parsed is None:
+            self._set_helper_issue(
+                helper_key,
+                "invalid_state",
+                (
+                    f"PumpSteer helper '{helper_key}' entity '{entity_id}' has invalid "
+                    f"state '{state_raw}', falling back to default {default}"
+                ),
+            )
+            return default
+
+        self._clear_helper_issue(helper_key, entity_id)
+        return parsed
+
+    def _set_price_issue(self, issue: str, message: str) -> None:
+        """Warn once per price issue and downgrade repeats to debug."""
+        if self._price_issue != issue:
+            _LOGGER.warning(message)
+            self._price_issue = issue
+        else:
+            _LOGGER.debug(message)
+
+    def _clear_price_issue(self, today_entity_id: str, tomorrow_entity_id: str) -> None:
+        """Log price data recovery once when an issue clears."""
+        if self._price_issue is not None:
+            _LOGGER.info(
+                "PumpSteer price data recovered for today='%s', tomorrow='%s'",
+                today_entity_id,
+                tomorrow_entity_id,
+            )
+            self._price_issue = None
 
     def _comfort_floor(self, target: float, aggressiveness: int) -> float:
         drop = COMFORT_FLOOR_BY_AGGRESSIVENESS[aggressiveness]
@@ -357,7 +540,8 @@ class PumpSteerSensor(RestoreEntity):
                 )
             else:
                 _LOGGER.debug(
-                    "PumpSteer forecast returned no usable temperatures (weather=%s, price=%s)",
+                    "PumpSteer forecast returned no usable temperatures "
+                    "(weather=%s, price=%s)",
                     weather_entity,
                     price_entity,
                 )
@@ -419,16 +603,14 @@ class PumpSteerSensor(RestoreEntity):
         outdoor: Optional[float],
         now: datetime,
     ) -> None:
-        """
-        Enter safe mode.
-
-        Safe mode passes through the real outdoor temperature and resets PI
-        and brake state to avoid drift.
-        """
-        _LOGGER.warning(
-            "PumpSteer SAFE MODE: %s — optimization paused, sending real outdoor temp",
-            reason,
-        )
+        if not self._safe_mode_warned:
+            _LOGGER.warning(
+                "PumpSteer entered SAFE MODE: %s — optimization paused, sending real outdoor temp",
+                reason,
+            )
+            self._safe_mode_warned = True
+        else:
+            _LOGGER.debug("PumpSteer safe mode still active: %s", reason)
 
         self._pi.reset(now)
         self._brake_ramp = 0.0
@@ -541,13 +723,16 @@ class PumpSteerSensor(RestoreEntity):
 
         indoor = safe_float(get_state(self.hass, cfg.get("indoor_temp_entity")))
         outdoor = safe_float(get_state(self.hass, cfg.get("real_outdoor_entity")))
-        target = self._read_entity(self._number_entity_id("target_temperature"))
-        if target is None:
-            target = float(DEFAULT_TARGET_TEMP)
-
-        summer_threshold = self._read_entity(self._number_entity_id("summer_threshold"))
-        if summer_threshold is None:
-            summer_threshold = float(DEFAULT_SUMMER_THRESHOLD)
+        target = self._helper_value_with_fallback(
+            helper_key="target_temperature",
+            cfg=cfg,
+            default=float(DEFAULT_TARGET_TEMP),
+        )
+        summer_threshold = self._helper_value_with_fallback(
+            helper_key="summer_threshold",
+            cfg=cfg,
+            default=float(DEFAULT_SUMMER_THRESHOLD),
+        )
         aggressiveness = self._aggressiveness(cfg)
         house_inertia = self._house_inertia(cfg)
 
@@ -600,7 +785,6 @@ class PumpSteerSensor(RestoreEntity):
             math.ceil((PRICE_LOOKAHEAD_HOURS * 60) / max(interval_minutes, 1)),
         )
 
-        # Compute ramp_in based on the upcoming expensive period, not just next_cat.
         # When current=normal, next=normal but expensive is coming soon, the old logic
         # gave jump=0 → ramp_in=RAMP_MIN, so minutes_until_expensive never fit inside
         # the window and pre-brake never triggered. By targeting PRICE_EXPENSIVE when
@@ -738,8 +922,6 @@ class PumpSteerSensor(RestoreEntity):
                 pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
                 brake_temp = self._brake_temp(outdoor, delta_c=brake_delta)
                 fake_temp = pi_fake + (brake_temp - pi_fake) * factor
-                # Keep PI ticking even at near/full brake so dt does not jump
-                # when leaving expensive mode. This avoids abrupt integral steps.
                 mode = MODE_BRAKING
             else:
                 pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
@@ -768,14 +950,23 @@ class PumpSteerSensor(RestoreEntity):
             )
             return
 
-        # 5. Preheating / pre-brake before expensive period.
-        forecast_cold = self._forecast_is_cold(
-            summer_threshold,
-            forecast_temps,
-            hours=PRICE_LOOKAHEAD_HOURS,
-        )
+        # 5. Pre-brake / preheating before expensive period.
+        #
+        # These are two distinct behaviours with different trigger conditions:
+        #
+        # 5a. Pre-brake — pure price signal.
+        #     Ramp the brake in during the window before the expensive slot so
+        #     the brake is already engaged the moment the slot starts.
+        #     Weather data is irrelevant here: if the price is going expensive,
+        #     we brake regardless of outdoor temperature.
+        #
+        # 5b. Preheat-boost — forecast signal.
+        #     While prices are still normal and an expensive period is coming,
+        #     heat extra so the house has thermal mass to draw on.
+        #     Only makes sense when it is actually cold outside — boosting in
+        #     warm weather wastes energy without benefit.
 
-        if upcoming and forecast_cold:
+        if upcoming:
             minutes_until_expensive = self._minutes_until_expensive(
                 categories,
                 current_slot,
@@ -783,9 +974,10 @@ class PumpSteerSensor(RestoreEntity):
                 now,
             )
 
+            # 5a. Pre-brake: engage ramp when expensive is within ramp_in window.
             if (
                 minutes_until_expensive is not None
-                and minutes_until_expensive <= ramp_in
+                and minutes_until_expensive <= ramp_in + interval_minutes
             ):
                 factor = self._update_brake_ramp(True, now, ramp_in, ramp_out)
                 pi_demand = self._pi_output(
@@ -821,40 +1013,57 @@ class PumpSteerSensor(RestoreEntity):
                 )
                 return
 
-            base_demand = self._pi_output(target, indoor, outdoor, now, cfg)
-            boosted_demand = base_demand + PREHEAT_BOOST_C
-            fake_temp = max(
-                MIN_FAKE_TEMP,
-                min(MAX_FAKE_TEMP, outdoor - boosted_demand),
+            # 5b. Preheat-boost: heat extra while still cheap, only when cold.
+            forecast_cold = self._forecast_is_cold(
+                summer_threshold,
+                forecast_temps,
+                hours=PRICE_LOOKAHEAD_HOURS,
             )
+            if forecast_cold:
+                base_demand = self._pi_output(target, indoor, outdoor, now, cfg)
+                boost = (
+                    PREHEAT_BOOST_C if cfg.get("preheat_boost_enabled", True) else 0.0
+                )
+                boosted_demand = base_demand + boost
+                fake_temp = max(
+                    MIN_FAKE_TEMP,
+                    min(MAX_FAKE_TEMP, outdoor - boosted_demand),
+                )
 
-            self._update_brake_ramp(True, now, ramp_in, ramp_out)
+                self._update_brake_ramp(True, now, ramp_in, ramp_out)
 
-            self._set_state(
-                fake_temp,
-                MODE_PREHEAT,
-                {
-                    **self._base_attrs(
-                        indoor,
-                        target,
-                        outdoor,
-                        current_cat,
-                        aggressiveness,
-                        boosted_demand,
-                    ),
-                    "preheat_boost_c": PREHEAT_BOOST_C,
-                    "brake_factor": 0.0,
-                    "minutes_until_expensive": (
-                        round(minutes_until_expensive, 0)
-                        if minutes_until_expensive
-                        else None
-                    ),
-                    "upcoming_expensive": True,
-                },
-                now,
-            )
-            return
+                self._set_state(
+                    fake_temp,
+                    MODE_PREHEAT,
+                    {
+                        **self._base_attrs(
+                            indoor,
+                            target,
+                            outdoor,
+                            current_cat,
+                            aggressiveness,
+                            boosted_demand,
+                        ),
+                        "preheat_boost_c": round(boost, 1),
+                        "brake_factor": 0.0,
+                        "minutes_until_expensive": (
+                            round(minutes_until_expensive, 0)
+                            if minutes_until_expensive
+                            else None
+                        ),
+                        "upcoming_expensive": True,
+                    },
+                    now,
+                )
+                return
 
+        # Compute forecast_cold for bridge_short_dip if not already done above.
+        # (If upcoming=False the block above was skipped entirely.)
+        forecast_cold = self._forecast_is_cold(
+            summer_threshold,
+            forecast_temps,
+            hours=PRICE_LOOKAHEAD_HOURS,
+        )
         bridge_short_dip = upcoming and not forecast_cold and self._brake_ramp > 0.0
 
         # 6. Normal PI control.
@@ -884,54 +1093,118 @@ class PumpSteerSensor(RestoreEntity):
         cfg: Dict[str, Any],
         now: datetime,
     ) -> Tuple[List[float], List[str], int, int]:
-        """
-        Read price data from configured entities.
-
-        Backward compatibility:
-        - Older setups may expose both today and tomorrow on the same entity
-          using raw_today/raw_tomorrow or today/tomorrow.
-        - Newer setups typically expose:
-            electricity_price_entity -> current price state + attribute "today"
-            price_tomorrow_entity    -> attribute "tomorrow"
-        """
         today_entity_id = cfg.get("electricity_price_entity")
         tomorrow_entity_id = cfg.get("price_tomorrow_entity") or today_entity_id
 
         if not today_entity_id:
+            self._set_price_issue(
+                "missing_today_entity",
+                "PumpSteer price fetch failed: electricity_price_entity is not configured",
+            )
             return [], [], 60, 0
 
+        today_attr = get_attr(self.hass, today_entity_id, "today")
+        today_raw_attr = get_attr(self.hass, today_entity_id, "raw_today")
         raw_today = (
-            get_attr(self.hass, today_entity_id, "today")
-            or get_attr(self.hass, today_entity_id, "raw_today")
-            or []
+            today_attr
+            if isinstance(today_attr, list)
+            else today_raw_attr if isinstance(today_raw_attr, list) else []
         )
 
+        tomorrow_attr = get_attr(self.hass, tomorrow_entity_id, "tomorrow")
+        tomorrow_raw_attr = get_attr(self.hass, tomorrow_entity_id, "raw_tomorrow")
+        fallback_tomorrow_attr = get_attr(self.hass, today_entity_id, "tomorrow")
+        fallback_tomorrow_raw_attr = get_attr(
+            self.hass, today_entity_id, "raw_tomorrow"
+        )
         raw_tomorrow = (
-            get_attr(self.hass, tomorrow_entity_id, "tomorrow")
-            or get_attr(self.hass, tomorrow_entity_id, "raw_tomorrow")
-            or get_attr(self.hass, today_entity_id, "tomorrow")
-            or get_attr(self.hass, today_entity_id, "raw_tomorrow")
-            or []
+            tomorrow_attr
+            if isinstance(tomorrow_attr, list)
+            else (
+                tomorrow_raw_attr
+                if isinstance(tomorrow_raw_attr, list)
+                else (
+                    fallback_tomorrow_attr
+                    if isinstance(fallback_tomorrow_attr, list)
+                    else (
+                        fallback_tomorrow_raw_attr
+                        if isinstance(fallback_tomorrow_raw_attr, list)
+                        else []
+                    )
+                )
+            )
         )
 
         prices_raw = [*raw_today, *raw_tomorrow]
 
         if not prices_raw:
-            _LOGGER.warning(
-                "No price data from today entity '%s' and tomorrow entity '%s'",
-                today_entity_id,
-                tomorrow_entity_id,
-            )
+            if (
+                today_attr is None
+                and today_raw_attr is None
+                and tomorrow_attr is None
+                and tomorrow_raw_attr is None
+                and fallback_tomorrow_attr is None
+                and fallback_tomorrow_raw_attr is None
+            ):
+                self._set_price_issue(
+                    "missing_price_attributes",
+                    (
+                        "PumpSteer price fetch failed: no price list attributes found "
+                        f"(today='{today_entity_id}', tomorrow='{tomorrow_entity_id}', "
+                        "checked today/raw_today/tomorrow/raw_tomorrow)"
+                    ),
+                )
+            else:
+                unsupported_types = []
+                for label, value in (
+                    ("today", today_attr),
+                    ("raw_today", today_raw_attr),
+                    ("tomorrow", tomorrow_attr),
+                    ("raw_tomorrow", tomorrow_raw_attr),
+                    ("fallback_tomorrow", fallback_tomorrow_attr),
+                    ("fallback_raw_tomorrow", fallback_tomorrow_raw_attr),
+                ):
+                    if value is not None and not isinstance(value, list):
+                        unsupported_types.append(f"{label}={type(value).__name__}")
+                self._set_price_issue(
+                    "unsupported_price_format",
+                    (
+                        "PumpSteer price fetch failed: unsupported price sensor format "
+                        f"(today='{today_entity_id}', tomorrow='{tomorrow_entity_id}', "
+                        f"details={unsupported_types or ['no list entries']})"
+                    ),
+                )
             return [], [], 60, 0
 
         prices: List[float] = []
+        invalid_entries = 0
         for item in prices_raw:
             value = PumpSteerSensor._extract_price(item)
             if value is not None and math.isfinite(value):
                 prices.append(value)
+            else:
+                invalid_entries += 1
 
         if not prices:
+            self._set_price_issue(
+                "no_usable_prices",
+                (
+                    "PumpSteer price parsing failed: received raw entries but parsed 0 "
+                    f"usable numeric prices (today='{today_entity_id}', "
+                    f"tomorrow='{tomorrow_entity_id}', raw_count={len(prices_raw)}, "
+                    f"invalid_count={invalid_entries})"
+                ),
+            )
             return [], [], 60, 0
+        self._clear_price_issue(today_entity_id, tomorrow_entity_id)
+
+        if invalid_entries > 0:
+            _LOGGER.debug(
+                "PumpSteer price parsing skipped %d invalid entries (today='%s', tomorrow='%s')",
+                invalid_entries,
+                today_entity_id,
+                tomorrow_entity_id,
+            )
 
         today_prices: List[float] = []
         for item in raw_today:
@@ -987,7 +1260,6 @@ class PumpSteerSensor(RestoreEntity):
 
     @staticmethod
     def _extract_price(item: Any) -> Optional[float]:
-        """Extract a numeric price value from supported input formats."""
         if item is None:
             return None
 
@@ -1018,7 +1290,12 @@ class PumpSteerSensor(RestoreEntity):
         extra: Dict[str, Any],
         now: datetime,
     ) -> None:
-        """Store final state and attributes."""
+        if self._safe_mode_warned and mode != MODE_SAFE:
+            _LOGGER.info(
+                "PumpSteer exited SAFE MODE and returned to normal control (mode=%s)",
+                mode,
+            )
+            self._safe_mode_warned = False
         self._state = round(fake_temp, 1)
         self._attributes = {
             "mode": mode,
@@ -1034,6 +1311,5 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up PumpSteer sensor from a config entry."""
     sensor = PumpSteerSensor(hass, config_entry)
     async_add_entities([sensor], update_before_add=False)
