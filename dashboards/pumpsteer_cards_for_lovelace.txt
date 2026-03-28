@@ -12,7 +12,7 @@ sections:
             entities:
               - entity: sensor.pumpsteer_operating_mode
                 name: Mode
-              - entity: sensor.pumpsteer_price_category
+              - entity: sensor.pumpsteer_price
                 name: Price
               - entity: sensor.pumpsteer_is_saving
                 name: Saving
@@ -33,8 +33,9 @@ sections:
                 name: Summer Threshold
                 icon: mdi:weather-sunny
               - entity: number.pumpsteer_house_thermal_mass
-                name: House Thermal Mass
                 icon: mdi:home-thermometer
+                name:
+                  type: entity
       - type: entities
         title: Status Details
         show_header_toggle: false
@@ -82,6 +83,7 @@ sections:
           - entity: sensor.pumpsteer
             icon: mdi:thermometer-chevron-down
             name: Virtual Outdoor Temperature
+            secondary_info: last-changed
           - type: attribute
             entity: sensor.pumpsteer
             attribute: outdoor_temperature
@@ -129,6 +131,7 @@ sections:
             icon: mdi:chart-bell-curve
           - entity: sensor.elpris_spot_avgifter
             name: Price
+            secondary_info: last-changed
           - type: attribute
             entity: sensor.pumpsteer
             attribute: minutes_until_expensive
@@ -141,6 +144,7 @@ sections:
             name: Last Updated
             icon: mdi:clock-outline
           - entity: sensor.pumpsteer_operating_mode
+            secondary_info: last-changed
       - type: custom:mini-graph-card
         name: Virtual Outdoor Temperature
         icon: mdi:thermometer-lines
