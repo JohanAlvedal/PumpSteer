@@ -72,9 +72,9 @@ At level 0 the brake and all price logic is bypassed entirely. At higher levels,
 
 -----
 
-#### 🏠 House Thermal Mass
+#### 🏠 Brake Ramp Time
 
-`number.pumpsteer_house_thermal_mass` · Range: 0.5–10.0 · Step: 0.5
+`number.pumpsteer_brake_ramp_time` · Range: 0.5–10.0 · Step: 0.5
 
 Controls how long the brake ramp takes to fully engage. Higher value = slower, smoother transition into braking.
 
@@ -207,7 +207,7 @@ RAMP_MIN_MINUTES: Final[float] = 20.0   # floor — never shorter than this
 RAMP_MAX_MINUTES: Final[float] = 60.0   # ceiling — never longer than this
 ```
 
-Controls how long the brake takes to ramp in and out. The actual ramp time is computed from the **House Thermal Mass** slider:
+Controls how long the brake takes to ramp in and out. The actual ramp time is computed from the **Brake Ramp Time** slider:
 
 ```
 ramp_in = clamp(slider × RAMP_SCALE, RAMP_MIN, RAMP_MAX)
