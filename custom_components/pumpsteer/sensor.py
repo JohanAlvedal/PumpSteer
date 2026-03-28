@@ -186,20 +186,20 @@ class PumpSteerSensor(RestoreEntity):
         from homeassistant.helpers.restore_state import ExtraStoredData
 
         class _BrakeData(ExtraStoredData):
-            def __init__(self_, brake_ramp, brake_last_t, brake_last_expensive_t):
-                self_.brake_ramp = brake_ramp
-                self_.brake_last_t = brake_last_t
-                self_.brake_last_expensive_t = brake_last_expensive_t
+            def __init__(self, brake_ramp, brake_last_t, brake_last_expensive_t):
+                self.brake_ramp = brake_ramp
+                self.brake_last_t = brake_last_t
+                self.brake_last_expensive_t = brake_last_expensive_t
 
-            def as_dict(self_):
+            def as_dict(self):
                 return {
-                    _RESTORE_BRAKE_RAMP: self_.brake_ramp,
+                    _RESTORE_BRAKE_RAMP: self.brake_ramp,
                     _RESTORE_BRAKE_LAST_T: (
-                        self_.brake_last_t.isoformat() if self_.brake_last_t else None
+                        self.brake_last_t.isoformat() if self.brake_last_t else None
                     ),
                     _RESTORE_BRAKE_LAST_EXPENSIVE_T: (
-                        self_.brake_last_expensive_t.isoformat()
-                        if self_.brake_last_expensive_t
+                        self.brake_last_expensive_t.isoformat()
+                        if self.brake_last_expensive_t
                         else None
                     ),
                 }
@@ -1108,7 +1108,9 @@ class PumpSteerSensor(RestoreEntity):
         raw_today = (
             today_attr
             if isinstance(today_attr, list)
-            else today_raw_attr if isinstance(today_raw_attr, list) else []
+            else today_raw_attr
+            if isinstance(today_raw_attr, list)
+            else []
         )
 
         tomorrow_attr = get_attr(self.hass, tomorrow_entity_id, "tomorrow")
