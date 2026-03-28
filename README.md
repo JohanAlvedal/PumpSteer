@@ -103,7 +103,7 @@ This approach is commonly used to influence heat pump behavior without modifying
 
 In setups like mine, this is done using an external device such as  
 👉 Ohmigo Ohm On WiFi Plus  
-🔗 [Ohmigo Ohm On WiFi Plus](https://www.ohmigo.io/en/product-page/ohmigo-ohm-on-wifi)
+🔗 [Ohmigo Ohm On WiFi Plus](https://www.ohmigo.io/product-page/ohm-on-wifi-plus)
 
 This device is connected to the heat pump’s outdoor temperature sensor circuit and allows Home Assistant to adjust the **resistance** seen by the heat pump.
 
