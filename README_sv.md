@@ -92,6 +92,66 @@ Använd endast PumpSteer om du förstår hur det fungerar och har verifierat att
 3. Migrera därefter fullt ut  
 
 ---
+## 🔧 Hur PumpSteer styr din värmepump
+
+PumpSteer styr **inte** din värmepump via Modbus, molntjänster eller börvärden.
+
+Istället fungerar den genom att påverka **utetemperaturgivaren**.
+
+Denna metod används ofta för att påverka värmepumpens beteende utan att ändra intern firmware eller styrsystem.
+
+I min setup görs detta med en extern enhet som  
+👉 Ohmigo Ohm On WiFi Plus  
+🔗 [Ohmigo Ohm On WiFi Plus]([https://www.ohmigo.io/en/product-page/ohmigo-ohm-on-wifi](https://www.ohmigo.io/product-page/ohm-on-wifi-plus))
+
+Enheten kopplas in på värmepumpens utetemperaturgivare och gör det möjligt för Home Assistant att justera det **motstånd** som värmepumpen ser.
+
+Genom att ändra motståndet simuleras en annan utetemperatur för värmepumpen.
+
+---
+
+### 🧠 Så fungerar det
+
+PumpSteer beräknar en **virtuell utetemperatur** baserat på:
+
+- Inomhustemperatur  
+- Måltemperatur  
+- Elpris  
+- Väderprognos  
+- Vald aggressivitetsnivå  
+
+Detta värde skickas sedan till den externa enheten (t.ex. Ohm On WiFi Plus), som manipulerar givarsignalen.
+
+👉 Värmepumpen tror att utetemperaturen har förändrats  
+👉 Och justerar värmen därefter  
+
+---
+
+### ⚡ Vad detta möjliggör
+
+- Minska uppvärmning när elen är dyr  
+- Förvärma när elen är billig  
+- Behålla komfort som högsta prioritet  
+- Optimera utan att ändra värmepumpens interna styrning  
+
+---
+
+### 🏠 Exempel på systemarkitektur
+
+1. Home Assistant kör PumpSteer  
+2. PumpSteer beräknar virtuell utetemperatur  
+3. Ohm On WiFi Plus justerar motståndet  
+4. Värmepumpen reagerar automatiskt  
+
+---
+
+### ⚠️ Viktigt
+
+- Denna metod kräver hårdvara som kan påverka givarsignalen  
+- Installation beror på din värmepumpsmodell  
+- Kontrollera alltid inkoppling och säkerhet noggrant
+
+---
 
 ## Nyheter i 2.0.0
 
