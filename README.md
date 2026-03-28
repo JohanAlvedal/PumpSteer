@@ -1,4 +1,4 @@
-# 🔥 PumpSteer 2.0.0 – Smart Heat Pump Optimization
+# 🔥 PumpSteer 2.0 – Smart Heat Pump Optimization
 
 ➡️ Swedish version: [README (Svenska)](README_sv.md)
 
