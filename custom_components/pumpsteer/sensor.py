@@ -21,6 +21,7 @@ from .electricity_price import (
     price_category_index,
 )
 from .holiday import async_update_holiday
+from .ohmigo import async_push_ohmigo
 from .settings import (
     BRAKE_DELTA_C,
     BRAKE_HOLD_MINUTES,
@@ -102,6 +103,7 @@ class PumpSteerSensor(RestoreEntity):
         self._config_entry = config_entry
         self._state: Optional[float] = None
         self._attributes: Dict[str, Any] = {}
+        self._ohmigo_last_push = None
 
         self._pi = PIController()
 
@@ -829,7 +831,7 @@ class PumpSteerSensor(RestoreEntity):
             self._prev_aggressiveness = None
 
             fake_temp = outdoor
-            self._set_state(
+            await self._set_state(
                 fake_temp,
                 MODE_SUMMER,
                 {
@@ -858,7 +860,7 @@ class PumpSteerSensor(RestoreEntity):
             fake_temp = outdoor + (brake_temp - outdoor) * factor
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
 
-            self._set_state(
+            await self._set_state(
                 fake_temp,
                 MODE_PRECOOL,
                 {
@@ -891,7 +893,7 @@ class PumpSteerSensor(RestoreEntity):
             demand = self._pi_output(target, indoor, outdoor, now, cfg)
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
 
-            self._set_state(
+            await self._set_state(
                 fake_temp,
                 MODE_PI,
                 {
@@ -948,7 +950,7 @@ class PumpSteerSensor(RestoreEntity):
 
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
 
-            self._set_state(
+            await self._set_state(
                 fake_temp,
                 mode,
                 {
@@ -1011,7 +1013,7 @@ class PumpSteerSensor(RestoreEntity):
                 fake_temp = pi_fake + (brake_temp - pi_fake) * factor
                 fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
 
-                self._set_state(
+                await self._set_state(
                     fake_temp,
                     MODE_PREHEAT,
                     {
@@ -1050,7 +1052,7 @@ class PumpSteerSensor(RestoreEntity):
 
                 self._update_brake_ramp(True, now, ramp_in, ramp_out)
 
-                self._set_state(
+                await self._set_state(
                     fake_temp,
                     MODE_PREHEAT,
                     {
@@ -1100,7 +1102,7 @@ class PumpSteerSensor(RestoreEntity):
         )
 
         mode = MODE_HOLIDAY if holiday else MODE_PI
-        self._set_state(
+        await self._set_state(
             fake_temp,
             mode,
             {
@@ -1315,7 +1317,7 @@ class PumpSteerSensor(RestoreEntity):
 
         return None
 
-    def _set_state(
+    async def _set_state(
         self,
         fake_temp: float,
         mode: str,
@@ -1336,6 +1338,13 @@ class PumpSteerSensor(RestoreEntity):
             "last_updated": now.isoformat(),
             **extra,
         }
+
+        self._ohmigo_last_push = await async_push_ohmigo(
+            self.hass,
+            self._config_entry,
+            fake_temp,
+            self._ohmigo_last_push,
+        )
 
 
 async def async_setup_entry(

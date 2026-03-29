@@ -1,9 +1,5 @@
 import logging
-
-import voluptuous as vol
-from homeassistant import config_entries
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.helpers.selector import selector
+from typing import Final, List
 
 _LOGGER = logging.getLogger(__name__)
 
