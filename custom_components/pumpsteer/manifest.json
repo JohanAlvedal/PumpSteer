@@ -1,15 +1,15 @@
 {
   "domain": "pumpsteer",
   "name": "PumpSteer",
+  "after_dependencies": [
+    "logbook"
+  ],
   "codeowners": [
     "@johanalvedal"
   ],
   "config_flow": true,
   "dependencies": [
     "recorder"
-  ],
-  "after_dependencies": [
-    "logbook"
   ],
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "integration_type": "hub",
