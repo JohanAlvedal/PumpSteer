@@ -8,6 +8,9 @@
   "dependencies": [
     "recorder"
   ],
+  "after_dependencies": [
+    "logbook"
+  ],
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "integration_type": "hub",
   "iot_class": "local_polling",
