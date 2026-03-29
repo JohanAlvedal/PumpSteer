@@ -20,8 +20,8 @@ PRECOOL_MARGIN: Final[float] = 3.0
 PID_KP: Final[float] = 2.4
 PID_KI: Final[float] = 0.035
 PID_KD: Final[float] = 0.0
-PID_INTEGRAL_CLAMP: Final[float] = 6.0
-PID_OUTPUT_CLAMP: Final[float] = 12.0
+PID_INTEGRAL_CLAMP: Final[float] = 4
+PID_OUTPUT_CLAMP: Final[float] = 10
 
 # === PRICE CLASSIFICATION ===
 # Default thresholds use P30/P80 and a 72-hour trailing history window.
