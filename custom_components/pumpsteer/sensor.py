@@ -75,6 +75,13 @@ _RESTORE_BRAKE_RAMP = "brake_ramp"
 _RESTORE_BRAKE_LAST_T = "brake_last_t"
 _RESTORE_BRAKE_LAST_EXPENSIVE_T = "brake_last_expensive_t"
 
+# Maximum dt_seconds allowed in _update_brake_ramp.
+# Caps the step size so a long gap between mode transitions (e.g. normal →
+# braking at a slot boundary, or braking → normal when price is reclassified)
+# does not cause a large jump in brake_ramp in a single cycle.
+# 60 s = one polling cycle → max ±5% per step at ramp_in/out = 20 min.
+_BRAKE_RAMP_MAX_DT_SECONDS: float = 60.0
+
 
 class PumpSteerSensor(RestoreEntity):
     """
@@ -108,9 +115,13 @@ class PumpSteerSensor(RestoreEntity):
         self._p30: float = 0.0
         self._p80: float = 0.0
 
-        # Cache price thresholds to avoid recorder/history lookups on every poll.
-        # Recompute at most once per hour, after restart, or if the price entity changes.
-        self._price_thresholds_cached_at: Optional[datetime] = None
+        # Cache price thresholds once per calendar day per entity.
+        # Recomputing every hour caused mid-slot reclassification: P80 could
+        # shift just enough to flip an ongoing expensive slot to normal,
+        # releasing the brake unexpectedly. Caching per day means thresholds
+        # are stable throughout the day and only refresh when new price data
+        # arrives at midnight.
+        self._price_thresholds_cached_date: Optional[str] = None  # "YYYY-MM-DD"
         self._price_thresholds_entity_id: Optional[str] = None
         self._cached_p30: float = 0.0
         self._cached_p80: float = 0.0
@@ -642,12 +653,18 @@ class PumpSteerSensor(RestoreEntity):
         ramp_out: float,
         hold_minutes: float = BRAKE_HOLD_MINUTES,
     ) -> float:
-        """Update brake ramp factor with optional hold time."""
+        """Update brake ramp factor with optional hold time.
+
+        dt_seconds is capped to _BRAKE_RAMP_MAX_DT_SECONDS (60 s) so that a
+        long gap between polling cycles — e.g. at a mode transition or after an
+        HA restart — never causes a large jump in brake_ramp in a single step.
+        This applies equally to ramp-in and ramp-out.
+        """
         if self._brake_last_t is None:
-            dt_seconds = 60.0
+            dt_seconds = _BRAKE_RAMP_MAX_DT_SECONDS
         else:
             dt_seconds = max((now - self._brake_last_t).total_seconds(), 1.0)
-            dt_seconds = min(dt_seconds, 60.0)
+            dt_seconds = min(dt_seconds, _BRAKE_RAMP_MAX_DT_SECONDS)
 
         self._brake_last_t = now
 
@@ -1068,9 +1085,19 @@ class PumpSteerSensor(RestoreEntity):
         bridge_short_dip = upcoming and not forecast_cold and self._brake_ramp > 0.0
 
         # 6. Normal PI control.
+        # If the brake is still engaged (e.g. price was just reclassified from
+        # expensive to normal mid-slot), pass hold_minutes so the brake ramps
+        # out gracefully instead of being released immediately.
+        brake_hold = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
         demand = self._pi_output(target, indoor, outdoor, now, cfg)
         fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
-        self._update_brake_ramp(bridge_short_dip, now, ramp_in, ramp_out)
+        self._update_brake_ramp(
+            bridge_short_dip,
+            now,
+            ramp_in,
+            ramp_out,
+            hold_minutes=brake_hold if self._brake_ramp > 0.0 else 0.0,
+        )
 
         mode = MODE_HOLIDAY if holiday else MODE_PI
         self._set_state(
@@ -1215,16 +1242,17 @@ class PumpSteerSensor(RestoreEntity):
             if value is not None and math.isfinite(value):
                 today_prices.append(value)
 
-        recalc_thresholds = False
-
-        if self._price_thresholds_cached_at is None:
-            recalc_thresholds = True
-        elif self._price_thresholds_entity_id != today_entity_id:
-            recalc_thresholds = True
-        else:
-            cache_age_seconds = (now - self._price_thresholds_cached_at).total_seconds()
-            if cache_age_seconds >= 3600:
-                recalc_thresholds = True
+        # Cache price thresholds once per calendar day per entity.
+        # Recomputing hourly caused mid-slot reclassification: P80 could shift
+        # just enough to flip an ongoing expensive slot to normal, releasing the
+        # brake unexpectedly. Daily caching keeps thresholds stable throughout
+        # the day; they refresh at midnight when new price data arrives.
+        today_date = now.strftime("%Y-%m-%d")
+        recalc_thresholds = (
+            self._price_thresholds_cached_date is None
+            or self._price_thresholds_entity_id != today_entity_id
+            or self._price_thresholds_cached_date != today_date
+        )
 
         if recalc_thresholds:
             self._cached_p30, self._cached_p80 = await async_get_price_thresholds(
@@ -1232,13 +1260,14 @@ class PumpSteerSensor(RestoreEntity):
                 today_entity_id,
                 today_prices or prices,
             )
-            self._price_thresholds_cached_at = now
+            self._price_thresholds_cached_date = today_date
             self._price_thresholds_entity_id = today_entity_id
             _LOGGER.debug(
-                "Recomputed price thresholds: p30=%.3f p80=%.3f for entity %s",
+                "Recomputed price thresholds: p30=%.3f p80=%.3f for entity %s (date=%s)",
                 self._cached_p30,
                 self._cached_p80,
                 today_entity_id,
+                today_date,
             )
 
         self._p30 = self._cached_p30
