@@ -52,7 +52,7 @@ NUMBER_ENTITIES: tuple[NumberEntityDescription, ...] = (
     ),
     NumberEntityDescription(
         key="house_inertia",
-        name="House Thermal Mass",
+        name="Brake Ramp Time",
         icon="mdi:home-thermometer",
         native_min_value=0.5,
         native_max_value=10.0,

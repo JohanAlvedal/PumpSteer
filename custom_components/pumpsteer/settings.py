@@ -3,7 +3,7 @@ from typing import Final, List
 
 _LOGGER = logging.getLogger(__name__)
 
-PUMPSTEER_VERSION: Final[str] = "2.0.2"
+PUMPSTEER_VERSION: Final[str] = "2.0.4"
 
 # === FAKE TEMPERATURE LIMITS ===
 MIN_FAKE_TEMP: Final[float] = -20.0
@@ -20,8 +20,8 @@ PRECOOL_MARGIN: Final[float] = 3.0
 PID_KP: Final[float] = 2.4
 PID_KI: Final[float] = 0.035
 PID_KD: Final[float] = 0.0
-PID_INTEGRAL_CLAMP: Final[float] = 6.0
-PID_OUTPUT_CLAMP: Final[float] = 12.0
+PID_INTEGRAL_CLAMP: Final[float] = 4
+PID_OUTPUT_CLAMP: Final[float] = 10
 
 # === PRICE CLASSIFICATION ===
 # Default thresholds use P30/P80 and a 72-hour trailing history window.
@@ -98,6 +98,14 @@ DEFAULT_AGGRESSIVENESS: Final[float] = 3.0
 DEFAULT_HOUSE_INERTIA: Final[float] = 2.0
 DEFAULT_TARGET_TEMP: Final[float] = 21.0
 HOLIDAY_TEMP: Final[float] = 16.0
+
+# === OHMIGO INTEGRATION ===
+# Default minimum interval between pushes to the Ohmigo number entity.
+# Users can override this per-installation in options (ohmigo_interval_minutes).
+OHMIGO_DEFAULT_INTERVAL_MINUTES: Final[float] = 5.0
+
+# Hysteresis: skip push when the new value is within this many °C of the current value.
+OHMIGO_HYSTERESIS_C: Final[float] = 0.2
 
 # === SANITY BOUNDS ===
 MIN_REASONABLE_TEMP: Final[float] = -30.0
