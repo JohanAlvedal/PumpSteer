@@ -159,6 +159,44 @@ Detta värde skickas sedan till den externa enheten (t.ex. Ohm On WiFi Plus), so
 
 ---
 
+### 🔌 Inbyggd Ohmigo-integration
+
+> ⚠️ Denna funktion är ny och betraktas som experimentell.  
+> Beteendet kan förändras och vissa edge cases kan finnas kvar.
+
+PumpSteer kan direkt skicka den beräknade virtuella utetemperaturen till en Ohmigo-enhet.
+
+#### Hur det fungerar
+
+- PumpSteer beräknar den virtuella utetemperaturen  
+- Värdet skickas automatiskt till vald Ohmigo `number`-entitet  
+- Värmepumpen reagerar via den ändrade sensorsignalen  
+
+#### Beteende
+
+- Värden avrundas till **0.5 °C**
+- Små förändringar (< ~0.2 °C) ignoreras (hysteresis)
+- Uppdateringar begränsas av ett intervall
+- Push kan slås av/på via en switch
+
+#### Konfiguration
+
+Ställs in via integrationens inställningar:
+
+- `ohmigo_entity` → målentitet  
+- `ohmigo_interval_minutes` → minsta tid mellan uppdateringar  
+
+Om ingen entitet anges är funktionen avstängd.
+
+#### Switch
+
+`switch.pumpsteer_ohmigo_enabled`
+
+Gör det möjligt att slå av/på push utan att ändra inställningar.
+
+---
+
+
 ### ⚠️ Viktigt
 
 - Denna metod kräver hårdvara som kan påverka givarsignalen  
