@@ -23,6 +23,7 @@ async def async_setup_entry(
         [
             PumpSteerHolidaySwitch(entry),
             PumpSteerNotificationsSwitch(entry),
+            PumpSteerOhmigoSwitch(entry),
         ]
     )
 
@@ -73,6 +74,43 @@ class PumpSteerNotificationsSwitch(RestoreEntity, SwitchEntity):
         self._attr_name = "Notifications"
         self._attr_icon = "mdi:bell"
         self._attr_is_on = True  # ON by default
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="PumpSteer",
+            manufacturer="Johan Alvedal",
+            model="PumpSteer",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        return self._attr_is_on
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None:
+            self._attr_is_on = last.state == "on"
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self._attr_is_on = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self._attr_is_on = False
+        self.async_write_ha_state()
+
+
+class PumpSteerOhmigoSwitch(RestoreEntity, SwitchEntity):
+    """Switch to enable or disable automatic Ohmigo setpoint push."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, entry: ConfigEntry) -> None:
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_ohmigo_enabled"
+        self._attr_name = "Ohmigo Push"
+        self._attr_icon = "mdi:thermometer-lines"
+        self._attr_is_on = True  # ON by default when ohmigo_entity is configured
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name="PumpSteer",
