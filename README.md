@@ -160,6 +160,44 @@ This calculated value is then sent to the external device (e.g. Ohm On WiFi Plus
 
 ---
 
+### 🔌 Built-in Ohmigo integration
+
+> ⚠️ This feature is new and considered experimental.  
+> Behavior may change and edge cases may still exist.
+
+PumpSteer can directly push the calculated virtual outdoor temperature to an Ohmigo device.
+
+This means you **do not need a separate Home Assistant automation**.
+
+#### How it works
+
+- PumpSteer calculates the virtual outdoor temperature  
+- The value is automatically pushed to the configured Ohmigo `number` entity  
+- The heat pump reacts via the adjusted sensor signal  
+
+#### Behavior
+
+- Values are rounded to nearest **0.5 °C**
+- Small changes (< ~0.2 °C) are ignored (hysteresis)
+- Updates are throttled (configurable interval)
+- Push can be enabled/disabled via a switch
+
+#### Configuration
+
+Configured in integration options:
+
+- `ohmigo_entity` → target entity (e.g. `number.ohmigo_temperature`)
+- `ohmigo_interval_minutes` → minimum time between updates
+
+If no entity is set, the feature is disabled.
+
+#### Switch
+
+`switch.pumpsteer_ohmigo_enabled`
+
+Allows you to enable/disable pushing without changing settings.
+
+---
 ### ⚠️ Important
 
 - This method requires hardware capable of influencing the outdoor sensor signal  
