@@ -1,4 +1,4 @@
-# 🔥 PumpSteer 2.0.0 – Smart styrning av värmepump
+# 🔥 PumpSteer 2.0 – Smart styrning av värmepump
 
 ➡️ Engelsk version: [README](README.md)
 
@@ -16,10 +16,19 @@ Den minskar energikostnaden när elen är dyr — samtidigt som inomhuskomforten
 
 ## 📸 Dashboard – exempel
 
-![PumpSteer 1](docs/img/01.png)
-![PumpSteer 2](docs/img/02.png)
-![PumpSteer 3](docs/img/03.png)
-![PumpSteer 4](docs/img/04.png)
+<table>
+  <tr>
+    <td><img src="docs/img/01.png"/></td>
+    <td><img src="docs/img/02.png"/></td>
+    <td><img src="docs/img/03.png"/></td>
+  </tr>
+  <tr>
+    <td><img src="docs/img/04.png"/></td>
+    <td><img src="docs/img/05.png"/></td>
+    <td></td>
+  </tr>
+</table>
+
 
 ---
 
@@ -38,6 +47,11 @@ Den minskar energikostnaden när elen är dyr — samtidigt som inomhuskomforten
 - [Säkerhet](#säkerhet)
 
 ---
+
+## Configuration
+- 🇸🇪 [Här](docs/Configuration_sv.md)
+
+___
 
 ## Viktigt – inte en vanlig uppgradering ⚠️
 
@@ -90,6 +104,104 @@ Använd endast PumpSteer om du förstår hur det fungerar och har verifierat att
 1. Installera 2.0.0  
 2. Observera i 24–48 timmar  
 3. Migrera därefter fullt ut  
+
+---
+## 🔧 Hur PumpSteer styr din värmepump
+
+PumpSteer styr **inte** din värmepump via Modbus, molntjänster eller börvärden.
+
+Istället fungerar den genom att påverka **utetemperaturgivaren**.
+
+Denna metod används ofta för att påverka värmepumpens beteende utan att ändra intern firmware eller styrsystem.
+
+I min setup görs detta med en extern enhet som  
+👉 Ohmigo Ohm On WiFi Plus  
+🔗 [Ohmigo Ohm On WiFi Plus](https://www.ohmigo.io/product-page/ohm-on-wifi-plus)
+
+Enheten kopplas in på värmepumpens utetemperaturgivare och gör det möjligt för Home Assistant att justera det **motstånd** som värmepumpen ser.
+
+Genom att ändra motståndet simuleras en annan utetemperatur för värmepumpen.
+
+---
+
+### 🧠 Så fungerar det
+
+PumpSteer beräknar en **virtuell utetemperatur** baserat på:
+
+- Inomhustemperatur  
+- Måltemperatur  
+- Elpris  
+- Väderprognos  
+- Vald aggressivitetsnivå  
+
+Detta värde skickas sedan till den externa enheten (t.ex. Ohm On WiFi Plus), som manipulerar givarsignalen.
+
+👉 Värmepumpen tror att utetemperaturen har förändrats  
+👉 Och justerar värmen därefter  
+
+---
+
+### ⚡ Vad detta möjliggör
+
+- Minska uppvärmning när elen är dyr  
+- Förvärma när elen är billig  
+- Behålla komfort som högsta prioritet  
+- Optimera utan att ändra värmepumpens interna styrning  
+
+---
+
+### 🏠 Exempel på systemarkitektur
+
+1. Home Assistant kör PumpSteer  
+2. PumpSteer beräknar virtuell utetemperatur  
+3. Ohm On WiFi Plus justerar motståndet  
+4. Värmepumpen reagerar automatiskt  
+
+---
+
+### 🔌 Inbyggd Ohmigo-integration
+
+> ⚠️ Denna funktion är ny och betraktas som experimentell.  
+> Beteendet kan förändras och vissa edge cases kan finnas kvar.
+
+PumpSteer kan direkt skicka den beräknade virtuella utetemperaturen till en Ohmigo-enhet.
+
+#### Hur det fungerar
+
+- PumpSteer beräknar den virtuella utetemperaturen  
+- Värdet skickas automatiskt till vald Ohmigo `number`-entitet  
+- Värmepumpen reagerar via den ändrade sensorsignalen  
+
+#### Beteende
+
+- Värden avrundas till **0.5 °C**
+- Små förändringar (< ~0.2 °C) ignoreras (hysteresis)
+- Uppdateringar begränsas av ett intervall
+- Push kan slås av/på via en switch
+
+#### Konfiguration
+
+Ställs in via integrationens inställningar:
+
+- `ohmigo_entity` → målentitet  
+- `ohmigo_interval_minutes` → minsta tid mellan uppdateringar  
+
+Om ingen entitet anges är funktionen avstängd.
+
+#### Switch
+
+`switch.pumpsteer_ohmigo_enabled`
+
+Gör det möjligt att slå av/på push utan att ändra inställningar.
+
+---
+
+
+### ⚠️ Viktigt
+
+- Denna metod kräver hårdvara som kan påverka givarsignalen  
+- Installation beror på din värmepumpsmodell  
+- Kontrollera alltid inkoppling och säkerhet noggrant
 
 ---
 

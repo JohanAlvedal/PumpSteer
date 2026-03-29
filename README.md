@@ -1,4 +1,4 @@
-# 🔥 PumpSteer 2.0.0 – Smart Heat Pump Optimization
+# 🔥 PumpSteer 2.0 – Smart Heat Pump Optimization
 
 ➡️ Swedish version: [README (Svenska)](README_sv.md)
 
@@ -16,10 +16,19 @@ It reduces energy cost when electricity is expensive — while protecting indoor
 
 ## 📸 Dashboard Preview
 
-![PumpSteer 1](docs/img/01.png)
-![PumpSteer 2](docs/img/02.png)
-![PumpSteer 3](docs/img/03.png)
-![PumpSteer 4](docs/img/04.png)
+<table>
+  <tr>
+    <td><img src="docs/img/01.png"/></td>
+    <td><img src="docs/img/02.png"/></td>
+    <td><img src="docs/img/03.png"/></td>
+  </tr>
+  <tr>
+    <td><img src="docs/img/04.png"/></td>
+    <td><img src="docs/img/05.png"/></td>
+    <td></td>
+  </tr>
+</table>
+
 
 ---
 
@@ -38,6 +47,11 @@ It reduces energy cost when electricity is expensive — while protecting indoor
 - [Safety](#safety--disclaimer)
 
 ---
+
+## Configuration
+- 🇬🇧 [Here](docs/Configuration.md)
+
+___
 
 ## Important – Not a Drop-in Upgrade ⚠️
 
@@ -91,6 +105,104 @@ Only use PumpSteer if you understand how it works and have verified that it func
 2. Observe for 24–48h  
 3. Then migrate fully  
 
+
+---
+## 🔧 How PumpSteer Controls Your Heat Pump
+
+PumpSteer does **not** control your heat pump via Modbus, cloud APIs, or thermostat setpoints.
+
+Instead, it works by influencing the **outdoor temperature sensor input**.
+
+This approach is commonly used to influence heat pump behavior without modifying internal firmware or control systems.
+
+In setups like mine, this is done using an external device such as  
+👉 Ohmigo Ohm On WiFi Plus  
+🔗 [Ohmigo Ohm On WiFi Plus](https://www.ohmigo.io/product-page/ohm-on-wifi-plus)
+
+This device is connected to the heat pump’s outdoor temperature sensor circuit and allows Home Assistant to adjust the **resistance** seen by the heat pump.
+
+By changing the resistance, the device simulates a different outdoor temperature for the heat pump.
+
+---
+
+### 🧠 How it works
+
+PumpSteer calculates a **virtual outdoor temperature** based on:
+
+- Indoor temperature  
+- Target temperature  
+- Electricity price  
+- Weather forecast  
+- Selected aggressiveness level  
+
+This calculated value is then sent to the external device (e.g. Ohm On WiFi Plus), which manipulates the sensor signal.
+
+👉 The heat pump believes the outdoor temperature has changed  
+👉 And adjusts heating accordingly  
+
+---
+
+### ⚡ What this enables
+
+- Reduce heating during expensive electricity hours  
+- Preheat when electricity is cheap  
+- Maintain indoor comfort as top priority  
+- Optimize without modifying the heat pump’s internal control  
+
+---
+
+### 🏠 Example system architecture
+
+1. Home Assistant runs PumpSteer  
+2. PumpSteer calculates virtual outdoor temperature  
+3. Ohm On WiFi Plus adjusts resistance  
+4. Heat pump reacts automatically  
+
+---
+
+### 🔌 Built-in Ohmigo integration
+
+> ⚠️ This feature is new and considered experimental.  
+> Behavior may change and edge cases may still exist.
+
+PumpSteer can directly push the calculated virtual outdoor temperature to an Ohmigo device.
+
+This means you **do not need a separate Home Assistant automation**.
+
+#### How it works
+
+- PumpSteer calculates the virtual outdoor temperature  
+- The value is automatically pushed to the configured Ohmigo `number` entity  
+- The heat pump reacts via the adjusted sensor signal  
+
+#### Behavior
+
+- Values are rounded to nearest **0.5 °C**
+- Small changes (< ~0.2 °C) are ignored (hysteresis)
+- Updates are throttled (configurable interval)
+- Push can be enabled/disabled via a switch
+
+#### Configuration
+
+Configured in integration options:
+
+- `ohmigo_entity` → target entity (e.g. `number.ohmigo_temperature`)
+- `ohmigo_interval_minutes` → minimum time between updates
+
+If no entity is set, the feature is disabled.
+
+#### Switch
+
+`switch.pumpsteer_ohmigo_enabled`
+
+Allows you to enable/disable pushing without changing settings.
+
+---
+### ⚠️ Important
+
+- This method requires hardware capable of influencing the outdoor sensor signal  
+- Installation depends on your heat pump model  
+- Always verify wiring and safety before use  
 ---
 
 ## What's New in 2.0.0

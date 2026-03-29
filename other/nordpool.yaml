@@ -15,9 +15,6 @@
 ##   (stora attribut, ingen historik behövs).
 ##   Behåll sensor.elpris_chart för historik.
 ##
-## SVOTC-konfiguration (input_text i 00_helpers.yaml):
-##   svotc_source_price_today    -> sensor.elpris_today
-##   svotc_source_price_tomorrow -> sensor.elpris_tomorrow
 ###############################################################################
 
 ###############################################################################
