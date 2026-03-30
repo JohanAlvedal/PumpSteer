@@ -819,7 +819,7 @@ class PumpSteerSensor(RestoreEntity):
         ramp_in = self._compute_ramp_minutes(
             current_cat, ramp_target_cat, house_inertia
         )
-        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.5)
+        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.7)
 
         comfort_floor = self._comfort_floor(target, aggressiveness)
         forecast_temps = await self._forecast_temps()
@@ -1087,19 +1087,28 @@ class PumpSteerSensor(RestoreEntity):
         bridge_short_dip = upcoming and not forecast_cold and self._brake_ramp > 0.0
 
         # 6. Normal PI control.
-        # If the brake is still engaged (e.g. price was just reclassified from
-        # expensive to normal mid-slot), pass hold_minutes so the brake ramps
-        # out gracefully instead of being released immediately.
+        # If the brake is still ramping out (for example after an expensive period
+        # or during a bridged short dip), blend fake_temp between pi_fake and
+        # brake_temp so the ramp-out is visible in the actual output.
         brake_hold = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
-        demand = self._pi_output(target, indoor, outdoor, now, cfg)
-        fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
-        self._update_brake_ramp(
+
+        pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
+        pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
+
+        factor = self._update_brake_ramp(
             bridge_short_dip,
             now,
             ramp_in,
             ramp_out,
             hold_minutes=brake_hold if self._brake_ramp > 0.0 else 0.0,
         )
+
+        if factor > 0.0:
+            brake_temp = self._brake_temp(outdoor)
+            fake_temp = pi_fake + (brake_temp - pi_fake) * factor
+            fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
+        else:
+            fake_temp = pi_fake
 
         mode = MODE_HOLIDAY if holiday else MODE_PI
         await self._set_state(
@@ -1112,8 +1121,12 @@ class PumpSteerSensor(RestoreEntity):
                     outdoor,
                     current_cat,
                     aggressiveness,
-                    demand,
+                    pi_demand,
                 ),
+                "brake_factor": round(factor, 3),
+                "ramp_in_minutes": round(ramp_in, 1),
+                "ramp_out_minutes": round(ramp_out, 1),
+                "bridge_short_dip": bridge_short_dip,
             },
             now,
         )
