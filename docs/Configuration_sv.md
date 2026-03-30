@@ -134,7 +134,7 @@ Sänker måltemperaturen till `HOLIDAY_TEMP` (standard 16 °C). PI och bromslogi
 
 ## settings.py
 
-Dessa inställningar kräver ändring i `custom_components/pumpsteer/settings.py` och omladdning av integrationen.
+Dessa inställningar kräver ändring i `custom_components/pumpsteer/settings.py` och kräver omlstart av Home Assistant.
 
 ---
 
@@ -149,9 +149,9 @@ Gränser för den fejkade utetemperaturen.
 
 **Exempel:**
 
-* Högre `MAX_FAKE_TEMP` = tillåter varmare signal
+* Högre `MAX_FAKE_TEMP` = tillåter varmare
 * Lägre `MAX_FAKE_TEMP` = begränsar uppåt
-* Lägre `MIN_FAKE_TEMP` = tillåter kallare signal
+* Lägre `MIN_FAKE_TEMP` = tillåter kallare
 * Högre `MIN_FAKE_TEMP` = begränsar nedåt
 
 ---
