@@ -66,6 +66,7 @@ SW_VERSION = get_version()
 MODE_SUMMER = "summer_mode"
 MODE_PRECOOL = "precool"
 MODE_PREHEAT = "preheating"
+MODE_PREBRAKE = "pre_braking"
 MODE_BRAKING = "braking"
 MODE_PI = "normal"
 MODE_HOLIDAY = "holiday"
@@ -108,6 +109,7 @@ class PumpSteerSensor(RestoreEntity):
         self._pi = PIController()
 
         self._brake_ramp: float = 0.0
+        self._preheat_ramp: float = 0.0
         self._brake_last_t: Optional[datetime] = None
         self._brake_last_expensive_t: Optional[datetime] = None
         self._ramp_in_minutes: float = 15.0
@@ -627,6 +629,7 @@ class PumpSteerSensor(RestoreEntity):
 
         self._pi.reset(now)
         self._brake_ramp = 0.0
+        self._preheat_ramp = 0.0
         self._brake_last_t = None
         self._brake_last_expensive_t = None
 
@@ -686,6 +689,24 @@ class PumpSteerSensor(RestoreEntity):
 
         self._brake_ramp = max(0.0, min(1.0, self._brake_ramp))
         return self._brake_ramp
+
+    def _update_preheat_ramp(
+        self,
+        preheat_requested: bool,
+        ramp_in: float,
+        ramp_out: float,
+    ) -> float:
+        """Update preheat ramp factor for smooth preheat entry and exit."""
+        step_up = 1.0 / max(ramp_in, 1.0)
+        step_down = 1.0 / max(ramp_out, 1.0)
+
+        if preheat_requested:
+            self._preheat_ramp += step_up
+        else:
+            self._preheat_ramp -= step_down
+
+        self._preheat_ramp = max(0.0, min(1.0, self._preheat_ramp))
+        return self._preheat_ramp
 
     def _pi_output(
         self,
@@ -818,7 +839,7 @@ class PumpSteerSensor(RestoreEntity):
         ramp_in = self._compute_ramp_minutes(
             current_cat, ramp_target_cat, house_inertia
         )
-        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.5)
+        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.7)
 
         comfort_floor = self._comfort_floor(target, aggressiveness)
         forecast_temps = await self._forecast_temps()
@@ -827,6 +848,7 @@ class PumpSteerSensor(RestoreEntity):
         if outdoor >= summer_threshold:
             self._pi.reset(now)
             self._brake_ramp = 0.0
+            self._preheat_ramp = 0.0
             self._brake_last_t = None
             self._prev_aggressiveness = None
 
@@ -886,6 +908,7 @@ class PumpSteerSensor(RestoreEntity):
                 )
                 self._pi.reset(now)
                 self._brake_ramp = 0.0
+                self._preheat_ramp = 0.0
                 self._brake_last_t = None
 
             self._prev_aggressiveness = 0
@@ -997,7 +1020,7 @@ class PumpSteerSensor(RestoreEntity):
             # 5a. Pre-brake: engage ramp when expensive is within ramp_in window.
             if (
                 minutes_until_expensive is not None
-                and minutes_until_expensive <= ramp_in + interval_minutes
+                and minutes_until_expensive <= ramp_in
             ):
                 factor = self._update_brake_ramp(True, now, ramp_in, ramp_out)
                 pi_demand = self._pi_output(
@@ -1015,7 +1038,7 @@ class PumpSteerSensor(RestoreEntity):
 
                 await self._set_state(
                     fake_temp,
-                    MODE_PREHEAT,
+                    MODE_PREBRAKE,
                     {
                         **self._base_attrs(
                             indoor,
@@ -1039,18 +1062,20 @@ class PumpSteerSensor(RestoreEntity):
                 forecast_temps,
                 hours=PRICE_LOOKAHEAD_HOURS,
             )
-            if forecast_cold:
-                base_demand = self._pi_output(target, indoor, outdoor, now, cfg)
-                boost = (
-                    PREHEAT_BOOST_C if cfg.get("preheat_boost_enabled", True) else 0.0
+            if forecast_cold and cfg.get("preheat_boost_enabled", True):
+                preheat_factor = self._update_preheat_ramp(
+                    True,
+                    ramp_in=max(ramp_in, 10.0),
+                    ramp_out=max(ramp_out, 10.0),
                 )
+
+                base_demand = self._pi_output(target, indoor, outdoor, now, cfg)
+                boost = PREHEAT_BOOST_C * preheat_factor
                 boosted_demand = base_demand + boost
                 fake_temp = max(
                     MIN_FAKE_TEMP,
                     min(MAX_FAKE_TEMP, outdoor - boosted_demand),
                 )
-
-                self._update_brake_ramp(True, now, ramp_in, ramp_out)
 
                 await self._set_state(
                     fake_temp,
@@ -1064,7 +1089,8 @@ class PumpSteerSensor(RestoreEntity):
                             aggressiveness,
                             boosted_demand,
                         ),
-                        "preheat_boost_c": round(boost, 1),
+                        "preheat_boost_c": round(boost, 2),
+                        "preheat_factor": round(preheat_factor, 3),
                         "brake_factor": 0.0,
                         "minutes_until_expensive": (
                             round(minutes_until_expensive, 0)
@@ -1087,19 +1113,34 @@ class PumpSteerSensor(RestoreEntity):
         bridge_short_dip = upcoming and not forecast_cold and self._brake_ramp > 0.0
 
         # 6. Normal PI control.
-        # If the brake is still engaged (e.g. price was just reclassified from
-        # expensive to normal mid-slot), pass hold_minutes so the brake ramps
-        # out gracefully instead of being released immediately.
+        # If the brake is still ramping out (for example after an expensive period
+        # or during a bridged short dip), blend fake_temp between pi_fake and
+        # brake_temp so the ramp-out is visible in the actual output.
         brake_hold = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
-        demand = self._pi_output(target, indoor, outdoor, now, cfg)
-        fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - demand))
-        self._update_brake_ramp(
+
+        self._update_preheat_ramp(
+            False,
+            ramp_in=max(ramp_in, 10.0),
+            ramp_out=max(ramp_out, 10.0),
+        )
+
+        pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
+        pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
+
+        factor = self._update_brake_ramp(
             bridge_short_dip,
             now,
             ramp_in,
             ramp_out,
             hold_minutes=brake_hold if self._brake_ramp > 0.0 else 0.0,
         )
+
+        if factor > 0.0:
+            brake_temp = self._brake_temp(outdoor)
+            fake_temp = pi_fake + (brake_temp - pi_fake) * factor
+            fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
+        else:
+            fake_temp = pi_fake
 
         mode = MODE_HOLIDAY if holiday else MODE_PI
         await self._set_state(
@@ -1112,8 +1153,12 @@ class PumpSteerSensor(RestoreEntity):
                     outdoor,
                     current_cat,
                     aggressiveness,
-                    demand,
+                    pi_demand,
                 ),
+                "brake_factor": round(factor, 3),
+                "ramp_in_minutes": round(ramp_in, 1),
+                "ramp_out_minutes": round(ramp_out, 1),
+                "bridge_short_dip": bridge_short_dip,
             },
             now,
         )
