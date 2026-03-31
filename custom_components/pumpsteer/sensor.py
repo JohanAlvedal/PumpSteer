@@ -1303,8 +1303,6 @@ class PumpSteerSensor(RestoreEntity):
 
         if recalc_thresholds:
             self._cached_p30, self._cached_p80 = await async_get_price_thresholds(
-                self.hass,
-                today_entity_id,
                 today_prices or prices,
             )
             self._price_thresholds_cached_date = today_date
