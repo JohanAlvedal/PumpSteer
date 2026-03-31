@@ -30,7 +30,6 @@ PID_OUTPUT_CLAMP: Final[float] = 10
 # expensive = above P80
 PRICE_PERCENTILE_CHEAP: Final[float] = 30.0
 PRICE_PERCENTILE_EXPENSIVE: Final[float] = 80.0
-DEFAULT_TRAILING_HOURS: Final[int] = 72
 MIN_SAMPLES_FOR_CLASSIFICATION: Final[int] = 5
 ABSOLUTE_CHEAP_LIMIT: Final[float] = (
     0.50  # SEK/kWh — always cheap regardless of history
