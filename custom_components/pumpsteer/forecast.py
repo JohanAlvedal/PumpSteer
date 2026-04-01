@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import logging
 from typing import Any, Optional
 
-import homeassistant.util.dt as dt_util
 from homeassistant.core import HomeAssistant
+import homeassistant.util.dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,20 +63,42 @@ def _round_to_hour(dt_value: datetime) -> datetime:
     return dt_value.replace(minute=0, second=0, microsecond=0)
 
 
-def _extract_weather_points(
+async def _async_extract_weather_points(
     hass: HomeAssistant,
     weather_entity_id: str,
     horizon_hours: int,
 ) -> dict[datetime, ForecastPoint]:
-    """Read hourly weather forecast from a Home Assistant weather entity."""
-    state = hass.states.get(weather_entity_id)
-    if state is None:
-        _LOGGER.debug("Weather entity not found: %s", weather_entity_id)
+    """Read hourly weather forecast via weather.get_forecasts service call (HA 2024.x+)."""
+
+    try:
+        response = await hass.services.async_call(
+            "weather",
+            "get_forecasts",
+            {"type": "hourly"},
+            target={"entity_id": weather_entity_id},
+            blocking=True,
+            return_response=True,
+        )
+    except Exception as err:
+        _LOGGER.debug("weather.get_forecasts failed for %s: %s", weather_entity_id, err)
         return {}
 
-    forecast = state.attributes.get("forecast")
+    if not isinstance(response, dict):
+        _LOGGER.debug(
+            "weather.get_forecasts returned unexpected type for %s: %s",
+            weather_entity_id,
+            type(response),
+        )
+        return {}
+
+    entity_data = response.get(weather_entity_id, {})
+    forecast = entity_data.get("forecast") if isinstance(entity_data, dict) else None
+
     if not isinstance(forecast, list):
-        _LOGGER.debug("Weather entity %s has no forecast list", weather_entity_id)
+        _LOGGER.debug(
+            "No forecast list in weather.get_forecasts response for %s",
+            weather_entity_id,
+        )
         return {}
 
     now_utc = dt_util.utcnow()
@@ -192,10 +214,12 @@ async def async_build_forecast(
     Build a normalized hourly forecast for planner usage.
 
     The function merges:
-    - future weather forecast from a weather entity
+    - future weather forecast from a weather entity (via weather.get_forecasts)
     - future electricity prices from a price entity
     """
-    weather_points = _extract_weather_points(hass, weather_entity_id, horizon_hours)
+    weather_points = await _async_extract_weather_points(
+        hass, weather_entity_id, horizon_hours
+    )
     price_points = _extract_price_points(hass, price_entity_id, horizon_hours)
 
     all_hours = sorted(set(weather_points.keys()) | set(price_points.keys()))

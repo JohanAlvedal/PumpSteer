@@ -1,16 +1,8 @@
 import logging
-from datetime import timedelta
 from typing import List
-
-from homeassistant.components.recorder import get_instance
-from homeassistant.components.recorder.history import get_significant_states
-from homeassistant.core import HomeAssistant
-from homeassistant.util.dt import now as dt_now
 
 from .settings import (
     ABSOLUTE_CHEAP_LIMIT,
-    DEFAULT_TRAILING_HOURS,
-    MIN_SAMPLES_FOR_CLASSIFICATION,
     PRICE_PERCENTILE_CHEAP,
     PRICE_PERCENTILE_EXPENSIVE,
 )
@@ -58,6 +50,8 @@ def compute_price_thresholds(
     Compute P30 and P80 thresholds.
     Uses history_prices if enough samples exist, otherwise falls back to today's prices.
     """
+    from .settings import MIN_SAMPLES_FOR_CLASSIFICATION
+
     prices = (
         history_prices
         if len(history_prices) >= MIN_SAMPLES_FOR_CLASSIFICATION
@@ -71,46 +65,22 @@ def compute_price_thresholds(
 
 
 async def async_get_price_thresholds(
-    hass: HomeAssistant,
-    price_entity_id: str,
     current_prices: List[float],
-    trailing_hours: int = DEFAULT_TRAILING_HOURS,
 ) -> tuple[float, float]:
-    """Fetch historical prices and compute P30/P80 thresholds."""
-    end_time = dt_now()
-    start_time = end_time - timedelta(hours=trailing_hours)
+    """Compute P30/P80 thresholds from today's prices only.
 
-    try:
-        recorder = get_instance(hass)
-
-        def _get_history():
-            return get_significant_states(hass, start_time, end_time, [price_entity_id])
-
-        history = await recorder.async_add_executor_job(_get_history)
-        states = history.get(price_entity_id, [])
-
-        history_prices = []
-        for s in states:
-            try:
-                if s.state not in ("unknown", "unavailable"):
-                    history_prices.append(float(s.state))
-            except (ValueError, TypeError):
-                continue
-
-    except Exception as err:
-        _LOGGER.warning(
-            "Could not fetch price history for %s, using today's prices: %s",
-            price_entity_id,
-            err,
-        )
-        history_prices = []
-
-    p30, p80 = compute_price_thresholds(history_prices, current_prices)
+    Thresholds are relative to the current day's price spread, consistent with
+    how Ngenic/Tibber classify prices. Caching per calendar day in sensor.py
+    ensures they remain stable within the day and refresh at midnight.
+    """
+    if not current_prices:
+        return 0.0, 0.0
+    p30 = _percentile(current_prices, PRICE_PERCENTILE_CHEAP)
+    p80 = _percentile(current_prices, PRICE_PERCENTILE_EXPENSIVE)
     _LOGGER.debug(
-        "Price thresholds: P30=%.3f P80=%.3f (from %d history + %d today)",
+        "Price thresholds: P30=%.3f P80=%.3f (from %d today prices)",
         p30,
         p80,
-        len(history_prices),
         len(current_prices),
     )
     return p30, p80

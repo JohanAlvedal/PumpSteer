@@ -1,4 +1,4 @@
-"""PumpSteer — Ngenic-inspired heat pump controller."""
+"""PumpSteer heat pump controller."""
 
 import logging
 

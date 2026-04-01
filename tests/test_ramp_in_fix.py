@@ -186,10 +186,10 @@ def test_bridge_short_dip_brake_holds_during_cheap_gap():
     t0 = now_utc()
 
     # Engagera bromsen till 1.0
-    for i in range(5):
+    for i in range(45):
         s._update_brake_ramp(
             brake_requested=True,
-            now=t0 + timedelta(minutes=i * 10),
+            now=t0 + timedelta(seconds=i * 30),
             ramp_in=20.0,
             ramp_out=20.0,
             hold_minutes=30.0,

@@ -20,6 +20,11 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         entry = self.config_entry
         current_data = {**entry.data, **entry.options}
 
+        # Build list of number entities for the Ohmigo dropdown.
+        number_entities = sorted(
+            s.entity_id for s in self.hass.states.async_all("number")
+        )
+
         if user_input is not None:
             try:
                 entity_errors = self._validate_entities(user_input)
@@ -67,74 +72,39 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         ),
                     ): selector({"entity": {"domain": "sensor"}}),
                     vol.Optional(
-                        "pid_kp",
-                        default=current_data.get("pid_kp", 2.4),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 20.0,
-                                "step": 0.1,
-                                "mode": "box",
-                            }
-                        }
-                    ),
-                    vol.Optional(
-                        "pid_ki",
-                        default=current_data.get("pid_ki", 0.035),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 2.0,
-                                "step": 0.001,
-                                "mode": "box",
-                            }
-                        }
-                    ),
-                    vol.Optional(
-                        "pid_kd",
-                        default=current_data.get("pid_kd", 0.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 2.0,
-                                "step": 0.001,
-                                "mode": "box",
-                            }
-                        }
-                    ),
-                    vol.Optional(
-                        "pid_integral_clamp",
-                        default=current_data.get("pid_integral_clamp", 6.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 30.0,
-                                "step": 0.1,
-                                "mode": "box",
-                            }
-                        }
-                    ),
-                    vol.Optional(
-                        "pid_output_clamp",
-                        default=current_data.get("pid_output_clamp", 12.0),
-                    ): selector(
-                        {
-                            "number": {
-                                "min": 0.0,
-                                "max": 30.0,
-                                "step": 0.1,
-                                "mode": "box",
-                            }
-                        }
-                    ),
-                    vol.Optional(
                         "notify_service",
                         default=current_data.get("notify_service", ""),
                     ): selector({"text": {}}),
+                    vol.Optional(
+                        "preheat_boost_enabled",
+                        default=current_data.get("preheat_boost_enabled", True),
+                    ): selector({"boolean": {}}),
+                    vol.Optional(
+                        "ohmigo_entity",
+                        default=current_data.get("ohmigo_entity", ""),
+                    ): selector(
+                        {
+                            "select": {
+                                "options": number_entities,
+                                "custom_value": True,
+                                "mode": "dropdown",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        "ohmigo_interval_minutes",
+                        default=current_data.get("ohmigo_interval_minutes", 5),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 1,
+                                "max": 60,
+                                "step": 1,
+                                "unit_of_measurement": "min",
+                                "mode": "slider",
+                            }
+                        }
+                    ),
                 }
             ),
             errors=errors,
@@ -168,6 +138,11 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         weather = user_input.get("weather_entity")
         if weather and not self._entity_exists(weather):
             errors["weather_entity"] = "entity_not_found"
+
+        # ohmigo_entity är valfri — validera bara om den är ifylld
+        ohmigo = user_input.get("ohmigo_entity", "")
+        if ohmigo and not self._entity_exists(ohmigo):
+            errors["ohmigo_entity"] = "entity_not_found"
 
         return errors
 
