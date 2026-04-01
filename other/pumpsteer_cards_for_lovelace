@@ -1,4 +1,4 @@
-# PumpSteer Lovelace Cards
+##### PumpSteer Lovelace Cards ######################################################################################
 
 type: sections
 sections:
@@ -39,10 +39,16 @@ sections:
                 name:
                   type: entity
               - entity: switch.pumpsteer_notifications
+                name:
+                  type: entity
               - entity: switch.pumpsteer_ohmigo_push
+                name:
+                  type: entity
               - entity: datetime.pumpsteer_holiday_start
               - entity: datetime.pumpsteer_holiday_end
               - entity: switch.pumpsteer_holiday_mode
+                name:
+                  type: entity
       - type: entities
         title: Status Details
         show_header_toggle: false
@@ -134,6 +140,7 @@ sections:
             icon: mdi:clock-outline
           - entity: sensor.pumpsteer_operating_mode
             secondary_info: last-changed
+            name: Operation Mode
       - type: custom:mini-graph-card
         name: Virtual Outdoor Temperature
         icon: mdi:thermometer-lines
@@ -191,9 +198,7 @@ badges:
       navigation_path: /dashboard-data/7
     entity: sensor.elpris_spot_avgifter
 
-
-
-####### Apexchart #####
+####### Apexchart ######################################################################################
 
 type: custom:apexcharts-card
 graph_span: 24h
@@ -274,4 +279,4 @@ series:
     extend_to: now
     unit: x
 
-####
+####################################################################################
