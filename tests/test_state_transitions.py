@@ -1,4 +1,4 @@
-import pytest
+
 
 PRICE_CHEAP = "cheap"
 PRICE_NORMAL = "normal"
@@ -37,7 +37,11 @@ def simulate_brake_states(categories, bridge_max_slots=2):
             continue
 
         # Pre-brake: starta innan dyrperiod, men bara om bromsen inte redan är aktiv
-        if not brake_active and current != PRICE_EXPENSIVE and next_cat == PRICE_EXPENSIVE:
+        if (
+            not brake_active
+            and current != PRICE_EXPENSIVE
+            and next_cat == PRICE_EXPENSIVE
+        ):
             brake_active = True
             states.append("PRE_BRAKE")
             continue
