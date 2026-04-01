@@ -16,6 +16,11 @@ PRECOOL_MARGIN: Final[float] = 3.0
 # WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0
 # WINTER_BRAKE_THRESHOLD: Final[float] = 7.0
 
+# Multiplier applied to ramp_in to derive ramp_out.
+# 1.0 = symmetric: a house that takes N minutes to brake takes equally long to release.
+# Values < 1.0 release faster than the brake was applied.
+RAMP_OUT_FACTOR = 0.8
+
 # === PI CONTROLLER ===
 PID_KP: Final[float] = 2.4
 PID_KI: Final[float] = 0.035

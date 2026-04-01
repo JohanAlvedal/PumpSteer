@@ -47,6 +47,7 @@ from .settings import (
     RAMP_MAX_MINUTES,
     RAMP_MIN_MINUTES,
     RAMP_SCALE,
+    RAMP_OUT_FACTOR,
 )
 from .utils import (
     compute_price_slot_index,
@@ -839,7 +840,7 @@ class PumpSteerSensor(RestoreEntity):
         ramp_in = self._compute_ramp_minutes(
             current_cat, ramp_target_cat, house_inertia
         )
-        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * 0.7)
+        ramp_out = max(RAMP_MIN_MINUTES, ramp_in * RAMP_OUT_FACTOR)
 
         comfort_floor = self._comfort_floor(target, aggressiveness)
         forecast_temps = await self._forecast_temps()
