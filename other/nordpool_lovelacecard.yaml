@@ -1,0 +1,333 @@
+########### The badges are wrong in your version. Please remove them. ##############################################
+
+title: Elpris
+icon: mdi:lightning-bolt-circle
+cards: []
+subview: false
+visible:
+  - user: 845020c8650446509156de8099f0da89
+  - user: c4f43fa667f945f49c9b8d3773ec275f
+  - user: 2d3b9ca059154dc390a9e8c8a57bf2e5
+  - user: bbcfbb89ea5946f58f0e359b739b5d6a
+badges:
+  - type: custom:mushroom-template-badge
+    icon: mdi:car
+    color: green
+    content: Bilen
+    tap_action:
+      action: navigate
+      navigation_path: /lovelace/3
+  - type: custom:mushroom-template-badge
+    content: Laddbox
+    icon: mdi:ev-plug-type2
+    color: green
+    tap_action:
+      action: navigate
+      navigation_path: /lovelace/laddbox
+  - type: custom:mushroom-template-badge
+    content: Elpris
+    icon: mdi:currency-usd
+    color: blue
+    tap_action:
+      action: navigate
+      navigation_path: /dashboard-data/7
+  - type: custom:mushroom-template-badge
+    content: Förbrukning
+    icon: mdi:power-plug
+    color: blue
+    tap_action:
+      action: navigate
+      navigation_path: /dashboard-data/8
+  - type: custom:mushroom-template-badge
+    content: System
+    icon: mdi:server
+    color: green
+    tap_action:
+      action: navigate
+      navigation_path: /lovelace/system
+type: sections
+sections:
+  - type: grid
+    cards:
+      - type: custom:apexcharts-card
+        graph_span: 24h
+        span:
+          start: day
+        now:
+          show: true
+          label: Nu
+        grid_options:
+          columns: full
+        apex_config:
+          chart:
+            height: 400px
+        header:
+          show: true
+          show_states: true
+          colorize_states: true
+          title: Elpriser (SEK/kWh)
+        series:
+          - entity: sensor.elpris_today
+            type: column
+            name: Idag
+            show:
+              in_header: false
+            data_generator: >
+              const rows = entity.attributes.today || [];
+
+              if (rows.length === 0) return [];
+
+
+              const values = rows.map(r => Number(r.value)).filter(v =>
+              !isNaN(v));
+
+              if (values.length === 0) return [];
+
+
+              const max = Math.max(...values);
+
+
+              return rows.map(r => {
+                const v = Number(r.value);
+                const p = max > 0 ? v / max : 0;
+                let color = "#76ba1b"; // Grön (standard)
+                if (p > 0.90) color = "#d70000";      // Mörkröd
+                else if (p > 0.70) color = "#ff2400"; // Röd-orange
+                else if (p > 0.40) color = "#ffa500"; // Orange
+
+                return {
+                  x: new Date(r.start).getTime(),
+                  y: v,
+                  fillColor: color
+                };
+              }).filter(p => !isNaN(p.y) && !isNaN(p.x));
+          - entity: sensor.elpris_today
+            name: Nu
+            show:
+              in_chart: false
+              in_header: true
+            data_generator: |
+              const rows = entity.attributes.today || [];
+              const now = new Date();
+
+              const current = rows.find(d =>
+                d.start && d.end &&
+                new Date(d.start) <= now &&
+                new Date(d.end) > now
+              );
+
+              return current ? [[now.getTime(), Number(current.value)]] : [];
+          - entity: sensor.elpris_today
+            name: Max
+            show:
+              in_chart: false
+              in_header: true
+            data_generator: >
+              const rows = entity.attributes.today || [];
+
+              if (rows.length === 0) return [];
+
+
+              const values = rows.map(r => Number(r.value)).filter(v =>
+              !isNaN(v));
+
+              if (values.length === 0) return [];
+
+
+              const max = Math.max(...values);
+
+              return [[new Date().setHours(0,0,0,0), max]];
+          - entity: sensor.elpris_today
+            name: Min
+            show:
+              in_chart: false
+              in_header: true
+            data_generator: >
+              const rows = entity.attributes.today || [];
+
+              if (rows.length === 0) return [];
+
+
+              const values = rows.map(r => Number(r.value)).filter(v =>
+              !isNaN(v));
+
+              if (values.length === 0) return [];
+
+
+              const min = Math.min(...values);
+
+              return [[new Date().setHours(0,0,0,0), min]];
+          - entity: sensor.elpris_tomorrow
+            type: line
+            name: Imorgon
+            unit: SEK/kWh
+            color: "#FFFFFF"
+            stroke_width: 2
+            curve: stepline
+            show:
+              in_header: false
+              legend_value: false
+            data_generator: |
+              const data = entity.attributes.tomorrow || [];
+              if (!Array.isArray(data) || data.length === 0) return [];
+
+              return data
+                .filter(d => d.start && d.value !== undefined && d.value !== null)
+                .map(d => {
+                  // Dra bort 24 timmar från tidstämpeln för att lägga den över "idag"
+                  const overlayTime = new Date(d.start).getTime() - (24 * 60 * 60 * 1000);
+                  return {
+                    x: overlayTime,
+                    y: Number(d.value)
+                  };
+                })
+                .filter(p => !isNaN(p.y) && !isNaN(p.x));
+    column_span: 2
+  - type: grid
+    cards:
+      - type: markdown
+        content: >-
+          {% set np_today = 'sensor.elpris_today' %}
+
+          {% set np_tomorrow = 'sensor.elpris_tomorrow' %}
+
+          {% set step = 0.05 %}
+
+
+          {# --- Hämta listor --- #}
+
+          {% set today_raw = state_attr(np_today, 'today') | default([], true)
+          %}
+
+          {% set tomorrow_raw = state_attr(np_tomorrow, 'tomorrow') |
+          default([], true) %}
+
+
+          {# --- Plocka ut value från dictar, bara numeriska --- #}
+
+          {% set today = today_raw | map(attribute='value') | select('number') |
+          list %}
+
+          {% set tomorrow = tomorrow_raw | map(attribute='value') |
+          select('number') | list %}
+
+
+          {# --- Nuvarande pris tas från today-sensorns state --- #}
+
+          {% set now_price = states(np_today) %}
+
+          {% set now_price = (now_price | string) | replace(',', '.') | float(0)
+          %}
+
+
+          {# --- Runda till step --- #}
+
+          {% set now_r = ((now_price / step) | round(0) * step) %}
+
+
+          **Idag:** Nu: **{{ '%.2f' | format(now_r) }}** SEK/kWh
+
+
+          {% if today | length > 0 %}
+            {% set avg_r = (((today | average) / step) | round(0) * step) %}
+            {% set max_r = (((today | max) / step) | round(0) * step) %}
+            {% set min_r = (((today | min) / step) | round(0) * step) %}
+          Medel: **{{ '%.2f' | format(avg_r) }}** SEK/kWh  
+
+          Max: **{{ '%.2f' | format(max_r) }}** SEK/kWh  
+
+          Min: **{{ '%.2f' | format(min_r) }}** SEK/kWh
+
+          {% else %}
+
+          Today values: *unavailable*
+
+          {% endif %}
+
+
+          {# --- Tomorrow: visa först efter 13:30 --- #}
+
+          {% if now().strftime('%H:%M') < '13:30' %}
+
+          📌 Elpriser för morgondagen kommer efter **13:30**.
+
+          {% else %}
+            {% if tomorrow | length > 0 %}
+              {% set tavg_r = (((tomorrow | average) / step) | round(0) * step) %}
+              {% set tmax_r = (((tomorrow | max) / step) | round(0) * step) %}
+              {% set tmin_r = (((tomorrow | min) / step) | round(0) * step) %}
+
+          **Tomorrow:**  
+
+          Average: **{{ '%.2f' | format(tavg_r) }}** SEK/kWh  
+
+          Min: **{{ '%.2f' | format(tmin_r) }}** SEK/kWh  
+
+          Max: **{{ '%.2f' | format(tmax_r) }}** SEK/kWh
+            {% else %}
+          Electricity prices for tomorrow are typically updated by ~13:00–13:30,
+          but they have not been updated yet.
+            {% endif %}
+          {% endif %}
+      - type: vertical-stack
+        cards:
+          - type: entity
+            entity: sensor.nordpool_price_band
+            state_color: false
+            icon: mdi:spirit-level
+          - type: vertical-stack
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - graph: none
+                    type: sensor
+                    detail: 1
+                    entity: sensor.accumulated_cost_goktytan_4
+                    hours_to_show: 6
+                  - graph: none
+                    type: sensor
+                    detail: 1
+                    entity: sensor.accumulated_reward_goktytan_4
+                    hours_to_show: 6
+                  - graph: none
+                    type: sensor
+                    detail: 1
+                    hours_to_show: 6
+                    icon: mdi:cash
+                    entity: sensor.goktytan_4_netto_kostnad
+                    name: Netto
+      - type: entities
+        entities:
+          - entity: sensor.nord_pool_se3_current_price
+            secondary_info: last-changed
+          - entity: sensor.nord_pool_se3_highest_price
+            secondary_info: last-changed
+          - entity: sensor.nord_pool_se3_lowest_price
+          - entity: sensor.nord_pool_se3_next_price
+          - entity: sensor.nord_pool_se3_previous_price
+          - type: section
+          - entity: sensor.elpriskoefficient
+          - entity: sensor.nordpool_price_band
+          - entity: sensor.svotc_price_p30_today
+          - entity: sensor.svotc_price_p80_today
+        title: Nordpool integration
+        state_color: true
+      - type: entities
+        title: Elpris – Nordpool (SVOTC)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.elpris_today
+          - entity: sensor.elpris_tomorrow
+          - entity: sensor.elpris_spot_avgifter
+            secondary_info: last-changed
+          - type: section
+            label: Elhandel
+          - entity: input_number.elhandel_rorlig_kvart_paslag
+          - entity: input_number.elhandel_rorlig_kvart_elcertifikat
+          - entity: input_number.elhandel_rorlig_kvart_moms
+    view_layout:
+      column_span: 2
+    column_span: 2
+max_columns: 2
+dense_section_placement: false
+top_margin: false
