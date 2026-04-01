@@ -1,270 +1,315 @@
-# PumpSteer
+# 🔥 PumpSteer 2.0.0
 
-PumpSteer is a custom Home Assistant integration that optimizes your heat pump in order to reduce your electric bill when using dynamic pricing. The heat pump is controlled via the outdoor temperature sensor input. A secondary benefit is improved comfort by reducing indoor temperature swings due to weather. 
+➡️ Swedish version: [README (Svenska)](README_sv.md)
 
-<a href="https://www.buymeacoffee.com/alvjo" target="_blank">
-  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 200px !important;">
-</a>
+> ⚠️ This is a major rewrite. Read upgrade notes before installing.
 
-<a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=https%3A%2F%2Fgithub.com%2FJohanAlvedal%2FPumpSteer%2Ftree%2Fmain" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Open your Home Assistant instance and start setting up a new integration." /></a>
+PumpSteer is a Home Assistant custom integration that optimizes your heat pump by dynamically adjusting the **virtual outdoor temperature**.
 
----
-
-## ⚠️ Disclaimer
-
-You use this integration at your own risk. Heating is a critical system in your home, and incorrect settings may lead to discomfort or damage.
-
-Do not use PumpSteer if your heating system is not performing adequately.
-
-Only use PumpSteer if you understand how it works and have verified that it functions correctly in your specific setup. Always monitor indoor temperatures and system behavior after installation.
+It reduces energy cost when electricity is expensive — while protecting indoor comfort.
 
 ---
 
-## 🗃️ Recorder Data Requirement
+## 📘 Documentation
 
-PumpSteer calculates price levels using 72 hours of raw electricity price history from the Home Assistant recorder. Long-term statistics are not used, so ensure the recorder keeps at least three days off data
-
----
-
-# PumpSteer
-
-| ![PumpSteer Drift & Status](docs/img/01.png) | ![PumpSteer Chart](docs/img/05.png) |
-| -------------------------------------------- | ----------------------------------- |
-| ![PumpSteer Troubleshooting](docs/img/02.png) | ![PumpSteer Templates](docs/img/03.png) |
-
-![PumpSteer Price & Holiday](docs/img/04.png)
-
----
-
-## ✅ Features
-
-* 🔧 Smart control of outdoor temperature
-* 🌡️ Dynamic comfort control using:
-
-  * Indoor temperature
-  * Target indoor temperature
-  * Electricity price forecast
-  * Weather forecast 
-  * Thermal inertia
-* 💸 Electricity price adjustment via Nordpool or other sensor
-* 🧊 Braking mode: limits heating when power is expensive
-* ☀️ Summer mode: disables heating control during warm weather
-* 🏝️ Holiday mode: temporarily reduces temperature when away
-* ❄️ Precool: pauses heating ahead of forecasted warm weather
-* 📈 Switchable price model (`hybrid` or `percentiles`)
-* 🤖 ML analysis: learns how your house responds (session-based) (beta, work in progress)
-* 🔁 Auto-adjustment of `house_inertia` (beta, disabled by default, work in progress)
-* 🧠 Recommendations for improved comfort/savings balance (beta, work in progress)
-* ⚙️ Adjustable heating and braking compensation factors
-* 🎛️ Fine-tuning via `input_number`, `input_text`, `input_boolean`, `input_datetime`
-* 🖼️ Extra sensors for UI visualization
-
-> 💡 **Note:** Holiday mode is only active when the outdoor temperature above the summer threshold.
-
-## ❄️ Precool Mode
-
-When the weather forecast shows temperatures exceeding the summer threshold in any of the next 24 hours, PumpSteer enters *precool* mode which turns down the heat in advance.
+- [Upgrade Warning](#important--not-a-drop-in-upgrade)
+- [What's New](#whats-new-in-200)
+- [Breaking Changes](#breaking-changes)
+- [Price Sensors](#price-sensor-support)
+- [Weather Support](#weather-support)
+- [New Installation](#new-installation)
+- [Upgrade Guide](#upgrade-from-166)
+- [Troubleshooting](#troubleshooting)
+- [Tuning](#tuning-quick-guide)
+- [Safety](#safety--disclaimer)
 
 ---
 
-## 🔧 Installation via HACS (Custom Repository)
+## Important – Not a Drop-in Upgrade ⚠️
 
-If PumpSteer is not yet available in HACS, so you need to add it as a custom repository:
+PumpSteer 2.0.0 is **not a minor update**.  
+It is a **complete rewrite of the control system**.
 
-1. Go to **HACS > ⋮ > Custom Repositories**
-2. Add: `https://github.com/JohanAlvedal/PumpSteer`
-3. Choose **Integration** as category
-4. Install PumpSteer
-5. Restart Home Assistant
-6. Follow the setup guide and select helper entities
+👉 Treat this as a **new integration**, not an upgrade.
 
-**For a complete step-by-step installation guide, including setting up helper entities and automations, please refer to our wiki:**
+### What this means
 
-[**PumpSteer - Installation och Grundkonfiguration**](https://github.com/JohanAlvedal/PumpSteer/wiki)
-
----
-
-## 🌤️ Weather Forecast Automation
-
-PumpSteer requires hourly temperature forecasts in `input_text.hourly_forecast_temperatures`. Instead of manual entry, use our automated blueprint:
-
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgist.githubusercontent.com%2FJohanAlvedal%2F48fb8b3e1ef5fc3a70b5c473be54e2fe%2Fraw%2Fpumpsteer_temperature_forcast.yaml)
-
-### What it does:
-- 🔄 Automatically fetches 24-hour temperature forecasts
-- 📊 Formats data as comma-separated values for PumpSteer
-- ⏰ Updates on configurable intervals (default: every 30 min)
-- 🌡️ Works with SMHI, Met.no, OpenWeatherMap, and more
-
-### Quick Setup:
-1. **Import blueprint** from the Gist above
-2. **Create automation** using your weather entity  
-3. **Set target** to `input_text.hourly_forecast_temperatures`
-4. **Configure update interval** (recommended: every 30 minutes)
-
-Once configured, PumpSteer will automatically receive fresh weather data for optimal heating decisions without any manual intervention.
+- ❌ Old dashboards will not behave the same  
+- ❌ Automations may break  
+- ❌ Old helpers are no longer primary  
+- ❌ Price logic is completely changed  
 
 ---
 
-## 📦 Helper Entities (via `pumpsteer_package.yaml`)
+### Required after upgrade
 
-| Type             | Entity                          | Function                                |
-| ---------------- | ------------------------------- | --------------------------------------- |
-| `input_number`   | `indoor_target_temperature`     | Target indoor temperature               |
-| `input_number`   | `pumpsteer_summer_threshold`    | Threshold to activate summer mode       |
-| `input_number`   | `pumpsteer_aggressiveness`      | Comfort vs savings (0–5)                |
-| `input_number`   | `house_inertia`                 | How slow/fast the house responds (0–10) |
-| `input_text`     | `hourly_forecast_temperatures`  | Temperature forecast (24 CSV values)    |
-| `input_boolean`  | `holiday_mode`                  | Activates holiday mode                  |
-| `input_boolean`  | `autotune_inertia`              | Allow system to adjust `house_inertia`  |
-| `input_select`   | `pumpsteer_price_model`         | Price classification model (`hybrid` or `percentiles`) |
-| `input_datetime` | `holiday_start` / `holiday_end` | Automatically enable holiday mode       |
+- Rebuild Lovelace cards  
+- Update automations  
+- Verify price sensors (today + tomorrow)  
+- Reconnect to new entities  
+- Retune settings  
 
 ---
 
-## 🧪 Forecast Format
+### Behavior is different
 
-`input_text.hourly_forecast_temperatures` must contain exactly 24 comma-separated temperature values (°C):
+- PI control instead of heuristics  
+- Ramped braking  
+- Forecast-aware decisions  
 
-```
--3.5,-4.2,-5.0,-4.8,… (total 24 values)
-```
-
-If the format is invalid, an error will be logged and the forecast ignored.
+➡️ Do not expect 1.6.6 behavior
 
 ---
 
-## 📊 Sensor: `sensor.pumpsteer`
+### Recommendation
 
-This sensor is the main output of the integration.
-
-### State:
-
-Virtual (fake) outdoor temperature sent to your heat pump.
-
-### Attributes:
-
-| Attribute                    | Meaning                                             |
-| ---------------------------- | --------------------------------------------------- |
-| `Mode`                       | `heating`, `neutral`, `braking_mode`, `summer_mode` |
-| `Fake Outdoor Temperature`   | Calculated temperature sent to the heat pump        |
-| `Price Category`             | Classification of current electricity price         |
-| `Status`                     | System status, e.g. "OK" or error messages          |
-| `Current Price`              | Current electricity price in SEK/kWh                |
-| `Max Price`                  | Highest price of the day                            |
-| `Aggressiveness`             | Comfort vs savings (0–5)                            |
-| `Inertia`                    | Estimated house inertia                             |
-| `Target Temperature`         | Desired indoor temperature                          |
-| `Indoor Temperature`         | Current indoor temperature                          |
-| `Outdoor Temperature`        | Real outdoor temperature                            |
-| `Summer Threshold`           | Threshold for summer mode                           |
-| `Braking Threshold (%)`      | Percent threshold to trigger braking                |
-| `Price Factor (%)`           | Position of current price within daily range (0% = min, 100% = max) |
-| `Holiday Mode`               | Whether holiday mode is active                      |
-| `Last Updated`               | Last update timestamp                               |
-| `Temp Error (°C)`            | Deviation from target indoor temperature            |
-| `To Summer Threshold (°C)`   | Distance to triggering summer mode                  |
-| `Next 3 Hours Prices`        | Upcoming electricity prices                         |
-| `Saving Potential (SEK/kWh)` | Potential savings from current price                |
-| `Decision Reason`            | Reason for current decision                         |
-| `Price Categories All Hours` | Classification for all hours                        |
-| `Current Hour`               | Current hour of the day                             |
-| `Data Quality`               | Availability and completeness of input data         |
+1. Install 2.0.0  
+2. Observe for 24–48h  
+3. Then migrate fully  
 
 ---
 
-## 🧠 Sensor: `sensor.pumpsteer_ml_analysis`
+## What's New in 2.0.0
 
-ML sensor showing analysis and recommendations based on your house's behavior.
-
-### Attributes:
-
-| Attribute                  | Description                                         |
-| -------------------------- | --------------------------------------------------- |
-| `success_rate`             | How often the system reached the target temperature |
-| `avg_heating_duration`     | Average heating session duration (min)              |
-| `most_used_aggressiveness` | Most used aggressiveness level                      |
-| `total_heating_sessions`   | Total number of sessions                            |
-| `recommendations`          | Text suggestions based on system performance        |
-| `auto_tune_active`         | If automatic inertia adjustment is active           |
-| `last_updated`             | Last analysis update timestamp                      |
-
-Recommendations can be shown in UI or in markdown cards.
+- 🧠 PI-based control (replaces heuristics)
+- ⚡ Smart price classification (`cheap / normal / expensive`)
+- 🔁 State machine (predictable behavior)
+- 🧊 Dynamic braking (ramp + hold + filtering)
+- 🌦 Forecast-aware planning (optional)
+- 🏠 Integration-managed entities
+- 🔒 Fully local (no cloud)
 
 ---
 
-## 🧠 How it works
+## Breaking Changes
 
-PumpSteer controls your heat pump's perceived demand using a fake outdoor temperature:
+### Price categories changed
 
-* Slightly increases heating (1 °C overshoot) only when electricity prices are very cheap
-* Avoids heating when prices are high
-* Goes to neutral mode when stable
-* Disables heating when it's warm outside (summer mode)
-* Pre-cools ahead of warm periods when the forecast exceeds the summer threshold
-* Lowers target temp to 16 °C during holidays
-* Learns over time how your house reacts and adjusts settings (if `autotune_inertia` is enabled)
+Old:
+- `very_cheap`, `very_expensive`, `extreme`
 
-All control is done locally without any cloud dependency.
+New:
+- `cheap`, `normal`, `expensive`
 
 ---
 
-## ❓ FAQ
+### Price sensor requirements
 
-### Can PumpSteer directly control my heat pump?
-
-PumpSteer does **not** talk to the heat pump over Modbus, REST, or any proprietary interface. Instead, it exposes the calculated value as a Home Assistant sensor (`sensor.pumpsteer`) that represents a[...]
-
-### What is thermal inertia and how is it calculated?
-
-`house_inertia` describes how quickly your building responds to heating or braking. A low value (≈0.5–1.5) means the house reacts fast, so PumpSteer can shift temperatures aggressively. A high val[...]
-
-If you enable `input_boolean.autotune_inertia`, the machine-learning module keeps track of every heating session: it records how far the indoor temperature was from the target, how long it took to rec[...]
-
-### What does the ML module actually learn?
-
-The ML collector watches the indoor temperature, target temperature, aggressiveness, and inertia during every heating cycle. It estimates success rate, typical heating duration, and how often comfort [...]
-
-### Which sensors must be connected to PumpSteer?
-
-The integration needs:
-
-* Indoor temperature sensor (`input_number.indoor_target_temperature` + actual indoor temperature entity)
-* Outdoor temperature sensor
-* Electricity price sensor
-* Optional: hourly outdoor temperature forecast, holiday switches, etc.
-
-You do **not** need to provide flow temperature, set-point, compressor status, or other proprietary heat pump sensors. As long as the heat pump follows the virtual outdoor temperature, PumpSteer can o[...]
-
-### How is the PumpSteer efficiency score calculated?
-
-`sensor.pumpsteer_efficiency_score` is an informative metric that blends comfort and savings on a 0–100 scale. It takes the absolute indoor temperature error (penalising large deviations) and the cu[...]
+Must support:
+- `today/raw_today`
+- `tomorrow/raw_tomorrow`
 
 ---
 
-## 🛠️ Logging
+### Control system rewritten
 
-* Errors and warnings are logged in Home Assistant
-* Sensor shows `unavailable` when data is missing
-* ML data is stored in `pumpsteer_ml_data.json` (max 100 sessions)
-* Auto-tuned `inertia` is saved in `adaptive_state.json`
+- Old: heuristic logic  
+- New: PI + state machine  
 
 ---
 
-## 🧪 Note
+### Braking redesigned
 
-This is a hobby project built with the help of ChatGPT, Copilot, and a lot of patience. Feedback and improvement ideas are always welcome.
+- ramping
+- hold logic
+- peak filtering
+- comfort protection
+
+---
+
+### Integration owns entities
+
+- numbers
+- switch
+- datetime
 
 ---
 
-## 🔗 Links
+### ML removed
 
-* 🔗 [GitHub repo](https://github.com/JohanAlvedal/PumpSteer)
-* 🐞 [Create Issue](https://github.com/JohanAlvedal/PumpSteer/issues)
+- no longer part of runtime
 
 ---
+
+## Price Sensor Support
+
+Supported formats:
+
+- `0.95`
+- `"0.95"`
+- `{ "value": 0.95 }`
+- `{ "price": 0.95 }`
+
+📌 Recommended example:
+
+
+other/nordpool.yaml
+
+
+✔ Works with:
+- Official Nord Pool integration
+- PumpSteer 2.0.0
+
+---
+
+## Weather Support
+
+Examples:
+- `weather.smhi_home`
+- `weather.yr_home`
+
+⚠️ Must be selected in:
+Settings → Devices → PumpSteer → Configure
+
+---
+
+## New Installation
+
+### Step-by-step
+
+1. Install via HACS or manually  
+2. Restart Home Assistant  
+3. Add integration  
+4. Select required sensors  
+
+---
+
+### First validation
+
+- `sensor.pumpsteer` active  
+- `status = ok`  
+- `price_category` changes  
+- `mode` behaves logically  
+
+---
+
+## Upgrade from 1.6.6
+
+### Required
+
+- Update price categories  
+- Configure tomorrow price  
+- Update automations  
+- Remove ML  
+
+---
+
+### Recommended
+
+- Verify price attributes  
+- Configure weather entity  
+- Update holiday automations  
+
+---
+
+### Test
+
+- Check `mode`
+- Check `brake_factor`
+- Observe expensive period
+
+---
+
+## Troubleshooting
+
+### Safe mode
+
+Cause:
+- missing price data
+
+Fix:
+- check `today/raw_today`
+- check `tomorrow/raw_tomorrow`
+
+---
+
+### No braking
+
+Cause:
+- not expensive
+- comfort protection
+
+---
+
+### Wrong price category
+
+Cause:
+- bad data format
+
+---
+
+## Tuning (Quick Guide)
+
+### Aggressiveness
+
+- 0 → no price control  
+- 1–2 → mild  
+- 3–4 → balanced  
+- 5 → aggressive  
+
+---
+
+### Inertia
+
+- Low → fast system  
+- High → slow system  
+
+Typical:
+- Apartment → low  
+- House → medium  
+- Heavy house → high  
+
+---
+
+## Safety & Disclaimer
+
+You use this integration at your own risk.
+
+Heating is a critical system.
+
+Do not use if:
+- system is unstable
+- you don’t understand behavior
+
+Always monitor:
+- indoor temperature
+- system response
+
+---
+
+## Recorder Requirement
+
+Requires:
+- 72 hours of price history
+- stored in recorder
+
+If missing:
+- classification fails
+- safe mode may trigger
+
+---
+
+## Note
+
+This is a hobby project built with:
+- ChatGPT
+- Copilot
+- patience 🙂
+
+Feedback is welcome!
+
+---
+
+## Links
+
+- GitHub repository  
+- Create Issue  
+
+---
+
 ## License
-As of version v1.6.2, this project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-Previous versions (≤ v1.5.1) are available under the Apache License 2.0.
+
+- ≥ v1.6.2 → AGPL-3.0  
+- ≤ v1.5.1 → Apache 2.0  
 
 © Johan Älvedal
