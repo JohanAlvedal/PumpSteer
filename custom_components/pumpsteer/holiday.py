@@ -45,7 +45,7 @@ def _get_datetime(hass: HomeAssistant, entity_id: str) -> Optional[datetime]:
         if dt.year <= CLEARED_YEAR:
             return None
         return dt
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 

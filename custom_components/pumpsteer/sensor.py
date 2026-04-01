@@ -256,13 +256,13 @@ class PumpSteerSensor(RestoreEntity):
                 self._brake_last_t = (
                     datetime.fromisoformat(raw_last_t) if raw_last_t else None
                 )
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 self._brake_last_t = None
             try:
                 self._brake_last_expensive_t = (
                     datetime.fromisoformat(raw_last_exp) if raw_last_exp else None
                 )
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 self._brake_last_expensive_t = None
             _LOGGER.debug(
                 "PumpSteer restored brake state: ramp=%.3f last_t=%s last_exp=%s",
