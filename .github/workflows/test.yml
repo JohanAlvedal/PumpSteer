@@ -29,6 +29,7 @@ jobs:
       - name: Install ruff
         uses: astral-sh/ruff-action@v3
         with:
+          version: "0.15.8"
           args: "--version"
 
       - name: pylint
