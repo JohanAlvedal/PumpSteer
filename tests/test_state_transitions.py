@@ -1,5 +1,3 @@
-
-
 PRICE_CHEAP = "cheap"
 PRICE_NORMAL = "normal"
 PRICE_EXPENSIVE = "expensive"

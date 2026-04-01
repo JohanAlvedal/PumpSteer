@@ -58,7 +58,7 @@ def safe_float(
         if max_val is not None and f > max_val:
             return None
         return f
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 
@@ -122,7 +122,7 @@ def safe_parse_temperature_forecast(
                 temps.append(t)
             else:
                 _LOGGER.debug("Ignoring out-of-range forecast temp: %s", t)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             continue
     return temps if temps else None
 
@@ -156,7 +156,7 @@ def detect_price_interval_minutes(prices: List[Any]) -> int:
 
             if delta_min > 0:
                 return delta_min
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             continue
 
     # Fallback: infer from number of slots in one day.

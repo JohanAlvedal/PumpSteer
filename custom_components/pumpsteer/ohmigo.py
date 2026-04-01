@@ -68,7 +68,7 @@ async def async_push_ohmigo(
                     new_val,
                 )
                 return last_push_time
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             pass
 
     try:

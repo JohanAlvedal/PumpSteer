@@ -33,7 +33,7 @@ def _as_float(value: Any) -> Optional[float]:
         if value in (None, "", "unknown", "unavailable", "None"):
             return None
         return float(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
 
 
