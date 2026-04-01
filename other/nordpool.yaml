@@ -1,5 +1,5 @@
 ###############################################################################
-## PACKAGE: SVOTC + Nordpool Price (SE3)
+## PACKAGE: Nordpool Price (SE3)
 ##
 ## Sensorer:
 ##   sensor.elpris_today      state=aktuellt pris, attr.raw=prisl ista idag
@@ -14,12 +14,6 @@
 ##   Exkludera sensor.elpris_today och sensor.elpris_tomorrow
 ##   (stora attribut, ingen historik behövs).
 ##   Behåll sensor.elpris_chart för historik.
-##
-## SVOTC-konfiguration (input_text i 00_helpers.yaml):
-##   svotc_source_price_today    -> sensor.elpris_today
-##   svotc_source_price_tomorrow -> sensor.elpris_tomorrow
-###############################################################################
-
 ###############################################################################
 ## 1. INPUT_NUMBER – Elhandel-parametrar
 ###############################################################################
@@ -74,7 +68,7 @@ template:
     action:
       - action: nordpool.get_prices_for_date
         data:
-          config_entry: 01KGFMFDG6SDFKHQFKK5QKCJ5T
+          config_entry: 01KHAXM5D239V0B77VNTCDJ3RG
           date: "{{ now().date() }}"
           areas: SE3
           currency: SEK
@@ -135,7 +129,7 @@ template:
     action:
       - action: nordpool.get_prices_for_date
         data:
-          config_entry: 01KGFMFDG6SDFKHQFKK5QKCJ5T
+          config_entry: 01KHAXM5D239V0B77VNTCDJ3RG
           date: "{{ (now() + timedelta(days=1)).date() }}"
           areas: SE3
           currency: SEK
@@ -261,8 +255,8 @@ template:
 ###############################################################################
 ## 3. RECORDER – exkludera rådata-sensorerna, behåll chart-historik
 ###############################################################################
-recorder:
-  exclude:
-    entities:
-      - sensor.elpris_today
-      - sensor.elpris_tomorrow
+# recorder:
+#   exclude:
+#     entities:
+#       - sensor.elpris_today
+#       - sensor.elpris_tomorrow
