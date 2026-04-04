@@ -18,10 +18,10 @@ from .electricity_price import (
     async_get_price_thresholds,
     classify_price_list,
     filter_short_peaks,
-    price_category_index,
 )
 from .holiday import async_update_holiday
 from .ohmigo import async_push_ohmigo
+from .pump_log import log_event, log_mode_change
 from .settings import (
     BRAKE_DELTA_C,
     BRAKE_HOLD_MINUTES,
@@ -44,10 +44,10 @@ from .settings import (
     PREHEAT_BOOST_C,
     PREHEAT_ON_MISSING_FORECAST,
     PRICE_LOOKAHEAD_HOURS,
+    RAMP_OUT_FACTOR,
     RAMP_MAX_MINUTES,
     RAMP_MIN_MINUTES,
     RAMP_SCALE,
-    RAMP_OUT_FACTOR,
 )
 from .utils import (
     compute_price_slot_index,
@@ -134,6 +134,7 @@ class PumpSteerSensor(RestoreEntity):
         # Track previous aggressiveness to detect transition into aggressiveness=0.
         # The PI reset should happen once on entry, not on every cycle.
         self._prev_aggressiveness: Optional[int] = None
+        self._prev_mode: Optional[str] = None
 
         # Store the remove callback returned by add_update_listener so it can
         # be cleaned up on unload.
@@ -458,16 +459,8 @@ class PumpSteerSensor(RestoreEntity):
         delta = delta_c if delta_c is not None else BRAKE_DELTA_C
         return min(max(outdoor + delta, MIN_FAKE_TEMP), MAX_FAKE_TEMP)
 
-    def _compute_ramp_minutes(
-        self,
-        current_cat: str,
-        next_cat: str,
-        house_inertia: float,
-    ) -> float:
-        current_index = price_category_index(current_cat)
-        next_index = price_category_index(next_cat)
-        jump = max(0, next_index - current_index)
-        ramp = jump * house_inertia * RAMP_SCALE
+    def _compute_ramp_minutes(self, house_inertia: float) -> float:
+        ramp = house_inertia * RAMP_SCALE
         return max(RAMP_MIN_MINUTES, min(RAMP_MAX_MINUTES, ramp))
 
     def _next_period_category(
@@ -625,6 +618,7 @@ class PumpSteerSensor(RestoreEntity):
                 reason,
             )
             self._safe_mode_warned = True
+            log_event("SAFE_MODE_ENTER", reason=reason)
         else:
             _LOGGER.debug("PumpSteer safe mode still active: %s", reason)
 
@@ -827,19 +821,10 @@ class PumpSteerSensor(RestoreEntity):
             math.ceil((PRICE_LOOKAHEAD_HOURS * 60) / max(interval_minutes, 1)),
         )
 
-        # When current=normal, next=normal but expensive is coming soon, the old logic
-        # gave jump=0 → ramp_in=RAMP_MIN, so minutes_until_expensive never fit inside
-        # the window and pre-brake never triggered. By targeting PRICE_EXPENSIVE when
-        # upcoming=True, ramp_in is correctly scaled to house_inertia and the trigger
-        # window opens in time. The same ramp_out benefits bridge_short_dip.
+        # ramp_in/out derived directly from house_inertia — independent of price jump.
+        # Higher thermal mass = longer ramp, giving a heavier house more time to respond.
         upcoming = self._upcoming_expensive(categories, current_slot, lookahead_slots)
-        if upcoming:
-            ramp_target_cat = PRICE_EXPENSIVE
-        else:
-            ramp_target_cat = next_cat or current_cat
-        ramp_in = self._compute_ramp_minutes(
-            current_cat, ramp_target_cat, house_inertia
-        )
+        ramp_in = self._compute_ramp_minutes(house_inertia)
         ramp_out = max(RAMP_MIN_MINUTES, ramp_in * RAMP_OUT_FACTOR)
 
         comfort_floor = self._comfort_floor(target, aggressiveness)
@@ -941,6 +926,7 @@ class PumpSteerSensor(RestoreEntity):
                     indoor,
                     comfort_floor,
                 )
+                log_event("COMFORT_FLOOR_RELEASE", indoor=round(indoor, 1), floor=round(comfort_floor, 1))
                 brake_requested = False
                 brake_hold = 0.0
             else:
@@ -1112,6 +1098,8 @@ class PumpSteerSensor(RestoreEntity):
             hours=PRICE_LOOKAHEAD_HOURS,
         )
         bridge_short_dip = upcoming and not forecast_cold and self._brake_ramp > 0.0
+        if bridge_short_dip:
+            log_event("BRIDGE_SHORT_DIP", brake_factor=round(self._brake_ramp, 3))
 
         # 6. Normal PI control.
         # If the brake is still ramping out (for example after an expensive period
@@ -1184,9 +1172,7 @@ class PumpSteerSensor(RestoreEntity):
         raw_today = (
             today_attr
             if isinstance(today_attr, list)
-            else today_raw_attr
-            if isinstance(today_raw_attr, list)
-            else []
+            else today_raw_attr if isinstance(today_raw_attr, list) else []
         )
 
         tomorrow_attr = get_attr(self.hass, tomorrow_entity_id, "tomorrow")
@@ -1315,6 +1301,7 @@ class PumpSteerSensor(RestoreEntity):
                 today_entity_id,
                 today_date,
             )
+            log_event("THRESHOLDS_SET", p30=round(self._cached_p30, 4), p80=round(self._cached_p80, 4), date=today_date)
 
         self._p30 = self._cached_p30
         self._p80 = self._cached_p80
@@ -1373,8 +1360,23 @@ class PumpSteerSensor(RestoreEntity):
                 "PumpSteer exited SAFE MODE and returned to normal control (mode=%s)",
                 mode,
             )
+            log_event("SAFE_MODE_EXIT", new_mode=mode)
             self._safe_mode_warned = False
         self._state = round(fake_temp, 1)
+        log_mode_change(
+            old_mode=self._prev_mode,
+            new_mode=mode,
+            fake_temp=fake_temp,
+            indoor=extra.get("indoor_temperature"),
+            outdoor=extra.get("outdoor_temperature"),
+            price_cat=extra.get("price_category"),
+            p30=getattr(self, "_p30", None),
+            p80=getattr(self, "_p80", None),
+            brake_factor=extra.get("brake_factor"),
+            ramp_in=extra.get("ramp_in_minutes"),
+            comfort_floor=extra.get("comfort_floor_c"),
+        )
+        self._prev_mode = mode
         self._attributes = {
             "mode": mode,
             "fake_outdoor_temperature": self._state,
@@ -1396,5 +1398,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    from .pump_log import setup_pump_log
+    await hass.async_add_executor_job(setup_pump_log)
     sensor = PumpSteerSensor(hass, config_entry)
     async_add_entities([sensor], update_before_add=False)
