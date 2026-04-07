@@ -53,6 +53,7 @@ _TEMP_BUFFER_SIZE = 10
 @dataclass
 class ThermalSample:
     """One data point collected during a braking period."""
+
     indoor_temp: float
     outdoor_temp: float
     rate: float  # °C/h, negative when indoor temperature is falling
@@ -216,7 +217,7 @@ class ThermalModel:
         for sample in self._samples:
             delta_t = sample.indoor_temp - sample.outdoor_temp
             sum_xy += sample.rate * delta_t
-            sum_xx += delta_t ** 2
+            sum_xx += delta_t**2
 
         if sum_xx < 1e-6:
             _LOGGER.debug("ThermalModel: degenerate data, skipping fit")

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 forecast.py
 
@@ -16,13 +14,15 @@ The main control loop continues to use simpler forecast gating
 such as _forecast_is_cold() and _should_precool().
 """
 
+from __future__ import annotations
+
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
 from typing import Any, Optional
 
-from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
+from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,21 +60,23 @@ class ThermalOutlook:
     """
 
     # Raw values
-    night_min_temp: Optional[float]      # Lowest temperature in 22:00–06:00 window
-    day_max_temp: Optional[float]        # Highest temperature in 06:00–22:00 window
-    hours_below_threshold: int           # Hours below summer_threshold in analysis window
-    effective_temp_now: Optional[float]  # Wind-chill-adjusted temperature for nearest point
+    night_min_temp: Optional[float]  # Lowest temperature in 22:00–06:00 window
+    day_max_temp: Optional[float]  # Highest temperature in 06:00–22:00 window
+    hours_below_threshold: int  # Hours below summer_threshold in analysis window
+    effective_temp_now: Optional[
+        float
+    ]  # Wind-chill-adjusted temperature for nearest point
 
     # Trends
-    warming_trend: bool                  # Temperature rising in the near horizon
-    cooling_trend: bool                  # Temperature falling in the near horizon
+    warming_trend: bool  # Temperature rising in the near horizon
+    cooling_trend: bool  # Temperature falling in the near horizon
 
     # Risk signal
-    precool_risk: bool                   # Warm period ahead that may reduce preheat value
+    precool_risk: bool  # Warm period ahead that may reduce preheat value
 
     # Diagnostic summary outputs
-    preheat_worthwhile: bool             # Diagnostic estimate only in 2.1.0
-    preheat_strength: float              # Diagnostic estimate only in 2.1.0
+    preheat_worthwhile: bool  # Diagnostic estimate only in 2.1.0
+    preheat_strength: float  # Diagnostic estimate only in 2.1.0
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -122,7 +124,7 @@ def _wind_chill(temp_c: float, wind_ms: float) -> float:
     """
     if temp_c >= 10.0 or wind_ms < 1.3:
         return temp_c
-    v016 = wind_ms ** 0.16
+    v016 = wind_ms**0.16
     return 13.12 + 0.6215 * temp_c - 11.37 * v016 + 0.3965 * temp_c * v016
 
 

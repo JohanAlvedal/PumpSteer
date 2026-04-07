@@ -16,11 +16,6 @@ PRECOOL_MARGIN: Final[float] = 3.0
 # WINTER_BRAKE_TEMP_OFFSET: Final[float] = 10.0
 # WINTER_BRAKE_THRESHOLD: Final[float] = 7.0
 
-# Multiplier applied to ramp_in to derive ramp_out.
-# 1.0 = symmetric: a house that takes N minutes to brake takes equally long to release.
-# Values < 1.0 release faster than the brake was applied.
-RAMP_OUT_FACTOR = 0.8
-
 # === PI CONTROLLER ===
 PID_KP: Final[float] = 2.4
 PID_KI: Final[float] = 0.035
@@ -68,13 +63,18 @@ COMFORT_FLOOR_BY_AGGRESSIVENESS: Final[List[float]] = [
 BRAKE_DELTA_C: Final[float] = 10.0
 
 # === RAMP TIMING ===
-# Ramp duration scales with price-category jump severity and house inertia,
-# then gets clamped between RAMP_MIN_MINUTES and RAMP_MAX_MINUTES.
-# Example with 15-minute prices and inertia=3:
-# 1 category jump × 3 × 10 = 30 minutes = 2 price slots
-RAMP_SCALE: Final[float] = 10.0
-RAMP_MIN_MINUTES: Final[float] = 20.0  # at least 1 price slot (15-min prices)
-RAMP_MAX_MINUTES: Final[float] = 60.0  # max 4 price slots
+# Ramp duration scales with house inertia and is clamped between
+# RAMP_MIN_MINUTES and RAMP_MAX_MINUTES.
+# Example: inertia=5 × 6 = 30 min ramp_in, 15 min ramp_out (× 0.5)
+RAMP_SCALE: Final[float] = 6.0  # multiplier: inertia × scale = ramp_in minutes
+RAMP_MIN_MINUTES: Final[float] = 15.0  # floor — never shorter than this (1 price slot)
+RAMP_MAX_MINUTES: Final[float] = (
+    60.0  # ceiling — never longer than this (4 price slots)
+)
+# Ramp-out duration as a fraction of ramp-in time.
+# < 1.0 = faster release than engagement (0.5 = 50 % of ramp-in).
+# > 1.0 = slower release than engagement.
+RAMP_OUT_FACTOR: Final[float] = 0.5
 
 # Preheating: extra boost applied during the preheat window (°C)
 PREHEAT_BOOST_C: Final[float] = 4.0
@@ -107,7 +107,7 @@ DEFAULT_SUMMER_THRESHOLD: Final[float] = 18.0
 DEFAULT_AGGRESSIVENESS: Final[float] = 3.0
 DEFAULT_HOUSE_INERTIA: Final[float] = 2.0
 DEFAULT_TARGET_TEMP: Final[float] = 21.0
-HOLIDAY_TEMP: Final[float] = 16.0
+HOLIDAY_TEMP: Final[float] = 17.0
 
 # === OHMIGO INTEGRATION ===
 # Default minimum interval between pushes to the Ohmigo number entity.
@@ -122,6 +122,9 @@ MIN_REASONABLE_TEMP: Final[float] = -30.0
 MAX_REASONABLE_TEMP: Final[float] = 30.0
 MIN_REASONABLE_PRICE: Final[float] = -2.0
 MAX_REASONABLE_PRICE: Final[float] = 15.0
+
+# === PUMP LOG ===
+PUMP_LOG_ENABLED: Final[bool] = True
 
 
 def validate_core_settings() -> None:
