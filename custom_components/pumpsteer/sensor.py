@@ -4,14 +4,13 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import homeassistant.util.dt as dt_util
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import StateType
-from homeassistant.components.sensor import SensorEntity
-from .thermal_model import ThermalModel
 
 from .control import PIController
 from .electricity_price import (
@@ -46,11 +45,12 @@ from .settings import (
     PREHEAT_BOOST_C,
     PREHEAT_ON_MISSING_FORECAST,
     PRICE_LOOKAHEAD_HOURS,
-    RAMP_OUT_FACTOR,
     RAMP_MAX_MINUTES,
     RAMP_MIN_MINUTES,
+    RAMP_OUT_FACTOR,
     RAMP_SCALE,
 )
+from .thermal_model import ThermalModel
 from .utils import (
     compute_price_slot_index,
     detect_price_interval_minutes,
@@ -92,12 +92,20 @@ class PumpSteerSensor(RestoreEntity):
     """
     PumpSteer heat pump controller.
 
+    Control architecture in 2.1.0:
+    - PI is the primary control loop
+    - Brake and pre-brake are bounded overlays on top of PI
+    - Comfort floor always overrides savings
+    - Forecast is used as a simple gate signal for preheat/precool
+    - Thermal model data is diagnostic only and does not directly affect control
+
     State machine:
         summer_mode  -> outdoor >= summer_threshold, passthrough
         precool      -> forecast shows warm period coming, raise fake temp
         holiday      -> lower target, same PI/braking logic
         preheating   -> expensive period coming, boost heating now
-        braking      -> expensive period active, PI disconnected
+        pre_braking  -> expensive period imminent, ramp brake in before slot start
+        braking      -> expensive period active, ramped brake overlay
         normal       -> PI regulates fake temp toward target
         safe_mode    -> required data missing, passthrough real outdoor temp
     """
@@ -512,39 +520,37 @@ class PumpSteerSensor(RestoreEntity):
         return False
 
     async def _forecast_temps(self) -> Optional[List[float]]:
+        """Return forecast outdoor temperatures for simple control gating."""
         cfg = self._cfg()
         weather_entity = cfg.get("weather_entity")
-        price_entity = cfg.get("electricity_price_entity")
 
-        if not weather_entity or not price_entity:
+        if not weather_entity:
             if self._forecast_available_last is not False:
                 _LOGGER.debug(
-                    "PumpSteer forecast unavailable: %s",
-                    (
-                        "weather_entity not configured"
-                        if not weather_entity
-                        else "electricity_price_entity not configured"
-                    ),
+                    "PumpSteer forecast unavailable: weather_entity not configured"
                 )
                 self._forecast_available_last = False
             return None
 
-        from .forecast import async_build_forecast
+        from .forecast import _async_extract_weather_points
 
         try:
-            points = await async_build_forecast(
+            weather_points = await _async_extract_weather_points(
                 self.hass,
-                price_entity_id=price_entity,
                 weather_entity_id=weather_entity,
                 horizon_hours=PRECOOL_LOOKAHEAD,
             )
         except Exception as err:
             if self._forecast_available_last is not False:
-                _LOGGER.debug("PumpSteer forecast build failed: %s", err)
+                _LOGGER.debug("PumpSteer forecast fetch failed: %s", err)
                 self._forecast_available_last = False
             return None
 
-        temps = [p.outdoor_temp for p in points if p.outdoor_temp is not None]
+        temps = [
+            point.outdoor_temp
+            for point in sorted(weather_points.values(), key=lambda p: p.timestamp)
+            if point.outdoor_temp is not None
+        ]
         available_now = bool(temps)
 
         if available_now != self._forecast_available_last:
@@ -557,9 +563,8 @@ class PumpSteerSensor(RestoreEntity):
             else:
                 _LOGGER.debug(
                     "PumpSteer forecast returned no usable temperatures "
-                    "(weather=%s, price=%s)",
+                    "(weather=%s)",
                     weather_entity,
-                    price_entity,
                 )
             self._forecast_available_last = available_now
 
@@ -614,6 +619,7 @@ class PumpSteerSensor(RestoreEntity):
             "thermal_k": round(self._thermal_model.k, 4),
             "thermal_k_valid": self._thermal_model.is_valid,
             "thermal_k_samples": self._thermal_model.sample_count,
+            "thermal_model_role": "diagnostic_only",
         }
 
     def _enter_safe_mode(
@@ -782,7 +788,8 @@ class PumpSteerSensor(RestoreEntity):
         aggressiveness = self._aggressiveness(cfg)
         house_inertia = self._house_inertia(cfg)
 
-        self._thermal_model.record_temp(now, indoor if indoor is not None else 0.0)
+        if indoor is not None:
+            self._thermal_model.record_temp(now, indoor)
 
         if indoor is None or outdoor is None:
             missing = []
@@ -827,6 +834,7 @@ class PumpSteerSensor(RestoreEntity):
         next_cat = self._next_period_category(
             categories, current_slot, interval_minutes
         )
+        del next_cat
 
         lookahead_slots = max(
             1,
@@ -938,7 +946,11 @@ class PumpSteerSensor(RestoreEntity):
                     indoor,
                     comfort_floor,
                 )
-                log_event("COMFORT_FLOOR_RELEASE", indoor=round(indoor, 1), floor=round(comfort_floor, 1))
+                log_event(
+                    "COMFORT_FLOOR_RELEASE",
+                    indoor=round(indoor, 1),
+                    floor=round(comfort_floor, 1),
+                )
                 brake_requested = False
                 brake_hold = 0.0
             else:
@@ -1316,7 +1328,12 @@ class PumpSteerSensor(RestoreEntity):
                     today_entity_id,
                     today_date,
                 )
-                log_event("THRESHOLDS_SET", p30=round(self._cached_p30, 4), p80=round(self._cached_p80, 4), date=today_date)
+                log_event(
+                    "THRESHOLDS_SET",
+                    p30=round(self._cached_p30, 4),
+                    p80=round(self._cached_p80, 4),
+                    date=today_date,
+                )
             else:
                 _LOGGER.debug(
                     "Price thresholds not cached yet (today_prices=%s, midnight_grace=%s), "
@@ -1385,6 +1402,7 @@ class PumpSteerSensor(RestoreEntity):
             )
             log_event("SAFE_MODE_EXIT", new_mode=mode)
             self._safe_mode_warned = False
+
         self._state = round(fake_temp, 1)
         log_mode_change(
             old_mode=self._prev_mode,
@@ -1417,7 +1435,7 @@ class PumpSteerSensor(RestoreEntity):
 
 
 class ThermalOutlookSensor(SensorEntity):
-    """Exposes ThermalOutlook as a HA sensor for visualization and debugging."""
+    """Expose ThermalOutlook as a diagnostic sensor for visualization and debugging."""
 
     _attr_has_entity_name = True
     _attr_name = "Thermal Outlook"
@@ -1453,19 +1471,22 @@ class ThermalOutlookSensor(SensorEntity):
     def extra_state_attributes(self) -> dict:
         if self._outlook is None:
             return {}
-        o = self._outlook
+        outlook = self._outlook
         return {
-            "night_min_temp": o.night_min_temp,
-            "day_max_temp": o.day_max_temp,
-            "hours_below_threshold": o.hours_below_threshold,
+            "control_role": "diagnostic_only",
+            "night_min_temp": outlook.night_min_temp,
+            "day_max_temp": outlook.day_max_temp,
+            "hours_below_threshold": outlook.hours_below_threshold,
             "effective_temp_now": (
-                round(o.effective_temp_now, 1) if o.effective_temp_now is not None else None
+                round(outlook.effective_temp_now, 1)
+                if outlook.effective_temp_now is not None
+                else None
             ),
-            "warming_trend": o.warming_trend,
-            "cooling_trend": o.cooling_trend,
-            "precool_risk": o.precool_risk,
-            "preheat_worthwhile": o.preheat_worthwhile,
-            "preheat_strength": round(o.preheat_strength, 2),
+            "warming_trend": outlook.warming_trend,
+            "cooling_trend": outlook.cooling_trend,
+            "precool_risk": outlook.precool_risk,
+            "preheat_worthwhile": outlook.preheat_worthwhile,
+            "preheat_strength": round(outlook.preheat_strength, 2),
         }
 
     async def async_update(self) -> None:
@@ -1479,6 +1500,7 @@ class ThermalOutlookSensor(SensorEntity):
 
         if not weather_entity or not price_entity:
             return
+
         try:
             points = await async_build_forecast(
                 self.hass,
@@ -1489,7 +1511,6 @@ class ThermalOutlookSensor(SensorEntity):
             self._outlook = analyze_thermal_outlook(
                 points,
                 summer_threshold=summer_threshold,
-                now_hour=dt_util.now().hour,
             )
         except Exception as err:
             _LOGGER.debug("ThermalOutlookSensor update failed: %s", err)
@@ -1501,6 +1522,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     from .pump_log import setup_pump_log
+
     await hass.async_add_executor_job(setup_pump_log)
     sensor = PumpSteerSensor(hass, config_entry)
     outlook_sensor = ThermalOutlookSensor(hass, config_entry)
