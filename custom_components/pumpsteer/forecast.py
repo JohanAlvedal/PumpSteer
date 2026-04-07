@@ -27,6 +27,33 @@ class ForecastPoint:
     source_weather: str = "unknown"
 
 
+@dataclass
+class ThermalOutlook:
+    """
+    Summarized thermal analysis based on upcoming weather and prices.
+    Used as decision support for preheat/precool — replaces binary _forecast_is_cold().
+    Produced by analyze_thermal_outlook(), consumed by sensor.py (block 5b) and
+    ThermalOutlookSensor for visualization.
+    """
+
+    # Raw values
+    night_min_temp: Optional[float]      # lowest temp 22:00–06:00
+    day_max_temp: Optional[float]        # highest temp 06:00–22:00
+    hours_below_threshold: int           # hours below summer_threshold (24h window)
+    effective_temp_now: Optional[float]  # wind-chill-adjusted current temp
+
+    # Trends (next trend_hours hours)
+    warming_trend: bool   # temp rising → warm day ahead, hold back preheat
+    cooling_trend: bool   # temp falling → cold night ahead, preheat motivated
+
+    # Risk signal
+    precool_risk: bool    # warm period ahead (day_max >= summer_threshold + margin)
+
+    # Decision outputs (computed)
+    preheat_worthwhile: bool  # is preheat justified given the full picture?
+    preheat_strength: float   # 0.0–1.0, scales PREHEAT_BOOST_C
+
+
 def _as_float(value: Any) -> Optional[float]:
     """Convert a value to float when possible."""
     try:
@@ -61,6 +88,18 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
 def _round_to_hour(dt_value: datetime) -> datetime:
     """Round down datetime to whole hour in UTC."""
     return dt_value.replace(minute=0, second=0, microsecond=0)
+
+
+def _wind_chill(temp_c: float, wind_ms: float) -> float:
+    """
+    JAG wind chill index (simplified).
+    Valid below ~10°C and wind > 1.3 m/s.
+    Outside these bounds, raw temperature is returned unchanged.
+    """
+    if temp_c >= 10.0 or wind_ms < 1.3:
+        return temp_c
+    v016 = wind_ms ** 0.16
+    return 13.12 + 0.6215 * temp_c - 11.37 * v016 + 0.3965 * temp_c * v016
 
 
 async def _async_extract_weather_points(
@@ -258,3 +297,106 @@ async def async_build_forecast(
         merged.append(point)
 
     return merged
+
+
+def analyze_thermal_outlook(
+    points: list[ForecastPoint],
+    summer_threshold: float,
+    now_hour: int,
+    precool_margin: float = 3.0,
+    trend_hours: int = 6,
+) -> ThermalOutlook:
+    """
+    Analyze a ForecastPoint list and return a ThermalOutlook.
+
+    night_min_temp: lowest temp in the night window (22:00–06:00)
+    day_max_temp:   highest temp in the day window  (06:00–22:00)
+    warming_trend:  true if avg(temp[mid:]) > avg(temp[:mid]) + 1°C hysteresis
+    cooling_trend:  true if avg(temp[mid:]) < avg(temp[:mid]) - 1°C hysteresis
+    effective_temp_now: wind-chill-adjusted temp for the nearest forecast point
+    preheat_worthwhile: true if cold enough for long enough AND no warm day takes over
+    preheat_strength: normalized against a 15°C span below summer_threshold
+    precool_risk: true if day_max >= summer_threshold + precool_margin
+    """
+    if not points:
+        return ThermalOutlook(
+            night_min_temp=None,
+            day_max_temp=None,
+            hours_below_threshold=0,
+            effective_temp_now=None,
+            warming_trend=False,
+            cooling_trend=False,
+            precool_risk=False,
+            preheat_worthwhile=False,
+            preheat_strength=0.0,
+        )
+
+    # Split into night (22–06) and day (06–22) based on timestamp hour
+    night_temps: list[float] = []
+    day_temps: list[float] = []
+    for p in points:
+        if p.outdoor_temp is None:
+            continue
+        h = p.timestamp.hour
+        if h >= 22 or h < 6:
+            night_temps.append(p.outdoor_temp)
+        else:
+            day_temps.append(p.outdoor_temp)
+
+    night_min = min(night_temps) if night_temps else None
+    day_max = max(day_temps) if day_temps else None
+
+    # Count hours below threshold
+    hours_cold = sum(
+        1 for p in points
+        if p.outdoor_temp is not None and p.outdoor_temp < summer_threshold
+    )
+
+    # Wind chill for the nearest forecast point
+    eff_temp: Optional[float] = None
+    if points[0].outdoor_temp is not None:
+        wind = points[0].wind_speed or 0.0
+        eff_temp = _wind_chill(points[0].outdoor_temp, wind)
+
+    # Trend: compare average of first half vs second half of trend window
+    trend_temps = [
+        p.outdoor_temp for p in points[:trend_hours] if p.outdoor_temp is not None
+    ]
+    warming = False
+    cooling = False
+    if len(trend_temps) >= 4:
+        mid = len(trend_temps) // 2
+        early_avg = sum(trend_temps[:mid]) / mid
+        late_avg = sum(trend_temps[mid:]) / (len(trend_temps) - mid)
+        warming = late_avg > early_avg + 1.0  # 1°C hysteresis to filter noise
+        cooling = late_avg < early_avg - 1.0
+
+    # Precool risk: a warm period is coming that will heat the house naturally
+    precool_risk = day_max is not None and day_max >= summer_threshold + precool_margin
+
+    # Is preheat worthwhile?
+    # Requires: cold enough (>= 3h), no warm day taking over, temp not already rising
+    preheat_worthwhile = (
+        hours_cold >= 3
+        and not warming
+        and not precool_risk
+        and (day_max is None or day_max < summer_threshold - 2.0)
+    )
+
+    # Strength: how cold relative to threshold, normalized against a 15°C span
+    preheat_strength = 0.0
+    if preheat_worthwhile and night_min is not None:
+        delta = summer_threshold - night_min
+        preheat_strength = min(1.0, max(0.0, delta / 15.0))
+
+    return ThermalOutlook(
+        night_min_temp=night_min,
+        day_max_temp=day_max,
+        hours_below_threshold=hours_cold,
+        effective_temp_now=eff_temp,
+        warming_trend=warming,
+        cooling_trend=cooling,
+        precool_risk=precool_risk,
+        preheat_worthwhile=preheat_worthwhile,
+        preheat_strength=preheat_strength,
+    )
