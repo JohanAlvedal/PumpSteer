@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import StateType
 from homeassistant.components.sensor import SensorEntity
+from .thermal_model import ThermalModel
 
 from .control import PIController
 from .electricity_price import (
@@ -109,6 +110,7 @@ class PumpSteerSensor(RestoreEntity):
         self._ohmigo_last_push = None
 
         self._pi = PIController()
+        self._thermal_model = ThermalModel()
 
         self._brake_ramp: float = 0.0
         self._preheat_ramp: float = 0.0
@@ -266,12 +268,16 @@ class PumpSteerSensor(RestoreEntity):
                 )
             except (ValueError, TypeError):
                 self._brake_last_expensive_t = None
-            _LOGGER.debug(
-                "PumpSteer restored brake state: ramp=%.3f last_t=%s last_exp=%s",
-                self._brake_ramp,
-                self._brake_last_t,
-                self._brake_last_expensive_t,
-            )
+        _LOGGER.debug(
+            "PumpSteer restored brake state: ramp=%.3f last_t=%s last_exp=%s",
+            self._brake_ramp,
+            self._brake_last_t,
+            self._brake_last_expensive_t,
+        )
+
+        saved_k = self._attributes.get("thermal_k")
+        if saved_k is not None:
+            self._thermal_model.restore_k(float(saved_k))
 
         # Wait until Home Assistant is fully started before the first real update.
         self.hass.bus.async_listen_once(
@@ -605,6 +611,9 @@ class PumpSteerSensor(RestoreEntity):
             "aggressiveness": aggressiveness,
             "p30": round(self._p30, 3),
             "p80": round(self._p80, 3),
+            "thermal_k": round(self._thermal_model.k, 4),
+            "thermal_k_valid": self._thermal_model.is_valid,
+            "thermal_k_samples": self._thermal_model.sample_count,
         }
 
     def _enter_safe_mode(
@@ -772,6 +781,8 @@ class PumpSteerSensor(RestoreEntity):
         )
         aggressiveness = self._aggressiveness(cfg)
         house_inertia = self._house_inertia(cfg)
+
+        self._thermal_model.record_temp(now, indoor if indoor is not None else 0.0)
 
         if indoor is None or outdoor is None:
             missing = []
@@ -942,6 +953,7 @@ class PumpSteerSensor(RestoreEntity):
             )
 
             if factor > 0.0:
+                self._thermal_model.collect_braking_sample(indoor, outdoor)
                 pi_demand = self._pi_output(
                     target,
                     indoor,
