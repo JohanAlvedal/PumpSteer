@@ -112,6 +112,7 @@ class PumpSteerSensor(RestoreEntity):
 
         self._pi = PIController()
         self._thermal_model = ThermalModel()
+        self._last_outlook: Optional[Any] = None
 
         self._brake_ramp: float = 0.0
         self._preheat_ramp: float = 0.0
@@ -843,6 +844,27 @@ class PumpSteerSensor(RestoreEntity):
         comfort_floor = self._comfort_floor(target, aggressiveness)
         forecast_temps = await self._forecast_temps()
 
+        # Compute ThermalOutlook for preheat gating (block 5b).
+        # Reuses the same weather entity already used by _forecast_temps.
+        self._last_outlook = None
+        _cfg_weather = cfg.get("weather_entity")
+        _cfg_price = cfg.get("electricity_price_entity")
+        if _cfg_weather and _cfg_price:
+            try:
+                from .forecast import async_build_forecast, analyze_thermal_outlook
+                _outlook_points = await async_build_forecast(
+                    self.hass,
+                    price_entity_id=_cfg_price,
+                    weather_entity_id=_cfg_weather,
+                    horizon_hours=24,
+                )
+                self._last_outlook = analyze_thermal_outlook(
+                    _outlook_points,
+                    summer_threshold=summer_threshold,
+                )
+            except Exception as _err:
+                _LOGGER.debug("ThermalOutlook computation failed: %s", _err)
+
         # 1. Summer mode.
         if outdoor >= summer_threshold:
             self._pi.reset(now)
@@ -1058,12 +1080,22 @@ class PumpSteerSensor(RestoreEntity):
                 return
 
             # 5b. Preheat-boost: heat extra while still cheap, only when cold.
-            forecast_cold = self._forecast_is_cold(
-                summer_threshold,
-                forecast_temps,
-                hours=PRICE_LOOKAHEAD_HOURS,
+            # Uses ThermalOutlook.preheat_worthwhile to gate the decision, and
+            # preheat_strength to scale the boost — colder night = stronger boost.
+            # Falls back to _forecast_is_cold if ThermalOutlook is unavailable.
+            outlook_worthwhile = (
+                self._last_outlook is not None
+                and self._last_outlook.preheat_worthwhile
             )
-            if forecast_cold and cfg.get("preheat_boost_enabled", True):
+            forecast_cold_fallback = (
+                self._last_outlook is None
+                and self._forecast_is_cold(
+                    summer_threshold,
+                    forecast_temps,
+                    hours=PRICE_LOOKAHEAD_HOURS,
+                )
+            )
+            if (outlook_worthwhile or forecast_cold_fallback) and cfg.get("preheat_boost_enabled", True):
                 preheat_factor = self._update_preheat_ramp(
                     True,
                     ramp_in=max(ramp_in, 10.0),
@@ -1071,7 +1103,12 @@ class PumpSteerSensor(RestoreEntity):
                 )
 
                 base_demand = self._pi_output(target, indoor, outdoor, now, cfg)
-                boost = PREHEAT_BOOST_C * preheat_factor
+                strength = (
+                    self._last_outlook.preheat_strength
+                    if self._last_outlook is not None
+                    else 1.0
+                )
+                boost = PREHEAT_BOOST_C * preheat_factor * strength
                 boosted_demand = base_demand + boost
                 fake_temp = max(
                     MIN_FAKE_TEMP,
@@ -1092,6 +1129,7 @@ class PumpSteerSensor(RestoreEntity):
                         ),
                         "preheat_boost_c": round(boost, 2),
                         "preheat_factor": round(preheat_factor, 3),
+                        "preheat_strength": round(strength, 2),
                         "brake_factor": 0.0,
                         "minutes_until_expensive": (
                             round(minutes_until_expensive, 0)
