@@ -51,9 +51,9 @@ class ThermalOutlook:
     This structure provides diagnostic insight into upcoming thermal conditions,
     such as cold periods, warming trends, and precool risk.
 
-    In PumpSteer 2.1.0, this is used for observability and visualization only
-    (for example via ThermalOutlookSensor) and does NOT directly influence
-    control decisions.
+    In PumpSteer 2.1.x, preheat_worthwhile and preheat_strength are used
+    in block 5b of sensor.py to gate and scale the preheat boost.
+    All other fields remain diagnostic only and do not influence control.
 
     The active control loop continues to use simpler forecast gating
     such as _forecast_is_cold().
@@ -76,8 +76,8 @@ class ThermalOutlook:
     precool_risk: bool  # Warm period ahead that may reduce preheat value
 
     # Diagnostic summary outputs
-    preheat_worthwhile: bool  # Diagnostic estimate only in 2.1.0
-    preheat_strength: float  # Diagnostic estimate only in 2.1.0
+    preheat_worthwhile: bool  # Gates preheat boost in block 5b
+    preheat_strength: float   # Scales preheat boost magnitude (0.0–1.0)
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -345,8 +345,9 @@ def analyze_thermal_outlook(
     This function produces a richer thermal interpretation of the forecast,
     including trends, cold duration, effective temperature, and precool risk.
 
-    In PumpSteer 2.1.0, this analysis is intended for diagnostics and future
-    control improvements. It is NOT part of the active control decision path.
+    In PumpSteer 2.1.x, preheat_worthwhile and preheat_strength from this
+    function are used in block 5b to gate and scale the preheat boost.
+    All other outputs remain diagnostic only.
 
     The main control loop still relies on simpler forecast signals.
     """
@@ -424,8 +425,9 @@ def analyze_thermal_outlook(
         preheat_strength = min(1.0, max(0.0, delta / 15.0))
 
     # NOTE:
-    # ThermalOutlook is diagnostic only in 2.1.0.
-    # It must not be used to directly control preheat/brake decisions.
+    # preheat_worthwhile and preheat_strength feed into block 5b in sensor.py.
+    # All other ThermalOutlook fields are diagnostic only.
+    # Pre-brake (block 5a) is never forecast-gated.
     return ThermalOutlook(
         night_min_temp=night_min,
         day_max_temp=day_max,
