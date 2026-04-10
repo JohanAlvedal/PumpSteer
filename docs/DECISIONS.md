@@ -150,13 +150,11 @@ forecast would cause the brake to miss its window whenever forecast is unavailab
 
 ---
 
-
----
-
 ### Why house thermal mass controls pre-brake lead time
 
-**Decision:** `number.pumpsteer_house_thermal_mass` affects the brake ramp timing
-(`ramp_in` / `ramp_out`) rather than directly deciding whether braking should happen.
+**Decision:** `number.pumpsteer_house_inertia` (display label: "Brake Ramp Time") affects
+the brake ramp timing (`ramp_in` / `ramp_out`) rather than directly deciding whether
+braking should happen.
 
 **Reasoning:**
 Price logic decides **if** a slot is expensive enough to brake. House thermal mass
@@ -172,6 +170,8 @@ same brake state in time. This keeps the mental model clean:
 
 Letting thermal mass decide whether braking is active would mix plant dynamics with
 price classification and make behavior harder to explain and tune.
+
+---
 
 ## Summer Mode
 
