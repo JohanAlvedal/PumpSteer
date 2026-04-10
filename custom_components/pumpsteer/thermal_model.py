@@ -49,6 +49,15 @@ _K_MAX = 0.5
 # 10 samples × ~60 s polling gives roughly a 10 minute window.
 _TEMP_BUFFER_SIZE = 10
 
+# Minimum history span before rate is considered reliable.
+# A few minutes gives a more stable estimate than a near-instant sample.
+_MIN_RATE_WINDOW_MINUTES = 3.0
+
+# Plausible bounds for measured indoor temperature rate (°C/h).
+# These are intentionally conservative and only reject obvious spikes/noise.
+_MIN_RATE_C_PER_HOUR = -5.0
+_MAX_RATE_C_PER_HOUR = 1.0
+
 
 @dataclass
 class ThermalSample:
@@ -109,6 +118,11 @@ class ThermalModel:
         """Number of samples used in the most recent successful fit."""
         return self._sample_count
 
+    @property
+    def pending_samples(self) -> int:
+        """Number of collected samples waiting for the next fit."""
+        return len(self._samples)
+
     # ── Persistence ────────────────────────────────────────────────────────────
 
     def restore_k(self, k: float) -> None:
@@ -152,9 +166,21 @@ class ThermalModel:
         Samples are skipped when:
         - the history window is too short
         - the indoor/outdoor temperature delta is too small to be meaningful
+        - the measured rate does not indicate actual cooling
+        - the measured rate is clearly implausible
         """
         rate = self._compute_rate()
         if rate is None:
+            return
+
+        # Only use real cooling samples.
+        # If indoor temperature is still flat/rising, the sample is not useful
+        # for estimating passive heat loss during braking.
+        if rate >= 0.0:
+            return
+
+        # Reject obvious spikes/noise before they contaminate the fit.
+        if rate < _MIN_RATE_C_PER_HOUR or rate > _MAX_RATE_C_PER_HOUR:
             return
 
         delta_t = indoor_temp - outdoor_temp
@@ -185,8 +211,8 @@ class ThermalModel:
         t_now, temp_now = self._temp_history[-1]
 
         dt_hours = (t_now - t_old).total_seconds() / 3600.0
-        if dt_hours < (1 / 60):
-            # Less than 1 minute of history — too noisy to use.
+        if dt_hours < (_MIN_RATE_WINDOW_MINUTES / 60.0):
+            # Too little history — the estimate becomes noisy and unstable.
             return None
 
         return (temp_now - temp_old) / dt_hours

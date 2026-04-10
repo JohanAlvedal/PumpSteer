@@ -63,7 +63,7 @@ class ThermalOutlook:
     night_min_temp: Optional[float]  # Lowest temperature in 22:00–06:00 window
     day_max_temp: Optional[float]  # Highest temperature in 06:00–22:00 window
     hours_below_threshold: int  # Hours below summer_threshold in analysis window
-    
+
     effective_temp_now: Optional[
         float
     ]  # Wind-chill-adjusted temperature for nearest point
@@ -77,7 +77,7 @@ class ThermalOutlook:
 
     # Diagnostic summary outputs
     preheat_worthwhile: bool  # Gates preheat boost in block 5b
-    preheat_strength: float   # Scales preheat boost magnitude (0.0–1.0)
+    preheat_strength: float  # Scales preheat boost magnitude (0.0–1.0)
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -125,7 +125,7 @@ def _wind_chill(temp_c: float, wind_ms: float) -> float:
     """
     if temp_c >= 10.0 or wind_ms < 1.3:
         return temp_c
-    v016 = wind_ms **0.16
+    v016 = wind_ms**0.16
     return 13.12 + 0.6215 * temp_c - 11.37 * v016 + 0.3965 * temp_c * v016
 
 
@@ -335,7 +335,7 @@ async def async_build_forecast(
 def analyze_thermal_outlook(
     points: list[ForecastPoint],
     summer_threshold: float,
-    now_hour: int = 0,          # accepted for API compatibility, not used in logic
+    now_hour: int = 0,  # accepted for API compatibility, not used in logic
     precool_margin: float = 3.0,
     trend_hours: int = 6,
 ) -> ThermalOutlook:

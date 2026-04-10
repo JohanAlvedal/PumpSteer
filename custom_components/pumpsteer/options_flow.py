@@ -76,10 +76,6 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         default=current_data.get("notify_service", ""),
                     ): selector({"text": {}}),
                     vol.Optional(
-                        "preheat_boost_enabled",
-                        default=current_data.get("preheat_boost_enabled", True),
-                    ): selector({"boolean": {}}),
-                    vol.Optional(
                         "ohmigo_entity",
                         default=current_data.get("ohmigo_entity", ""),
                     ): selector(
@@ -134,12 +130,12 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                 _LOGGER.warning("%s unavailable: %s", description, entity_id)
                 errors[field] = "entity_unavailable"
 
-        # weather_entity är valfri — validera bara om den är ifylld
+        # weather_entity is optional — validate only if set
         weather = user_input.get("weather_entity")
         if weather and not self._entity_exists(weather):
             errors["weather_entity"] = "entity_not_found"
 
-        # ohmigo_entity är valfri — validera bara om den är ifylld
+        # ohmigo_entity is optional — validate only if set
         ohmigo = user_input.get("ohmigo_entity", "")
         if ohmigo and not self._entity_exists(ohmigo):
             errors["ohmigo_entity"] = "entity_not_found"

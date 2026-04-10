@@ -29,7 +29,8 @@ def _percentile(values: List[float], p: float) -> float:
 
 
 def classify_price(price: float, p30: float, p80: float) -> str:
-    """Classify a single price against P30/P80 thresholds."""
+    if p80 < ABSOLUTE_CHEAP_LIMIT:
+        return PRICE_CHEAP
     if price <= p30 or price <= ABSOLUTE_CHEAP_LIMIT:
         return PRICE_CHEAP
     if price <= p80:
