@@ -1,0 +1,32 @@
+# Release 2.1.0
+
+## What's new
+
+### Thermal Outlook sensor
+A new sensor, `sensor.pumpsteer_thermal_outlook`, is now available on the PumpSteer device.
+
+It exposes the result of PumpSteer’s forecast analysis that was previously only used internally. The sensor makes it easier to see, directly in the dashboard, whether preheating looks worthwhile, how strong the cold signal is, whether a warming or cooling trend is detected, and whether there is a precool risk ahead.
+
+This improves observability and makes PumpSteer’s forecast reasoning easier to follow without digging through the main sensor attributes.
+
+### Preheat boost moved to the dashboard
+The preheat boost toggle (`switch.pumpsteer_preheat_boost`) is now exposed as a proper switch entity on the PumpSteer device.
+
+Previously this setting was only available through the integration configuration flow. It can now be controlled directly from the dashboard or from automations.
+
+### Groundwork for smarter future decisions
+`forecast.py` and `thermal_model.py` have been refactored and cleaned up to support future improvements.
+
+- `forecast.py` provides a clearer analysis of upcoming weather conditions
+- `thermal_model.py` passively collects data during braking periods for diagnostics and future thermal-learning use
+
+In PumpSteer 2.1.0, this work is primarily about observability, diagnostics, and architecture. It does **not** yet replace the existing core control logic, but it prepares PumpSteer for future improvements in deciding when preheating is truly worthwhile and how much thermal margin the house has before a brake.
+
+### Internal cleanup
+General internal cleanup and refactoring across the codebase to improve structure, maintainability, and future extensibility.
+
+## Upgrade notes
+
+No migration is required.
+
+Existing installations upgrade normally on reload. The new preheat switch defaults to the same effective behavior as the previous configuration-based setting.
