@@ -14,12 +14,10 @@
 
 ---
 
-## [2.0.0]
-
-### Major rewrite
-
-- PI controller
-- State machine
-- Price classification
-- Dynamic braking
-- Forecast support
+## 2.0.0 (The Big Rewrite)
+- **New Control System:** Replaced heuristics with PI-based control.
+- **Price Classification:** Simplified to `cheap / normal / expensive`.
+- **State Machine:** Predictable behavior and status reporting.
+- **Dynamic Braking:** Added ramping, hold logic, and peak filtering.
+- **Managed Entities:** Integration now owns numbers, switches, and datetime entities.
+- **Local First:** No cloud dependencies.
