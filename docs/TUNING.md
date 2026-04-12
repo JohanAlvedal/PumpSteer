@@ -1,28 +1,17 @@
-# Tuning
+# 🔧 Tuning & Performance
 
-## Aggressiveness
+### Aggressiveness Level
+Controls how hard the system reacts to price changes.
+- **0:** No price control.
+- **1–2:** Mild response.
+- **3–4:** Balanced (Recommended for most).
+- **5:** Aggressive price chasing.
 
-- 0 → no price control  
-- 1–2 → mild  
-- 3–4 → balanced  
-- 5 → aggressive  
+### Inertia
+Matches the thermal mass of your building.
+- **Low:** For apartments or light wooden houses (fast response).
+- **Medium:** For standard detached houses.
+- **High:** For heavy stone/concrete houses with high thermal mass.
 
----
-
-## Inertia
-
-- Low → fast system  
-- High → slow system  
-
-Typical:
-
-- Apartment → low  
-- House → medium  
-- Heavy house → high  
-
----
-
-## Key idea
-
-- Price decides WHEN  
-- Inertia decides HOW EARLY  
+### Recorder Requirement
+The system requires at least **72 hours of price history** in the Home Assistant Recorder to function correctly. If missing, "Safe Mode" may trigger.
