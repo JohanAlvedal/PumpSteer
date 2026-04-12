@@ -129,9 +129,10 @@ Prices are classified into three categories using hybrid percentile thresholds:
 - `normal` — between P30 and P80
 - `expensive` — above P80
 
-Thresholds are computed from the **72-hour trailing price history** fetched from the HA
-recorder. If insufficient history exists (< `MIN_SAMPLES_FOR_CLASSIFICATION` = 5 samples),
-today's known prices are used as fallback.
+Thresholds are computed from today's known prices only. This matches how Ngenic/Tibber classify prices — relative to the current day's price spread rather than a trailing history window.
+If today's prices are not yet available, the combined today+tomorrow list is used as a temporary fallback until the cache can be committed.
+HISTORY_WEIGHT / HORIZON_WEIGHT and compute_price_thresholds() (which uses 72-hour trailing history) exist in settings.py / electricity_price.py but are not applied — reserved for a future hybrid implementation.
+Thresholds are cached per calendar day.
 
 `HISTORY_WEIGHT` / `HORIZON_WEIGHT` exist in `settings.py` but are not yet applied in
 the threshold calculation — they are reserved for a future hybrid implementation.
