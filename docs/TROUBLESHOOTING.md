@@ -1,28 +1,18 @@
-# Troubleshooting
+# 🛠 Troubleshooting
 
-## Safe mode
+### Safe Mode
+**Cause:** Usually missing or invalid price data.
+**Fix:** Check that your price sensor provides `today/raw_today` and `tomorrow/raw_tomorrow`.
 
-Cause:
-- Missing price data  
+### No Braking Occurring
+**Cause:** - Price is not in the "Expensive" range.
+- Comfort protection is active (indoor temp is too low).
 
-Fix:
-- Check today/raw_today  
-- Check tomorrow/raw_tomorrow  
+### Wrong Price Category
+**Cause:** Invalid data format from your price sensor. PumpSteer supports:
+- `0.95`
+- `{ "value": 0.95 }`
+- `{ "price": 0.95 }`
 
----
-
-## No braking
-
-Cause:
-- Price not high enough  
-- Comfort protection active  
-
----
-
-## Wrong behavior
-
-Check:
-
-- Sensors  
-- Price format  
-- Forecast availability  
+### Safety & Disclaimer
+Heating is a critical system. Do not use PumpSteer if your heating system is unstable or if you do not understand the behavior of virtual outdoor temperature manipulation.
