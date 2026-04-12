@@ -47,7 +47,7 @@ To keep things organized, the documentation is divided into the following sectio
 
 ---
 
-## 🔧 How it works
+## 🔧 How it works (The TL;DR)
 
 PumpSteer calculates a **virtual outdoor temperature** based on electricity prices, indoor temperature, and weather forecasts. 
 
