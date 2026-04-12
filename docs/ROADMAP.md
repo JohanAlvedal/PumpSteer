@@ -1,9 +1,10 @@
- PumpSteer Roadmap
+# PumpSteer Roadmap
 
-## Current Version: 2.0.x — Stable
+## Current Version: 2.1.0 — Observability & Architecture
 
-Version 2.0 delivered a stable, predictable, and well-architected control system.
-The 2.0.x series continues with bug fixes and incremental hardening.
+Version 2.1 builds on the stable 2.0 foundation by improving observability, making
+forecast reasoning visible in the dashboard, and laying the groundwork for smarter
+preheat decisions in future versions.
 
 ### Delivered in 2.0.x
 
@@ -24,37 +25,52 @@ The 2.0.x series continues with bug fixes and incremental hardening.
 - ✅ Safe mode fallback for missing sensor data
 - ✅ HA 2026.2+ forecast API compatibility (`get_forecasts` service call)
 
+### Delivered in 2.1.0
+
+- ✅ `sensor.pumpsteer_thermal_outlook` — exposes forecast analysis as a dashboard-visible sensor
+  (preheat worthwhile, preheat strength, warming/cooling trend, precool risk, night min / day max temp)
+- ✅ Preheat boost exposed as `switch.pumpsteer_preheat_boost` — controllable from dashboard and automations
+  (previously only configurable in the options flow)
+- ✅ `ThermalModel` passive sample collection during braking sessions — groundwork for future thermal learning
+- ✅ `forecast.py` refactored for clearer weather analysis and better separation of concerns
+- ✅ Internal cleanup and refactoring for maintainability and future extensibility
+
 ---
 
 ## 🔴 Active / Near-term
 
-### Verify brake ramp fix end-to-end
-Observe a full pre-brake cycle in production from the beginning to confirm the dt-cap
-fix works correctly across an entire ramp-in → braking → ramp-out sequence.
+### Connect ThermalOutlook to preheat-boost control (block 5b)
+Replace the current `_forecast_is_cold()` heuristic with `ThermalOutlook.preheat_worthwhile`
+so that block 5b uses the richer forecast analysis already computed by `ThermalOutlookSensor`.
+This is the established implementation order: passive collection ✅ → connect ThermalOutlook → combine with ThermalModel once k is calibrated.
+
+### Verify brake ramp end-to-end in production
+Observe a full pre-brake cycle to confirm the dt-cap fix works correctly across an
+entire ramp-in → braking → ramp-out sequence.
 
 ### Optional: clamp `factor` against `ideal_factor` in block 5a
 Guard against dirty `_brake_ramp` state from restores or unexpected mode transitions.
-Discussed but not yet applied — evaluate after observing the next production cycle.
+Evaluate after observing the next production cycle.
 
 ---
 
-## 🟡 Post-2.0 — Planned
+## 🟡 Post-2.1 — Planned
 
-### 1. Improved forecast usage
-- More precise preheat window timing based on forecast temperature profile
-- Avoid preheat-boost triggering when the cold period is too short to matter
+### 1. Smarter preheat decisions
+- Use `ThermalOutlook.preheat_strength` to scale the preheat boost proportionally
+  rather than applying a fixed `PREHEAT_BOOST_C`
+- Avoid preheat-boost when the cold period is too short to matter
 
-### 2. Smarter price strategy
-- Optional future hybrid weighting between trailing history and today/tomorrow horizon
-  (constants exist today, but this is not yet implemented)
-- Peak filter: ignore expensive spikes shorter than a configurable threshold
-  (already partially implemented via `PEAK_FILTER_MIN_DURATION_MINUTES`)
+### 2. Activate ThermalModel fitting
+- Call `ThermalModel.fit()` once per day (at midnight alongside threshold refresh)
+  once sufficient braking session data has accumulated
+- Use fitted `k` to predict indoor temperature drop during planned brakes
+- Expose `brake_safe` prediction as a sensor attribute for verification
+
+### 3. Smarter price strategy
+- Optional hybrid weighting between trailing history and today/tomorrow horizon
+  (constants exist in `settings.py` but are not yet applied)
 - Consider price spread within the day, not just absolute P80 threshold
-
-### 3. Diagnostics & debugging
-- Richer sensor attributes: PI P-term, I-term, brake factor, price category all visible
-- Better mode transition logging
-- Dashboard template sensors for capturing brake/price snapshots
 
 ### 4. Configuration improvements
 - More user-friendly option labels
