@@ -67,9 +67,14 @@ acceptable — stale thresholds are better than mid-slot reclassification.
 **Status: not yet implemented — constants exist but are unused.**
 
 `HISTORY_WEIGHT` and `HORIZON_WEIGHT` are defined in `settings.py` (both 0.50) but
-`compute_price_thresholds()` does not apply them. The current logic is simpler:
-use the 72-hour trailing history if at least `MIN_SAMPLES_FOR_CLASSIFICATION` samples
-exist, otherwise fall back to today's known prices.
+are not applied. The current logic uses **today's known prices only** to compute P30
+and P80 — consistent with how Ngenic/Tibber classify prices relative to the current
+day's spread. If today's prices are not yet available (e.g. at midnight before the
+sensor has updated), the combined today+tomorrow list is used as a temporary fallback
+until the cache can be committed for the day.
+
+`compute_price_thresholds()` in `electricity_price.py` (which supports a trailing
+history input) exists but is not called by `sensor.py`.
 
 **Intended design (future):**
 P80_hybrid = HISTORY_WEIGHT × P80_history + HORIZON_WEIGHT × P80_today_tomorrow
