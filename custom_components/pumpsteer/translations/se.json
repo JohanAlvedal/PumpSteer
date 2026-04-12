@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "PumpSteer – inställningar",
+        "data": {
+          "indoor_temp_entity": "Inomhustemperatursensor",
+          "real_outdoor_entity": "Utomhustemperatursensor",
+          "electricity_price_entity": "Elprisensor"
+        }
+      }
+    },
+    "error": {
+      "required": "Det här fältet är obligatoriskt",
+      "entity_not_found": "Entiteten hittades inte",
+      "entity_unavailable": "Entiteten är otillgänglig",
+      "unknown": "Ett okänt fel uppstod"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PumpSteer – alternativ",
+        "data": {
+          "indoor_temp_entity": "Inomhustemperatursensor",
+          "real_outdoor_entity": "Utomhustemperatursensor",
+          "electricity_price_entity": "Elprisensor (idag)",
+          "price_tomorrow_entity": "Elprisensor (imorgon)",
+          "pid_kp": "Temperaturrespons (Kp)",
+          "pid_ki": "Långsiktig korrigering (Ki)",
+          "pid_kd": "Dämpning vid snabba förändringar (Kd)",
+          "pid_integral_clamp": "Gräns för långsiktig korrigering",
+          "pid_output_clamp": "Maximal temperaturregel",
+          "notify_service": "Notifieringstjänst (valfri, t.ex. notify.mobile_app_min_telefon)",
+          "preheat_boost_enabled": "Aktivera förvärmning",
+          "ohmigo_entity": "Ohmigo-entitet (valfri)",
+          "ohmigo_interval_minutes": "Ohmigo push-intervall"
+        },
+        "data_description": {
+          "pid_kp": "Hur kraftigt PumpSteer reagerar på aktuell temperaturdifferens. Typiskt intervall: 2,0 till 5,0.",
+          "pid_ki": "Hur mycket PumpSteer korrigerar långsiktig drift. Typiskt intervall: 0,01 till 0,05.",
+          "pid_kd": "Hur mycket PumpSteer reagerar på snabba temperaturförändringar. Håll på 0,0 om du inte trimmar det medvetet.",
+          "pid_integral_clamp": "Begränsar uppbyggd långsiktig korrigering för att minska windup. Typiskt intervall: 5,0 till 10,0.",
+          "pid_output_clamp": "Begränsar hur många grader PumpSteer maximalt justerar börvärdet.",
+          "notify_service": "Lämna tomt för att använda beständiga notifieringar i HA:s sidofält istället.",
+          "preheat_boost_enabled": "När aktiverad värmer PumpSteer extra inför dyra perioder för att bygga upp termisk massa.",
+          "ohmigo_entity": "PumpSteer skickar den virtuella utetemperaturen till den här entiteten efter varje uppdatering. Lämna tomt för att inaktivera. Slå av/på utan att konfigurera om via brytaren 'Ohmigo Push'.",
+          "ohmigo_interval_minutes": "Minsta tid mellan push-uppdateringar till Ohmigo. Standard 5 minuter. Push hoppas även över om förändringen är mindre än 0,2 °C."
+        }
+      }
+    },
+    "error": {
+      "required": "Det här fältet är obligatoriskt",
+      "entity_not_found": "Entiteten hittades inte",
+      "entity_unavailable": "Entiteten är otillgänglig"
+    }
+  }
+}

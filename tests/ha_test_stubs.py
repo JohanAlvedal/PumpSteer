@@ -251,6 +251,7 @@ vol.Optional = Optional
 sys.modules["voluptuous"] = vol
 
 # ── numpy ─────────────────────────────────────────────────────────────────────
+# ── numpy ─────────────────────────────────────────────────────────────────────
 np_mod = types.ModuleType("numpy")
 
 
@@ -282,21 +283,32 @@ def select(condlist, choicelist, default=None):
     return out
 
 
+def isscalar(value):
+    return not isinstance(value, (list, tuple, dict, set))
+
+
 np_mod.array = array
 np_mod.percentile = percentile
 np_mod.select = select
+np_mod.isscalar = isscalar
+np_mod.bool_ = bool
 sys.modules["numpy"] = np_mod
 
 # ── homeassistant.components.recorder ────────────────────────────────────────
+# ── homeassistant.components.* ───────────────────────────────────────────────
 components_mod = types.ModuleType("homeassistant.components")
+components_mod.__path__ = []  # Mark as package
+
+sensor_mod = types.ModuleType("homeassistant.components.sensor")
+
+
+class SensorEntity:  # Minimal stub
+    """Minimal SensorEntity stub for tests."""
+
+
+sensor_mod.SensorEntity = SensorEntity
+
 recorder_mod = types.ModuleType("homeassistant.components.recorder")
-
-
-def get_instance(hass):
-    return None
-
-
-recorder_mod.get_instance = get_instance
 history_mod = types.ModuleType("homeassistant.components.recorder.history")
 
 
@@ -307,5 +319,6 @@ def get_significant_states(*args, **kwargs):
 history_mod.get_significant_states = get_significant_states
 recorder_mod.history = history_mod
 sys.modules["homeassistant.components"] = components_mod
+sys.modules["homeassistant.components.sensor"] = sensor_mod
 sys.modules["homeassistant.components.recorder"] = recorder_mod
 sys.modules["homeassistant.components.recorder.history"] = history_mod

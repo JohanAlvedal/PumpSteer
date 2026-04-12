@@ -1,8 +1,24 @@
+"""
+forecast.py
+
+This module provides two separate responsibilities:
+
+1. Forecast normalization for PumpSteer utility/control support
+2. Thermal outlook analysis for diagnostics and observability
+
+IMPORTANT:
+In PumpSteer 2.1.0, ThermalOutlook is diagnostic only.
+It does not directly influence active control decisions.
+
+The main control loop continues to use simpler forecast gating
+such as _forecast_is_cold() and _should_precool().
+"""
+
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
 from typing import Any, Optional
 
 from homeassistant.core import HomeAssistant
@@ -25,6 +41,43 @@ class ForecastPoint:
     humidity: Optional[float] = None
     source_price: str = "unknown"
     source_weather: str = "unknown"
+
+
+@dataclass
+class ThermalOutlook:
+    """
+    Summarized thermal analysis based on upcoming weather and prices.
+
+    This structure provides diagnostic insight into upcoming thermal conditions,
+    such as cold periods, warming trends, and precool risk.
+
+    In PumpSteer 2.1.x, preheat_worthwhile and preheat_strength are used
+    in block 5b of sensor.py to gate and scale the preheat boost.
+    All other fields remain diagnostic only and do not influence control.
+
+    The active control loop continues to use simpler forecast gating
+    such as _forecast_is_cold().
+    """
+
+    # Raw values
+    night_min_temp: Optional[float]  # Lowest temperature in 22:00–06:00 window
+    day_max_temp: Optional[float]  # Highest temperature in 06:00–22:00 window
+    hours_below_threshold: int  # Hours below summer_threshold in analysis window
+
+    effective_temp_now: Optional[
+        float
+    ]  # Wind-chill-adjusted temperature for nearest point
+
+    # Trends
+    warming_trend: bool  # Temperature rising in the near horizon
+    cooling_trend: bool  # Temperature falling in the near horizon
+
+    # Risk signal
+    precool_risk: bool  # Warm period ahead that may reduce preheat value
+
+    # Diagnostic summary outputs
+    preheat_worthwhile: bool  # Gates preheat boost in block 5b
+    preheat_strength: float  # Scales preheat boost magnitude (0.0–1.0)
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -63,12 +116,25 @@ def _round_to_hour(dt_value: datetime) -> datetime:
     return dt_value.replace(minute=0, second=0, microsecond=0)
 
 
+def _wind_chill(temp_c: float, wind_ms: float) -> float:
+    """
+    Calculate a simplified wind chill estimate.
+
+    Valid below approximately 10°C and for wind speeds above 1.3 m/s.
+    Outside these bounds, the raw outdoor temperature is returned unchanged.
+    """
+    if temp_c >= 10.0 or wind_ms < 1.3:
+        return temp_c
+    v016 = wind_ms**0.16
+    return 13.12 + 0.6215 * temp_c - 11.37 * v016 + 0.3965 * temp_c * v016
+
+
 async def _async_extract_weather_points(
     hass: HomeAssistant,
     weather_entity_id: str,
     horizon_hours: int,
 ) -> dict[datetime, ForecastPoint]:
-    """Read hourly weather forecast via weather.get_forecasts service call (HA 2024.x+)."""
+    """Read hourly weather forecast via weather.get_forecasts service call."""
 
     try:
         response = await hass.services.async_call(
@@ -102,6 +168,7 @@ async def _async_extract_weather_points(
         return {}
 
     now_utc = dt_util.utcnow()
+    current_hour = now_utc.replace(minute=0, second=0, microsecond=0)
     end_utc = now_utc + timedelta(hours=horizon_hours)
     result: dict[datetime, ForecastPoint] = {}
 
@@ -115,7 +182,7 @@ async def _async_extract_weather_points(
 
         ts = _round_to_hour(ts)
 
-        if ts < now_utc.replace(minute=0, second=0, microsecond=0):
+        if ts < current_hour:
             continue
         if ts > end_utc:
             continue
@@ -163,9 +230,9 @@ def _extract_price_points(
     """
     Read future hourly prices from a Home Assistant price entity.
 
-    Expected sources:
+    Expected sources include:
     - raw_today / raw_tomorrow style lists
-    - a forecast-like list in attributes
+    - forecast-like price lists in entity attributes
     """
     state = hass.states.get(price_entity_id)
     if state is None:
@@ -173,6 +240,7 @@ def _extract_price_points(
         return {}
 
     now_utc = dt_util.utcnow()
+    current_hour = now_utc.replace(minute=0, second=0, microsecond=0)
     end_utc = now_utc + timedelta(hours=horizon_hours)
 
     candidates: list[dict[str, Any]] = []
@@ -180,7 +248,7 @@ def _extract_price_points(
     for attr_name in ("raw_today", "raw_tomorrow", "prices", "forecast"):
         attr = state.attributes.get(attr_name)
         if isinstance(attr, list):
-            candidates.extend([item for item in attr if isinstance(item, dict)])
+            candidates.extend(item for item in attr if isinstance(item, dict))
 
     result: dict[datetime, float] = {}
 
@@ -189,7 +257,7 @@ def _extract_price_points(
         if ts is None:
             continue
 
-        if ts < now_utc.replace(minute=0, second=0, microsecond=0):
+        if ts < current_hour:
             continue
         if ts > end_utc:
             continue
@@ -211,11 +279,15 @@ async def async_build_forecast(
     horizon_hours: int = 24,
 ) -> list[ForecastPoint]:
     """
-    Build a normalized hourly forecast for planner usage.
+    Build a normalized hourly forecast for PumpSteer utility and diagnostics.
 
-    The function merges:
-    - future weather forecast from a weather entity (via weather.get_forecasts)
+    This function merges:
+    - future weather forecast from a weather entity
     - future electricity prices from a price entity
+
+    In 2.1.0, this supports both:
+    - simple control-facing forecast helpers
+    - richer diagnostic analysis such as ThermalOutlook
     """
     weather_points = await _async_extract_weather_points(
         hass, weather_entity_id, horizon_hours
@@ -258,3 +330,112 @@ async def async_build_forecast(
         merged.append(point)
 
     return merged
+
+
+def analyze_thermal_outlook(
+    points: list[ForecastPoint],
+    summer_threshold: float,
+    now_hour: int = 0,  # accepted for API compatibility, not used in logic
+    precool_margin: float = 3.0,
+    trend_hours: int = 6,
+) -> ThermalOutlook:
+    """
+    Analyze a ForecastPoint list and return a ThermalOutlook.
+
+    This function produces a richer thermal interpretation of the forecast,
+    including trends, cold duration, effective temperature, and precool risk.
+
+    In PumpSteer 2.1.x, preheat_worthwhile and preheat_strength from this
+    function are used in block 5b to gate and scale the preheat boost.
+    All other outputs remain diagnostic only.
+
+    The main control loop still relies on simpler forecast signals.
+    """
+    if not points:
+        return ThermalOutlook(
+            night_min_temp=None,
+            day_max_temp=None,
+            hours_below_threshold=0,
+            effective_temp_now=None,
+            warming_trend=False,
+            cooling_trend=False,
+            precool_risk=False,
+            preheat_worthwhile=False,
+            preheat_strength=0.0,
+        )
+
+    # Split into night (22–06) and day (06–22) based on forecast timestamp hour.
+    night_temps: list[float] = []
+    day_temps: list[float] = []
+    for point in points:
+        if point.outdoor_temp is None:
+            continue
+        hour = point.timestamp.hour
+        if hour >= 22 or hour < 6:
+            night_temps.append(point.outdoor_temp)
+        else:
+            day_temps.append(point.outdoor_temp)
+
+    night_min = min(night_temps) if night_temps else None
+    day_max = max(day_temps) if day_temps else None
+
+    # Count hours below the threshold in the provided analysis window.
+    hours_cold = sum(
+        1
+        for point in points
+        if point.outdoor_temp is not None and point.outdoor_temp < summer_threshold
+    )
+
+    # Wind-chill-adjusted temperature for the nearest forecast point.
+    eff_temp: Optional[float] = None
+    if points[0].outdoor_temp is not None:
+        wind = points[0].wind_speed or 0.0
+        eff_temp = _wind_chill(points[0].outdoor_temp, wind)
+
+    # Trend analysis based on the first trend_hours forecast points.
+    trend_temps = [
+        point.outdoor_temp
+        for point in points[:trend_hours]
+        if point.outdoor_temp is not None
+    ]
+    warming = False
+    cooling = False
+    if len(trend_temps) >= 4:
+        mid = len(trend_temps) // 2
+        early_avg = sum(trend_temps[:mid]) / mid
+        late_avg = sum(trend_temps[mid:]) / (len(trend_temps) - mid)
+        warming = late_avg > early_avg + 1.0
+        cooling = late_avg < early_avg - 1.0
+
+    # Warm daytime period ahead may reduce the value of preheating.
+    precool_risk = day_max is not None and day_max >= summer_threshold + precool_margin
+
+    # Diagnostic estimate only in 2.1.0.
+    preheat_worthwhile = (
+        hours_cold >= 3
+        and not warming
+        and not precool_risk
+        and (day_max is None or day_max < summer_threshold - 2.0)
+    )
+
+    # Diagnostic estimate only in 2.1.0.
+    preheat_strength = 0.0
+    if preheat_worthwhile and night_min is not None:
+        delta = summer_threshold - night_min
+        preheat_strength = min(1.0, max(0.0, delta / 15.0))
+
+    # NOTE:
+    # preheat_worthwhile and preheat_strength feed into block 5b in sensor.py.
+    # All other ThermalOutlook fields are diagnostic only.
+    # Pre-brake (block 5a) is never forecast-gated.
+    return ThermalOutlook(
+        night_min_temp=night_min,
+        day_max_temp=day_max,
+        hours_below_threshold=hours_cold,
+        effective_temp_now=eff_temp,
+        warming_trend=warming,
+        cooling_trend=cooling,
+        precool_risk=precool_risk,
+        preheat_worthwhile=preheat_worthwhile,
+        preheat_strength=preheat_strength,
+    )
