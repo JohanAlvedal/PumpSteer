@@ -23,6 +23,6 @@ PumpSteer 2.0.0 is a **complete rewrite**. Treat this as a new integration.
 * **ML:** Machine Learning features have been removed.
 
 ### Recommendations:
-1. Install 2.0.0.
+1. Install 2.x.x.
 2. Observe for 24–48h.
 3. Then migrate fully and rebuild Lovelace cards.
