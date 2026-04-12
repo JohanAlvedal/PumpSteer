@@ -1,30 +1,14 @@
-# Dashboard
+# 📊 Dashboard Setup
 
-PumpSteer supports:
+PumpSteer works best with visual tracking. Example configurations are located in the `/dashboards/` folder.
 
-- mini-graph-card  
-- apexcharts-card  
+### Requirements
+You must install these via HACS:
+1. `mini-graph-card`
+2. `apexcharts-card`
 
----
-
-## What you can visualize
-
-- Indoor temperature  
-- Target temperature  
-- Virtual outdoor temperature  
-- Price behavior  
-
----
-
-## Setup
-
-1. Install cards via HACS  
-2. Paste YAML into dashboard  
-3. Adjust entity IDs  
-
----
-
-## Tips
-
-- No graph → check entity IDs  
-- No data → check sensors  
+### How to use templates
+1. Go to your dashboard and select **Edit Dashboard**.
+2. Open the **Raw Configuration Editor**.
+3. Copy the YAML from our examples and paste it into your view.
+4. **Note:** Ensure entity IDs like `sensor.pumpsteer` match your setup.
