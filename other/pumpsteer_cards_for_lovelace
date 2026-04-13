@@ -14,7 +14,7 @@ sections:
             entities:
               - entity: sensor.pumpsteer_operating_mode
                 name: Mode
-              - entity: sensor.pumpsteer_price
+              - entity: sensor.pumpsteer_price_category
                 name: Price
               - entity: sensor.pumpsteer_is_saving
                 name: Saving
@@ -29,26 +29,26 @@ sections:
                 name: Target Temperature
                 icon: mdi:thermometer
               - entity: number.pumpsteer_saving_level
-                name: Saving Level (0 = Off, 5 = Max)
+                name: Aggressiveness (0 = Off, 5 = Max)
                 icon: mdi:lightning-bolt-circle
               - entity: number.pumpsteer_summer_mode_threshold
                 name: Summer Threshold
                 icon: mdi:weather-sunny
               - entity: number.pumpsteer_house_thermal_mass
+                name: House Thermal Mass
                 icon: mdi:home-thermometer
-                name:
-                  type: entity
               - entity: switch.pumpsteer_notifications
-                name:
-                  type: entity
+                name: Notifications
               - entity: switch.pumpsteer_ohmigo_push
-                name:
-                  type: entity
+                name: Ohmigo Push
+              - entity: switch.pumpsteer_preheat_boost
               - entity: datetime.pumpsteer_holiday_start
+                name: Holiday Start
               - entity: datetime.pumpsteer_holiday_end
+                name: Holiday End
               - entity: switch.pumpsteer_holiday_mode
-                name:
-                  type: entity
+                name: Holiday Mode
+              - entity: sensor.pumpsteer_thermal_outlook
       - type: entities
         title: Status Details
         show_header_toggle: false
@@ -70,21 +70,48 @@ sections:
             attribute: heating_demand_c
             name: Heating Demand
             icon: mdi:fire
+      - type: custom:mini-graph-card
+        name: 📈 Offset-utveckling (24h)
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 3
+        font_size: 75
+        animate: true
+        show:
+          labels: false
+          legend: true
+          icon: false
+        entities:
+          - entity: sensor.pumpsteer
+            name: Outdoor
+            show_state: true
+          - entity: sensor.pumpsteer_fake_temp_delta
+            name: Brake factor
+            show_state: true
   - type: grid
     cards:
       - type: entities
-        title: PumpSteer Status
+        title: PumpSteer Data
         entities:
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: status
+            name: Status
+            icon: mdi:check-circle
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: mode
+            name: Mode
+            icon: mdi:cog
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: price_category
+            name: Price Category
+            icon: mdi:tag
           - entity: sensor.pumpsteer
             icon: mdi:thermometer-chevron-down
             name: Virtual Outdoor Temperature
             secondary_info: last-changed
-          - type: attribute
-            entity: sensor.pumpsteer
-            attribute: outdoor_temperature
-            name: Outdoor Temperature
-            suffix: °C
-            icon: mdi:thermometer
           - type: attribute
             entity: sensor.pumpsteer
             attribute: indoor_temperature
@@ -93,25 +120,10 @@ sections:
             icon: mdi:home-thermometer
           - type: attribute
             entity: sensor.pumpsteer
-            attribute: mode
-            name: Mode
-            icon: mdi:cog
-          - type: attribute
-            entity: sensor.pumpsteer
-            attribute: status
-            name: Status
-            icon: mdi:check-circle
-          - type: attribute
-            entity: sensor.pumpsteer
-            attribute: heating_demand_c
-            name: Heating Demand
+            attribute: outdoor_temperature
+            name: Outdoor Temperature
             suffix: °C
-            icon: mdi:fire
-          - type: attribute
-            entity: sensor.pumpsteer
-            attribute: price_category
-            name: Price Category
-            icon: mdi:tag
+            icon: mdi:thermometer
           - type: attribute
             entity: sensor.pumpsteer
             attribute: p30
@@ -127,20 +139,26 @@ sections:
           - entity: sensor.elpris_spot_avgifter
             name: Price Now
             secondary_info: last-changed
-          - type: attribute
-            entity: sensor.pumpsteer
-            attribute: minutes_until_expensive
-            name: Minutes to expensive
-            suffix: Min
-            icon: mdi:chart-bell-curve
+          - type: conditional
+            conditions:
+              - entity: sensor.pumpsteer_minutes_until_expensive
+                state_not: unknown
+              - entity: sensor.pumpsteer_minutes_until_expensive
+                state_not: unavailable
+            row:
+              entity: sensor.pumpsteer_minutes_until_expensive
+              name: Minutes to expensive
+              icon: mdi:chart-bell-curve
           - type: attribute
             entity: sensor.pumpsteer
             attribute: last_updated
             name: Last Updated
             icon: mdi:clock-outline
-          - entity: sensor.pumpsteer_operating_mode
-            secondary_info: last-changed
-            name: Operation Mode
+          - type: attribute
+            entity: sensor.pumpsteer
+            attribute: minutes_until_expensive
+            name: Minutes to expensive
+            icon: mdi:chart-bell-curve
       - type: custom:mini-graph-card
         name: Virtual Outdoor Temperature
         icon: mdi:thermometer-lines
@@ -188,15 +206,7 @@ sections:
 max_columns: 4
 title: PumpSteer Dashboard
 cards: []
-badges:
-  - type: entity
-    show_name: false
-    show_state: true
-    show_icon: true
-    tap_action:
-      action: navigate
-      navigation_path: /dashboard-data/7
-    entity: sensor.elpris_spot_avgifter
+
 
 ####### Apexchart ######################################################################################
 
