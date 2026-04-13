@@ -207,6 +207,132 @@ max_columns: 4
 title: PumpSteer Dashboard
 cards: []
 
+####### DEBUG ##########################################################################################
+
+type: sections
+max_columns: 4
+title: Debug
+path: debug
+sections:
+  - type: grid
+    cards:
+      - type: entities
+        title: PumpSteer Debug — Brake Timing
+        show_header_toggle: false
+        entities:
+          - entity: sensor.ps_debug_brake_start
+            name: Brake started (preheating/braking)
+            icon: mdi:timer-play-outline
+          - type: attribute
+            entity: sensor.ps_debug_brake_start
+            attribute: mode
+            name: Mode vid start
+            icon: mdi:cog
+          - type: attribute
+            entity: sensor.ps_debug_brake_start
+            attribute: minutes_until_expensive
+            name: Minuter kvar till dyrt
+            icon: mdi:clock-alert-outline
+          - type: attribute
+            entity: sensor.ps_debug_brake_start
+            attribute: ramp_in_minutes
+            name: Ramp-in (min)
+            icon: mdi:slope-uphill
+          - type: attribute
+            entity: sensor.ps_debug_brake_start
+            attribute: brake_factor
+            name: Brake factor vid start
+            icon: mdi:car-brake-alert
+          - type: divider
+          - entity: sensor.ps_debug_brake_full
+            name: Brake 100%
+            icon: mdi:timer-check-outline
+          - type: attribute
+            entity: sensor.ps_debug_brake_full
+            attribute: indoor
+            name: Inomhus vid 100%
+            icon: mdi:home-thermometer
+          - type: attribute
+            entity: sensor.ps_debug_brake_full
+            attribute: price_category
+            name: Priskategori vid 100%
+            icon: mdi:tag
+          - type: divider
+          - entity: sensor.ps_debug_price_expensive
+            name: Pris gick över P80
+            icon: mdi:cash-plus
+          - type: attribute
+            entity: sensor.ps_debug_price_expensive
+            attribute: price
+            name: Pris (SEK/kWh)
+            icon: mdi:lightning-bolt
+          - type: attribute
+            entity: sensor.ps_debug_price_expensive
+            attribute: brake_factor
+            name: Brake factor vid P80-korsning
+            icon: mdi:car-brake-alert
+      - type: markdown
+        title: PumpSteer Debug
+        content: >
+          | Parameter | Värde |
+
+          |-----------|-------|
+
+          | Mode | {{ state_attr('sensor.pumpsteer', 'mode') }} |
+
+          | Priskategori | {{ state_attr('sensor.pumpsteer', 'price_category')
+          }} |
+
+          | Brake factor | {{ (state_attr('sensor.pumpsteer', 'brake_factor') |
+          float(0) * 100) | round(0) }}% |
+
+          | P80 | {{ state_attr('sensor.pumpsteer', 'p80') }} SEK/kWh |
+
+          | P30 | {{ state_attr('sensor.pumpsteer', 'p30') }} SEK/kWh |
+
+          | Aktuellt pris | {{ states('sensor.elpris_spot_avgifter') }} SEK/kWh
+          |
+
+          | Upcoming expensive | {{ state_attr('sensor.pumpsteer',
+          'upcoming_expensive') | default('—') }} |
+
+          | Minuter till dyrt | {{ state_attr('sensor.pumpsteer',
+          'minutes_until_expensive') | default('—') }} |
+
+          | Ramp-in | {{ state_attr('sensor.pumpsteer', 'ramp_in_minutes') |
+          default('—') }} min |
+
+          | Inomhus | {{ state_attr('sensor.pumpsteer', 'indoor_temperature') }}
+          °C |
+
+          | Utomhus | {{ state_attr('sensor.pumpsteer', 'outdoor_temperature')
+          }} °C |
+
+          | Senast uppdaterad | {{ state_attr('sensor.pumpsteer',
+          'last_updated') | as_datetime | as_local | as_timestamp |
+          timestamp_custom('%H:%M:%S') }} |
+      - type: entities
+        title: Status details
+        show_header_toggle: false
+        entities:
+          - entity: sensor.pumpsteer_prognosis_cheapest_hour
+            name:
+              type: entity
+          - entity: sensor.pumpsteer_prognosis_day_schedule
+            name:
+              type: entity
+          - entity: sensor.pumpsteer_prognosis_expensive_hours_remaining
+            name:
+              type: entity
+          - entity: sensor.pumpsteer_prognosis_next_expensive_hour
+            name:
+              type: entity
+          - entity: sensor.pumpsteer_prognosis_overview
+            name:
+              type: entity
+    column_span: 2
+cards: []
+
 
 ####### Apexchart ######################################################################################
 
