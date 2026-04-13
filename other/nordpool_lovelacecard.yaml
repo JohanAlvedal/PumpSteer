@@ -1,7 +1,5 @@
-########### The badges are wrong in your version. Please remove them. ##############################################
-
-title: Elpris
-icon: mdi:lightning-bolt-circle
+title: Nordpool
+icon: ""
 cards: []
 subview: false
 visible:
@@ -185,6 +183,35 @@ sections:
     column_span: 2
   - type: grid
     cards:
+      - type: entities
+        title: Elpris – Nordpool
+        show_header_toggle: false
+        entities:
+          - entity: sensor.elpris_today
+          - entity: sensor.elpris_tomorrow
+          - entity: sensor.elpris_spot_avgifter
+            secondary_info: last-changed
+          - type: section
+            label: Elhandel
+          - entity: input_number.elhandel_rorlig_kvart_paslag
+          - entity: input_number.elhandel_rorlig_kvart_elcertifikat
+          - entity: input_number.elhandel_rorlig_kvart_moms
+      - type: entities
+        entities:
+          - entity: sensor.nord_pool_se3_current_price
+            secondary_info: last-changed
+          - entity: sensor.nord_pool_se3_highest_price
+            secondary_info: last-changed
+          - entity: sensor.nord_pool_se3_lowest_price
+          - entity: sensor.nord_pool_se3_next_price
+          - entity: sensor.nord_pool_se3_previous_price
+          - type: section
+          - entity: sensor.elpriskoefficient
+          - entity: sensor.nordpool_price_band
+          - entity: sensor.svotc_price_p30_today
+          - entity: sensor.svotc_price_p80_today
+        title: Nordpool integration
+        state_color: true
       - type: markdown
         content: >-
           {% set np_today = 'sensor.elpris_today' %}
@@ -269,65 +296,10 @@ sections:
           but they have not been updated yet.
             {% endif %}
           {% endif %}
-      - type: vertical-stack
-        cards:
-          - type: entity
-            entity: sensor.nordpool_price_band
-            state_color: false
-            icon: mdi:spirit-level
-          - type: vertical-stack
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - graph: none
-                    type: sensor
-                    detail: 1
-                    entity: sensor.accumulated_cost_goktytan_4
-                    hours_to_show: 6
-                  - graph: none
-                    type: sensor
-                    detail: 1
-                    entity: sensor.accumulated_reward_goktytan_4
-                    hours_to_show: 6
-                  - graph: none
-                    type: sensor
-                    detail: 1
-                    hours_to_show: 6
-                    icon: mdi:cash
-                    entity: sensor.goktytan_4_netto_kostnad
-                    name: Netto
-      - type: entities
-        entities:
-          - entity: sensor.nord_pool_se3_current_price
-            secondary_info: last-changed
-          - entity: sensor.nord_pool_se3_highest_price
-            secondary_info: last-changed
-          - entity: sensor.nord_pool_se3_lowest_price
-          - entity: sensor.nord_pool_se3_next_price
-          - entity: sensor.nord_pool_se3_previous_price
-          - type: section
-          - entity: sensor.elpriskoefficient
-          - entity: sensor.nordpool_price_band
-          - entity: sensor.svotc_price_p30_today
-          - entity: sensor.svotc_price_p80_today
-        title: Nordpool integration
-        state_color: true
-      - type: entities
-        title: Elpris – Nordpool (SVOTC)
-        show_header_toggle: false
-        entities:
-          - entity: sensor.elpris_today
-          - entity: sensor.elpris_tomorrow
-          - entity: sensor.elpris_spot_avgifter
-            secondary_info: last-changed
-          - type: section
-            label: Elhandel
-          - entity: input_number.elhandel_rorlig_kvart_paslag
-          - entity: input_number.elhandel_rorlig_kvart_elcertifikat
-          - entity: input_number.elhandel_rorlig_kvart_moms
     view_layout:
       column_span: 2
     column_span: 2
 max_columns: 2
 dense_section_placement: false
 top_margin: false
+path: elpris
