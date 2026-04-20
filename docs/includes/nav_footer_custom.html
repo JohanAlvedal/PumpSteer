@@ -1,0 +1,32 @@
+<button class="dark-mode-toggle" id="dark-mode-toggle" onclick="toggleDarkMode()">
+  <span id="toggle-icon">🌙</span>&nbsp;&nbsp;<span id="toggle-text">Dark mode</span>
+</button>
+
+<script>
+  function applyTheme(theme) {
+    jtd.setTheme(theme);
+    var btn = document.getElementById('toggle-icon');
+    var txt = document.getElementById('toggle-text');
+    if (theme === 'dark') {
+      btn.textContent = '☀️';
+      txt.textContent = 'Light mode';
+    } else {
+      btn.textContent = '🌙';
+      txt.textContent = 'Dark mode';
+    }
+    localStorage.setItem('pumpsteer-theme', theme);
+  }
+
+  function toggleDarkMode() {
+    var current = jtd.getTheme();
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  }
+
+  // Restore saved preference on page load
+  (function() {
+    var saved = localStorage.getItem('pumpsteer-theme');
+    if (saved) {
+      applyTheme(saved);
+    }
+  })();
+</script>
