@@ -1,0 +1,18 @@
+.side-bar {
+  width: 180px;
+  min-width: 180px;
+}
+
+.main-content-wrap {
+  margin-left: 180px;
+}
+
+@media (min-width: 50rem) {
+  .side-bar {
+    width: 180px;
+    min-width: 180px;
+  }
+  .main-content-wrap {
+    margin-left: 180px;
+  }
+}
