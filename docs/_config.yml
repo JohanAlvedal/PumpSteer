@@ -12,6 +12,10 @@ favicon_ico: "/assets/img/favicon.ico"
 # Color scheme: dark or light
 color_scheme: light
 
+# Custom CSS
+custom_css:
+  - assets/css/custom.css
+
 # Search
 search_enabled: true
 search:
