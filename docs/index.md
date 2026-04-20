@@ -82,22 +82,6 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 
 ---
 
-## Documentation
-
-| | |
-|---|---|
-| 🚀 [Installation Guide](docs/INSTALLATION) | Step-by-step setup |
-| ⚙️ [Configuration](docs/Configuration) | All settings explained |
-| 📊 [Dashboard Setup](docs/DASHBOARD) | Lovelace cards and templates |
-| 🧠 [Architecture](docs/ARCHITECTURE) | How the PI control and state machine works |
-| 🔧 [Tuning Guide](docs/TUNING) | Optimize for your home |
-| 🛠 [Troubleshooting](docs/TROUBLESHOOTING) | Common problems and fixes |
-| 📋 [Changelog](docs/CHANGELOG) | Version history |
-| 🗺 [Roadmap](docs/ROADMAP) | Planned features |
-| ⚖️ [Design Decisions](docs/DECISIONS) | Why things work the way they do |
-
----
-
 {: .warning }
 **Disclaimer:** Heating is a critical system. Use PumpSteer at your own risk. Always
 monitor behavior after installation and ensure your fallback (safe mode) works correctly.
