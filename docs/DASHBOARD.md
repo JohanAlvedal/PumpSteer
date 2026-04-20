@@ -125,6 +125,7 @@ actual entity IDs.
 
 A template sensor you can use to color-code the current mode:
 
+{% raw %}
 ```yaml
 # Add to configuration.yaml or a package file
 template:
@@ -140,6 +141,7 @@ template:
           {% else %} green
           {% endif %}
 ```
+{% endraw %}
 
 ---
 
