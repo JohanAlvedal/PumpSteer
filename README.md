@@ -1,10 +1,8 @@
-# 🔥 PumpSteer 2.X – Smart Heat Pump Optimization
+# 🔥 PumpSteer – Smart Heat Pump Optimization
 
 ➡️ Swedish version: [README (Svenska)](README_sv.md)
 
-> ⚠️ **Major rewrite.** Please read the [Installation & Upgrade Guide](docs/INSTALLATION.md) before installing.
-
-PumpSteer is a Home Assistant custom integration that optimizes your heat pump by dynamically adjusting the **virtual outdoor temperature**. 
+PumpSteer is a Home Assistant custom integration that optimizes your heat pump by dynamically adjusting the **virtual outdoor temperature**.
 
 It reduces energy costs during peak price hours while maintaining indoor comfort through intelligent PI-control.
 
@@ -14,44 +12,32 @@ It reduces energy costs during peak price hours while maintaining indoor comfort
 
 ---
 
-## 📸 Dashboard Preview
-
-<table>
-  <tr>
-    <td><img src="docs/img/01.png" width="200"/></td>
-    <td><img src="docs/img/02.png" width="200"/></td>
-    <td><img src="docs/img/03.png" width="200"/></td>
-  </tr>
-</table>
-
----
-
 ## 📘 Documentation
 
-To keep things organized, the documentation is divided into the following sections:
+Full documentation is available at **[johanalvedal.github.io/PumpSteer](https://johanalvedal.github.io/PumpSteer/)**
 
 ### 🚀 Getting Started
-* **[Installation Guide](docs/INSTALLATION.md)** – Step-by-step setup and upgrade notes from v1.6.6.
-* **[Configuration](docs/Configuration.md)** – Detailed explanation of all integration settings.
-* **[Dashboard Setup](docs/DASHBOARD.md)** – How to use the provided Lovelace templates.
+* **[Installation Guide](https://johanalvedal.github.io/PumpSteer/INSTALLATION)** – Step-by-step setup and upgrade notes.
+* **[Configuration](https://johanalvedal.github.io/PumpSteer/Configuration)** – Detailed explanation of all integration settings.
+* **[Dashboard Setup](https://johanalvedal.github.io/PumpSteer/DASHBOARD)** – How to use the provided Lovelace templates.
 
 ### 🧠 Deep Dive
-* **[System Architecture](docs/ARCHITECTURE.md)** – How the PI-control and state machine works.
-* **[Tuning Guide](docs/TUNING.md)** – How to optimize Inertia and Aggressiveness for your home.
-* **[Decisions & Logic](docs/DECISIONS.md)** – The reasoning behind the control strategies.
+* **[System Architecture](https://johanalvedal.github.io/PumpSteer/ARCHITECTURE)** – How the PI-control and state machine works.
+* **[Tuning Guide](https://johanalvedal.github.io/PumpSteer/TUNING)** – How to optimize Inertia and Aggressiveness for your home.
+* **[Design Decisions](https://johanalvedal.github.io/PumpSteer/DECISIONS)** – The reasoning behind the control strategies.
 
 ### 🛠 Support & Future
-* **[Troubleshooting](docs/TROUBLESHOOTING.md)** – Common issues and how to fix them.
-* **[Changelog](docs/CHANGELOG.md)** – Version history and updates.
-* **[Roadmap](docs/ROADMAP.md)** – Planned features and future development.
+* **[Troubleshooting](https://johanalvedal.github.io/PumpSteer/TROUBLESHOOTING)** – Common issues and how to fix them.
+* **[Changelog](https://johanalvedal.github.io/PumpSteer/CHANGELOG)** – Version history and updates.
+* **[Roadmap](https://johanalvedal.github.io/PumpSteer/ROADMAP)** – Planned features and future development.
 
 ---
 
-## 🔧 How it works (The TL;DR)
+## 🔧 How it works
 
-PumpSteer calculates a **virtual outdoor temperature** based on electricity prices, indoor temperature, and weather forecasts. 
+PumpSteer calculates a **virtual outdoor temperature** based on electricity prices, indoor temperature, and weather forecasts.
 
-It pushes this value to hardware (like an **Ohmigo** device) connected to your heat pump's outdoor sensor. The heat pump "sees" a different temperature and adjusts its performance accordingly—saving you money without needing complex Modbus or Cloud APIs.
+It pushes this value to hardware (like an **Ohmigo** device) connected to your heat pump's outdoor sensor. The heat pump "sees" a different temperature and adjusts its performance accordingly — saving you money without needing complex Modbus or Cloud APIs.
 
 ---
 
@@ -62,6 +48,7 @@ You use this integration at your own risk. Heating is a critical system in your 
 ---
 
 ## 🔗 Links
+- 📖 [Documentation](https://johanalvedal.github.io/PumpSteer/)
 - 🐞 [Report a Bug / Feature Request](https://github.com/JohanAlvedal/PumpSteer/issues)
 - 📝 License: AGPL-3.0
 - © Johan Älvedal
