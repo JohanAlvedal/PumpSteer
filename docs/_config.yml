@@ -9,16 +9,11 @@ logo: "/assets/img/logo.png"
 
 favicon_ico: "/assets/img/favicon.ico"
 
-# Default color scheme, user can toggle with the sun/moon button
+# Default color scheme: light or dark
 color_scheme: light
 
-# Enable dark/light mode toggle button in the sidebar
+# Enable copy button on code blocks
 enable_copy_code_button: true
-theme_toggle: true
-
-# Custom CSS
-custom_css:
-  - assets/css/custom.css
 
 # Search
 search_enabled: true
@@ -49,7 +44,7 @@ gh_edit_view_mode: "tree"
 back_to_top: true
 back_to_top_text: "Back to top"
 
-# Callouts (styled blockquotes)
+# Callouts
 callouts_level: quiet
 callouts:
   highlight:
