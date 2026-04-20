@@ -31,7 +31,75 @@ automatically and do not need to be changed.
 Install these cards via HACS before using the dashboard templates:
 
 - [**mini-graph-card**](https://github.com/kalkih/mini-graph-card) — for temperature and price charts
-- [**apexcharts-card**](https://github.com/RomRider/apexcharts-card) *(optional)* — for advanced charts
+- [**apexcharts-card**](https://github.com/RomRider/apexcharts-card) — for the braking vs price chart
+
+---
+
+## Ready-made example files
+
+The repository includes ready-to-use example files in the [`other/`](https://github.com/JohanAlvedal/PumpSteer/tree/main/other) folder.
+These are based on a real installation and are a good starting point.
+
+{: .note }
+All files in `other/` contain entity IDs specific to one installation.
+You will need to replace price sensor IDs, outdoor temperature entity IDs,
+and Nordpool config entry IDs with your own before using them.
+
+### `pumpsteer_package.yaml`
+
+A Home Assistant [package file](https://www.home-assistant.io/docs/configuration/packages/)
+that adds helper template sensors on top of the built-in PumpSteer entities:
+
+| Sensor | Description |
+|---|---|
+| `sensor.pumpsteer_operating_mode` | Human-readable mode with icon (Regulating / Saving / Pre-heating / etc.) |
+| `sensor.pumpsteer_status` | One-line status summary with emoji |
+| `sensor.pumpsteer_price` | Price category as readable text (Cheap / Normal / Expensive) |
+| `sensor.pumpsteer_temperature_difference` | Indoor vs target temperature delta |
+| `sensor.pumpsteer_fake_temp_delta` | Virtual vs real outdoor temperature delta |
+| `sensor.pumpsteer_brake_factor` | Brake factor as percentage (0–100 %) |
+| `sensor.pumpsteer_is_saving` | Boolean — true when in braking, pre_braking, or preheating mode |
+| `sensor.pumpsteer_holiday_status` | Holiday mode state with scheduled start/end times |
+| `sensor.pumpsteer_price_thresholds` | P30/P80 thresholds as a readable string |
+
+Add it to your HA config by placing the file in your `packages/` folder and adding
+this to `configuration.yaml` if not already present:
+
+```yaml
+homeassistant:
+  packages: !include_dir_named packages
+```
+
+### `nordpool_package.yaml`
+
+A complete Nordpool price package for SE3 (Sweden) that creates:
+
+- `sensor.elpris_today` — current price including markup, with full `today` raw list
+- `sensor.elpris_tomorrow` — tomorrow's prices as raw list (available from ~13:00)
+- `sensor.elpris_spot_avgifter` — current price with `min`/`max` attributes
+- `sensor.elpriskoefficient` — relative price level for the day
+- `sensor.nordpool_price_band` — very_cheap / cheap / normal / expensive / very_expensive
+- `binary_sensor.elpris_ok` — true when price is below threshold
+
+{: .important }
+This package requires the [Nordpool integration](https://github.com/custom-components/nordpool)
+and uses a hardcoded `config_entry` ID. You must replace `01KHAXM5D239V0B77VNTCDJ3RG`
+with your own Nordpool config entry ID, found under
+**Settings → Devices & Services → Nordpool → Configure**.
+
+### `lovelace_cards.yaml`
+
+A complete Lovelace dashboard layout including:
+
+- Glance card with mode, price category and saving status
+- Settings panel with all PumpSteer controls
+- Status details card (P30/P80, brake factor, heating demand)
+- Temperature history chart (virtual vs real outdoor)
+- Price vs P30/P80 chart (mini-graph-card)
+- Full ApexCharts card: braking factor vs price vs P80 over 24h
+
+Copy individual cards from this file into your own dashboard via the
+**Raw Configuration Editor**.
 
 ---
 
@@ -272,3 +340,46 @@ template:
 
 ---
 
+## Automation examples
+
+### Notify when braking starts
+
+{: .note }
+Replace `notify.mobile_app_my_phone` with your own notification service.
+
+{% raw %}
+```yaml
+alias: PumpSteer — braking started
+trigger:
+  - platform: state
+    entity_id: sensor.pumpsteer
+    attribute: mode
+    to: braking
+action:
+  - service: notify.mobile_app_my_phone  # ← replace with your notify service
+    data:
+      title: "⚡ Price braking active"
+      message: >
+        Electricity is expensive. Heating reduced.
+        Indoor: {{ state_attr('sensor.pumpsteer', 'indoor_temperature') }} °C
+```
+{% endraw %}
+
+### Lower target when away
+
+{: .note }
+Replace `person.you` with your own person entity.
+
+```yaml
+alias: PumpSteer — away mode
+trigger:
+  - platform: state
+    entity_id: person.you  # ← replace with your person entity
+    to: not_home
+action:
+  - service: number.set_value
+    target:
+      entity_id: number.pumpsteer_target_temperature
+    data:
+      value: 18
+```
