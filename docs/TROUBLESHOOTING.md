@@ -149,17 +149,20 @@ from today's data only. This is correct behavior.
 
 **Diagnosis steps:**
 
-1. Check `sensor.pumpsteer_thermal_outlook` → `preheat_worthwhile` attribute.
-   If `false`, the outlook analysis determined preheat is not justified:
-   - `warming_trend: true` — temperature is rising, so preheating wastes energy
-   - `precool_risk: true` — a warm day is coming, natural heating will occur
-   - `hours_below_threshold` < 3 — forecast is not cold enough or long enough
+1. Check that indoor temperature is **below** target.
+   Preheat is suppressed when `indoor_temp >= target_temperature`.
 
-2. Check that `raw_tomorrow` is populated on your price entity.
+2. Check that the cold-forecast heuristic is satisfied.
+   The control loop uses `_forecast_is_cold()` — a simple check based on forecast
+   temperature. Check your weather entity is configured and reporting valid forecasts.
+
+3. Check that `raw_tomorrow` is populated on your price entity.
    Lookahead requires tomorrow's prices to be available.
 
-3. Check that the weather entity is configured and reporting valid forecasts.
-   Look in HA logs for messages from `pumpsteer.forecast`.
+{: .note }
+`sensor.pumpsteer_thermal_outlook` attributes like `preheat_worthwhile` are
+**diagnostic only** — they do not directly control preheat in the current version.
+Use them as context clues, not as a definitive trigger indicator.
 
 ---
 
