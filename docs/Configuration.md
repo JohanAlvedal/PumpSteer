@@ -43,11 +43,17 @@ These are set when you first add the integration. You can change them later via
 These can be changed at any time without restarting HA. They take effect on the next
 polling cycle after saving.
 
+Go to **Settings → Devices & Services → PumpSteer → Configure** to access these options.
+
 | Field | Description | Default |
 |---|---|---|
 | **Notification service** | Push service for price alerts, e.g. `notify.mobile_app_my_phone`. Leave empty to use HA persistent notifications. | — |
 | **Ohmigo entity** | Number entity to push the fake outdoor temperature to. Leave empty to disable. | — |
 | **Ohmigo push interval** | Minimum minutes between Ohmigo pushes. | 5 min |
+
+{: .note }
+The notification service is configured directly here in the integration options — no
+separate entity or helper needed. Change it at any time without restarting HA.
 
 ---
 
