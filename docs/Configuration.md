@@ -153,12 +153,18 @@ the moment the slot begins. A thermally heavy house needs more lead time.
 **Default:** On
 
 When enabled, PumpSteer heats extra (by `PREHEAT_BOOST_C = 4 °C` equivalent) before
-an upcoming expensive period when the weather forecast is cold. This pre-charges the
-house with thermal mass so the heat pump can brake longer without discomfort.
+an upcoming expensive period when a simple cold-forecast heuristic (`_forecast_is_cold()`)
+returns true. This pre-charges the house with thermal mass so the heat pump can brake
+longer without discomfort.
 
 Only activates when:
 1. An expensive price slot is coming within the lookahead window
-2. The weather forecast shows cold conditions
+2. The cold-forecast heuristic returns True
+3. Indoor temperature is below target (preheat is suppressed if already at target)
+
+{: .note }
+`sensor.pumpsteer_thermal_outlook` is diagnostic only and does not yet control this
+switch. Preheat decisions are made by the simple `_forecast_is_cold()` heuristic.
 
 Disable this switch if you prefer to avoid pre-heating behavior, or if your forecast
 sensor is unreliable.
