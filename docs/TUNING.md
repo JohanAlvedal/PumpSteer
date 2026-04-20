@@ -154,18 +154,27 @@ all slots are classified as cheap regardless of percentile — no braking occurs
 Preheat boost (`switch.pumpsteer_preheat_boost`) only triggers when:
 
 1. An expensive slot is coming within the lookahead window
-2. The weather forecast shows cold conditions (`_forecast_is_cold()` returns True)
+2. A simple cold-forecast heuristic (`_forecast_is_cold()`) returns True
+3. Indoor temperature is **below** the target temperature
+
+{: .note }
+`sensor.pumpsteer_thermal_outlook` provides richer forecast analysis but does **not**
+yet influence the preheat decision. The control loop still uses the simple
+`_forecast_is_cold()` heuristic. The thermal outlook sensor is diagnostic only in
+the current version. Use it to understand why preheat did or did not trigger — not
+as a guarantee that preheat will follow its `preheat_worthwhile` attribute.
 
 If preheat never triggers but you expect it to:
 
 - Check that your weather entity is correctly configured in the options flow
-- Check `sensor.pumpsteer_thermal_outlook` attributes: `preheat_worthwhile` should be `true`
+- Check `sensor.pumpsteer_thermal_outlook` attributes for context (warming trend, night min temp)
 - Ensure the price sensor has `raw_tomorrow` populated (required for lookahead)
+- Check that indoor temperature is below target — preheat is suppressed when already at target
 
 If preheat triggers too often or during warm weather:
 
-- This indicates the weather entity is reporting cold temps even when it should not
-- Check the `sensor.pumpsteer_thermal_outlook` → `warming_trend` and `day_max_temp` attributes
+- This indicates the weather entity is reporting cold temps when it should not
+- Check `sensor.pumpsteer_thermal_outlook` → `warming_trend` and `day_max_temp` attributes
 - Consider lowering `PRECOOL_MARGIN` in `settings.py` if you see unwanted precool behavior
 
 ---
