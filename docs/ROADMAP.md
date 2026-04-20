@@ -1,114 +1,121 @@
-# PumpSteer Roadmap
+---
+layout: default
+title: Roadmap
+nav_order: 7
+---
 
-## Current Version: 2.1.0 — Observability & Architecture
+# 🗺 Roadmap
+{: .no_toc }
 
-Version 2.1 builds on the stable 2.0 foundation by improving observability, making
-forecast reasoning visible in the dashboard, and laying the groundwork for smarter
-preheat decisions in future versions.
+<details open markdown="block">
+  <summary>Contents</summary>
+  {: .text-delta }
+- TOC
+{:toc}
+</details>
 
-### Delivered in 2.0.x
+---
 
-- ✅ PI controller as primary control loop with integral windup protection
-- ✅ Smooth brake ramping — no hard steps, dt capped at 60s
-- ✅ Ramp timing derived from house thermal mass / house inertia
-- ✅ P30/P80 price classification with stable daily thresholds
-- ✅ Price thresholds cached per calendar day (prevents mid-slot reclassification)
-- ✅ Pre-brake (block 5a) separated from preheat-boost (block 5b)
-- ✅ `pre_braking` mode introduced to distinguish the two behaviors
-- ✅ Comfort floor per aggressiveness level
-- ✅ Brake hold time to prevent rapid cycling
-- ✅ PI integral frozen (not decayed) during braking
-- ✅ Ohmigo WiFi controller integration
-- ✅ Notification system with mode-transition triggers
-- ✅ Holiday mode
-- ✅ Summer mode
-- ✅ Safe mode fallback for missing sensor data
-- ✅ HA 2026.2+ forecast API compatibility (`get_forecasts` service call)
+## Current version
 
-### Delivered in 2.1.0
-
-- ✅ `sensor.pumpsteer_thermal_outlook` — exposes forecast analysis as a dashboard-visible sensor
-  (preheat worthwhile, preheat strength, warming/cooling trend, precool risk, night min / day max temp)
-- ✅ Preheat boost exposed as `switch.pumpsteer_preheat_boost` — controllable from dashboard and automations
-  (previously only configurable in the options flow)
-- ✅ `ThermalModel` passive sample collection during braking sessions — groundwork for future thermal learning
-- ✅ `forecast.py` refactored for clearer weather analysis and better separation of concerns
-- ✅ Internal cleanup and refactoring for maintainability and future extensibility
+See the [Changelog](CHANGELOG) for details on what has been delivered.
 
 ---
 
 ## 🔴 Active / Near-term
 
-### Connect ThermalOutlook to preheat-boost control (block 5b)
-Replace the current `_forecast_is_cold()` heuristic with `ThermalOutlook.preheat_worthwhile`
-so that block 5b uses the richer forecast analysis already computed by `ThermalOutlookSensor`.
-This is the established implementation order: passive collection ✅ → connect ThermalOutlook → combine with ThermalModel once k is calibrated.
+### Connect ThermalOutlook to preheat-boost (block 5b)
+
+Replace the current `_forecast_is_cold()` heuristic in block 5b with
+`ThermalOutlook.preheat_worthwhile` from the thermal outlook sensor.
+
+This gives preheat-boost access to the richer forecast analysis already computed by
+`sensor.pumpsteer_thermal_outlook` — including warming trends, precool risk, and
+night/day temperature splits — rather than the simpler cold-hours count.
+
+Implementation order: passive collection ✅ → connect ThermalOutlook → combine with ThermalModel once k is calibrated.
+
+### Activate preheat_strength scaling
+
+Use `ThermalOutlook.preheat_strength` (0.0–1.0) to scale the preheat boost
+proportionally rather than always applying the full `PREHEAT_BOOST_C = 4 °C`.
+A cold forecast warrants a larger boost; a mildly cold forecast warrants less.
 
 ### Verify brake ramp end-to-end in production
+
 Observe a full pre-brake cycle to confirm the dt-cap fix works correctly across an
 entire ramp-in → braking → ramp-out sequence.
 
 ### Optional: clamp `factor` against `ideal_factor` in block 5a
+
 Guard against dirty `_brake_ramp` state from restores or unexpected mode transitions.
 Evaluate after observing the next production cycle.
 
 ---
 
-## 🟡 Post-2.1 — Planned
+## 🟡 Post-current — Planned
 
-### 1. Smarter preheat decisions
-- Use `ThermalOutlook.preheat_strength` to scale the preheat boost proportionally
-  rather than applying a fixed `PREHEAT_BOOST_C`
-- Avoid preheat-boost when the cold period is too short to matter
+### Activate ThermalModel fitting
 
-### 2. Activate ThermalModel fitting
-- Call `ThermalModel.fit()` once per day (at midnight alongside threshold refresh)
-  once sufficient braking session data has accumulated
-- Use fitted `k` to predict indoor temperature drop during planned brakes
-- Expose `brake_safe` prediction as a sensor attribute for verification
+Call `ThermalModel.fit()` once per day (at midnight alongside threshold refresh)
+once sufficient braking-session data has accumulated (minimum 20 samples).
 
-### 3. Smarter price strategy
-- Optional hybrid weighting between trailing history and today/tomorrow horizon
+Use the fitted cooling rate constant `k` to:
+- Predict indoor temperature drop during planned brakes
+- Expose `brake_safe` as a sensor attribute for dashboard verification
+- Eventually gate or adjust brake depth based on predicted comfort impact
+
+### Smarter price strategy
+
+- Optional hybrid weighting between trailing 72-hour history and today/tomorrow horizon
   (constants exist in `settings.py` but are not yet applied)
-- Consider price spread within the day, not just absolute P80 threshold
+- Consider price spread within the day, not just the absolute P80 threshold
+- Peak filter improvements: configurable minimum spike duration
 
-### 4. Configuration improvements
-- More user-friendly option labels
-- Validate that sensor entity IDs exist on config entry setup
+### Configuration improvements
+
+- More user-friendly option labels in the options flow
+- Validate sensor entity IDs exist at config entry setup (not only on first use)
 
 ---
 
 ## 🟢 Future / Nice to Have
 
-### 1. Adaptive PI tuning (limited scope)
-- Semi-automatic Kp/Ki suggestion based on observed temperature response
-- Must remain fully explainable and optional
-- No automatic self-modification without user confirmation
+### Adaptive PI tuning (limited scope)
 
-### 2. Advanced forecast strategy
-- Multi-hour price + temperature optimization
-- Smarter thermal mass planning across consecutive expensive periods
+Semi-automatic Kp/Ki suggestion based on observed temperature response.
+Must remain fully explainable, optional, and require user confirmation before
+any parameter is changed. No automatic self-modification.
 
-### 3. Precool mode improvements
-- Better lookahead and margin tuning for summer precooling
+### Advanced forecast strategy
+
+Multi-hour price + temperature optimization. Smarter thermal mass planning across
+consecutive expensive periods. Better lookahead for tight price windows.
+
+### Precool mode improvements
+
+Better lookahead and margin tuning for summer precooling. More accurate warm-period
+detection that accounts for cloud cover and wind.
 
 ---
 
 ## ❌ Out of Scope (permanent)
 
+These will not be implemented regardless of requests:
+
 - Machine learning control loops
 - Black-box decision systems
-- Any behavior that cannot be explained from its inputs alone
-- Cloud dependencies
+- Any behavior that cannot be fully explained from its inputs alone
+- Cloud dependencies of any kind
 
 ---
 
-## Design Constraints (never compromise)
+## Design constraints (non-negotiable)
 
-These constraints apply to all future development:
+All future development must respect these constraints:
 
 1. **PI is always the primary loop** — price and forecast are overlays only
-2. **No double influence** — each signal affects the system once
+2. **No double influence** — each signal affects the system exactly once
 3. **Brake is bounded** — comfort floor always takes precedence
 4. **Thresholds are stable within a day** — no mid-slot reclassification
 5. **PI integral is frozen during braking** — preserves thermal context for ramp-out
