@@ -83,7 +83,7 @@ A complete Nordpool price package for SE3 (Sweden) that creates:
 
 {: .important }
 This package requires the [Nordpool integration](https://github.com/custom-components/nordpool)
-and uses a hardcoded `config_entry` ID. You must replace `01KHAXM5D239V0XXXXXXXXXX`
+and uses a hardcoded `config_entry` ID. You must replace `01KHAXM5D239V0B77VNTXXXXXX` 
 with your own Nordpool config entry ID, found under
 **Settings → Devices & Services → Nordpool → Configure**.
 
