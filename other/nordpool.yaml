@@ -68,7 +68,7 @@ template:
     action:
       - action: nordpool.get_prices_for_date
         data:
-          config_entry: 01KHAXM5D239V0B77VNTCDJ3RG
+          config_entry: 01KHAXM5D239V0B77VNTXXXXXX
           date: "{{ now().date() }}"
           areas: SE3
           currency: SEK
@@ -129,7 +129,7 @@ template:
     action:
       - action: nordpool.get_prices_for_date
         data:
-          config_entry: 01KHAXM5D239V0B77VNTCDJ3RG
+          config_entry: 01KHAXM5D239V0B77VNTXXXXXX
           date: "{{ (now() + timedelta(days=1)).date() }}"
           areas: SE3
           currency: SEK
