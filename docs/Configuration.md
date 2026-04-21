@@ -142,7 +142,9 @@ ramp_out = clamp(ramp_in × 0.5, 15 min, 60 min)
 | 3.0 | 18 min | 15 min | Typical Swedish detached house |
 | 5.0 | 30 min | 15 min | Larger / heavier houses |
 | 7.0 | 42 min | 21 min | Heavy construction |
-| 10.0 | 60 min *(max)* | 30 min | Very high thermal mass |
+| 8.0 | 48 min | 24 min | Very heavy construction |
+| 9.0 | 54 min | 27 min | Very high thermal mass |
+| 10.0 | 60 min *(max)* | 30 min | Exceptional thermal mass |
 
 {: .important }
 This slider also controls **pre-brake lead time**. A higher value means PumpSteer
