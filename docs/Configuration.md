@@ -132,17 +132,17 @@ responds to changes in heating.
 Ramp duration is calculated as:
 
 ```
-ramp_in  = clamp(value × 10, 20 min, 60 min)
-ramp_out = clamp(ramp_in × 0.8, 20 min, 60 min)
+ramp_in  = clamp(value × 6, 15 min, 60 min)
+ramp_out = clamp(ramp_in × 0.5, 15 min, 60 min)
 ```
 
 | Slider value | Ramp in | Ramp out | Suitable for |
 |---|---|---|---|
-| 0.5–2.0 | 20 min *(min)* | 20 min | Apartments, lightweight houses |
-| 2.0–3.0 | 20–30 min | 20–24 min | Typical Swedish detached house |
-| 4.0 | 40 min | 32 min | Larger / heavier houses |
-| 5.0 | 50 min | 40 min | Heavy construction |
-| 6.0+ | 60 min *(max)* | 48 min | Very high thermal mass |
+| 0.5–2.5 | 15 min *(min)* | 15 min | Apartments, lightweight houses |
+| 3.0 | 18 min | 15 min | Typical Swedish detached house |
+| 5.0 | 30 min | 15 min | Larger / heavier houses |
+| 7.0 | 42 min | 21 min | Heavy construction |
+| 10.0 | 60 min *(max)* | 30 min | Very high thermal mass |
 
 {: .important }
 This slider also controls **pre-brake lead time**. A higher value means PumpSteer
@@ -335,14 +335,14 @@ whether to pre-brake or preheat.
 ### Ramp timing constants
 
 ```python
-RAMP_SCALE: Final[float] = 10.0
-RAMP_MIN_MINUTES: Final[float] = 20.0
+RAMP_SCALE: Final[float] = 6.0
+RAMP_MIN_MINUTES: Final[float] = 15.0
 RAMP_MAX_MINUTES: Final[float] = 60.0
-RAMP_OUT_FACTOR: Final[float] = 0.8
+RAMP_OUT_FACTOR: Final[float] = 0.5
 ```
 
 `RAMP_SCALE` multiplies the house inertia slider value to get ramp duration in minutes.
-`RAMP_OUT_FACTOR` makes the ramp-out slightly faster than ramp-in (0.8 = 20% faster).
+`RAMP_OUT_FACTOR` makes the ramp-out faster than ramp-in (0.5 = 50% of ramp-in duration).
 
 ---
 
