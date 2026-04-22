@@ -3,6 +3,7 @@ name: HACS Validation
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   validate:
@@ -14,4 +15,4 @@ jobs:
       - name: HACS validation
         uses: hacs/action@main
         with:
-          category: "integration"
+          category: integration
