@@ -33,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 # Minimum braking samples before the model is considered valid.
 _MIN_SAMPLES = 20
 
-# Fallback k if insufficient braking history exists.
+# Default fallback k if no inertia-based fallback is provided.
 # 0.05 °C/h per °C delta means a house at 21°C inside and -4°C outside
 # (delta = 25°C) cools at about 1.25°C/h. This is conservative but plausible
 # for a Swedish wood-frame house.
@@ -57,6 +57,21 @@ _MIN_RATE_WINDOW_MINUTES = 3.0
 # These are intentionally conservative and only reject obvious spikes/noise.
 _MIN_RATE_C_PER_HOUR = -5.0
 _MAX_RATE_C_PER_HOUR = 1.0
+
+# Require a meaningful indoor/outdoor delta before using a sample.
+_MIN_DELTA_T = 2.0
+
+# Require a meaningful cooling rate before collecting a braking sample.
+# Very tiny negative values are often noise rather than true cooling.
+_MIN_COOLING_RATE_ABS = 0.03
+
+# Maximum number of samples kept for fitting.
+# This gives adaptation while still preserving enough data for stability.
+_MAX_FIT_SAMPLES = 120
+
+# Maximum allowed spread between min/max indoor temperatures in the recent
+# history window before the signal is considered too noisy for learning.
+_MAX_TEMP_SPREAD_C = 1.5
 
 
 @dataclass
@@ -123,6 +138,49 @@ class ThermalModel:
         """Number of collected samples waiting for the next fit."""
         return len(self._samples)
 
+    @property
+    def confidence(self) -> float:
+        """
+        Return a simple confidence score between 0.0 and 1.0.
+
+        Confidence is based mainly on the number of samples contributing
+        to the learned model.
+        """
+        if not self._valid:
+            return 0.0
+        return min(1.0, self._sample_count / float(_MIN_SAMPLES * 3))
+
+    # ── Fallback handling ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def fallback_k_for_inertia(house_inertia: float) -> float:
+        """
+        Return a better fallback k based on house inertia.
+
+        Lower inertia -> faster thermal response -> higher fallback k
+        Higher inertia -> slower thermal response -> lower fallback k
+        """
+        k = 0.085 - (0.008 * house_inertia)
+        return max(_K_MIN, min(_K_MAX, k))
+
+    def set_fallback_from_inertia(self, house_inertia: float) -> None:
+        """
+        Update fallback k from house inertia, but only before learning is valid.
+
+        This lets the model start from a more realistic baseline for the house
+        without overriding an already learned k.
+        """
+        if self._valid:
+            return
+
+        fallback_k = self.fallback_k_for_inertia(house_inertia)
+        self._k = fallback_k
+        _LOGGER.debug(
+            "ThermalModel: using inertia-based fallback k=%.4f (house_inertia=%.2f)",
+            fallback_k,
+            house_inertia,
+        )
+
     # ── Persistence ────────────────────────────────────────────────────────────
 
     def restore_k(self, k: float) -> None:
@@ -156,6 +214,7 @@ class ThermalModel:
         self,
         indoor_temp: float,
         outdoor_temp: float,
+        brake_factor: float = 1.0,
     ) -> None:
         """
         Collect one sample during braking periods.
@@ -164,11 +223,16 @@ class ThermalModel:
         cooling rate and stores the result for later fitting.
 
         Samples are skipped when:
+        - the brake factor is too weak to represent a meaningful brake phase
         - the history window is too short
         - the indoor/outdoor temperature delta is too small to be meaningful
         - the measured rate does not indicate actual cooling
         - the measured rate is clearly implausible
         """
+        # Prefer learning from clearer braking conditions.
+        if brake_factor < 0.7:
+            return
+
         rate = self._compute_rate()
         if rate is None:
             return
@@ -195,6 +259,23 @@ class ThermalModel:
                 rate=rate,
             )
         )
+
+        # Keep only the most recent samples so the model can adapt over time.
+        if len(self._samples) > _MAX_FIT_SAMPLES:
+            self._samples = self._samples[-_MAX_FIT_SAMPLES:]
+
+    def _temp_signal_is_noisy(self) -> bool:
+        """
+        Return True if the recent indoor temperature history appears too noisy.
+
+        This is a simple quality gate to avoid learning from unstable data.
+        """
+        if len(self._temp_history) < 3:
+            return False
+
+        temps = [temp for _, temp in self._temp_history]
+        spread = max(temps) - min(temps)
+        return spread > _MAX_TEMP_SPREAD_C
 
     def _compute_rate(self) -> Optional[float]:
         """
@@ -227,6 +308,9 @@ class ThermalModel:
             rate = -k * delta_T
             k = -sum(rate * delta_T) / sum(delta_T²)
 
+        Newer samples are weighted slightly higher than older samples so the
+        model adapts gradually to changing seasonal conditions.
+
         In PumpSteer 2.1.0, fitting improves diagnostics and observability.
         It does not by itself activate any control behavior.
         """
@@ -240,10 +324,16 @@ class ThermalModel:
 
         sum_xy = 0.0
         sum_xx = 0.0
-        for sample in self._samples:
+        total = len(self._samples)
+
+        for idx, sample in enumerate(self._samples):
             delta_t = sample.indoor_temp - sample.outdoor_temp
-            sum_xy += sample.rate * delta_t
-            sum_xx += delta_t**2
+
+            # Newer samples get slightly higher weight.
+            weight = 0.5 + (0.5 * ((idx + 1) / total))
+
+            sum_xy += weight * sample.rate * delta_t
+            sum_xx += weight * (delta_t**2)
 
         if sum_xx < 1e-6:
             _LOGGER.debug("ThermalModel: degenerate data, skipping fit")
@@ -304,18 +394,19 @@ class ThermalModel:
         This helper uses predict_drop() and returns True when the predicted
         end temperature remains at or above the comfort floor.
 
-        In PumpSteer 2.1.0, this is diagnostic/future-facing only and does
+        In PumpSteer 2.1.x, this is diagnostic/future-facing only and does
         not directly gate brake/pre-brake decisions.
         """
         drop = self.predict_drop(indoor, outdoor, brake_duration_minutes)
         predicted = indoor - drop
         safe = predicted >= comfort_floor
         _LOGGER.debug(
-            "ThermalModel: safe=%s drop=%.2f°C end=%.2f°C floor=%.2f°C k=%.4f",
+            "ThermalModel: safe=%s drop=%.2f°C end=%.2f°C floor=%.2f°C k=%.4f conf=%.2f",
             safe,
             drop,
             predicted,
             comfort_floor,
             self._k,
+            self.confidence,
         )
         return safe
