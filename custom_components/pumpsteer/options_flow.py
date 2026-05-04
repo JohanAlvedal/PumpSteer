@@ -1,9 +1,10 @@
 import logging
 
 import voluptuous as vol
-from homeassistant import config_entries
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.selector import selector
+
+from homeassistant import config_entries
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +76,10 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "notify_service",
                         default=current_data.get("notify_service", ""),
                     ): selector({"text": {}}),
+                    vol.Optional(
+                        "debug_notifications",
+                        default=current_data.get("debug_notifications", False),
+                    ): selector({"boolean": {}}),
                     vol.Optional(
                         "ohmigo_entity",
                         default=current_data.get("ohmigo_entity", ""),
