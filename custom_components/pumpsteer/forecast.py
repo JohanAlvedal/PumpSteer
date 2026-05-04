@@ -410,11 +410,19 @@ def analyze_thermal_outlook(
     # Warm daytime period ahead may reduce the value of preheating.
     precool_risk = day_max is not None and day_max >= summer_threshold + precool_margin
 
+    # Block preheat in mild spring/autumn weather.
+    # Night cold alone should not trigger preheat if the current effective
+    # temperature or the daytime temperature is already mild.
+    mild_weather_now = eff_temp is not None and eff_temp >= 8.0
+    mild_day_ahead = day_max is not None and day_max >= 10.0
+
     # Diagnostic estimate only in 2.1.0.
     preheat_worthwhile = (
         hours_cold >= 3
         and not warming
         and not precool_risk
+        and not mild_weather_now
+        and not mild_day_ahead
         and (day_max is None or day_max < summer_threshold - 2.0)
     )
 
