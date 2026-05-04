@@ -36,6 +36,19 @@ ABSOLUTE_CHEAP_LIMIT: Final[float] = (
 )
 MAX_PRICE_WARNING_THRESHOLD: Final[float] = 3.0
 
+# === BRAKE / PREHEAT STABILIZATION ===
+# Maximum dt used in ramp calculations.
+# Prevents large single-step jumps after restarts or delayed updates.
+BRAKE_RAMP_MAX_DT_SECONDS: Final[float] = 60.0
+PREHEAT_RAMP_MAX_DT_SECONDS: Final[float] = 60.0
+
+# Preheat stabilization / hysteresis.
+# Keeps preheat active briefly after a positive request and avoids flapping.
+PREHEAT_HOLD_MINUTES: Final[float] = 30.0
+PREHEAT_EXIT_NEGATIVE_CYCLES: Final[int] = 3
+
+# Hard stop for preheat if indoor temperature rises clearly above target.
+PREHEAT_HARD_STOP_ABOVE_TARGET_C: Final[float] = 0.6
 # Hybrid threshold weights.
 # History gives stability across days.
 # Horizon gives better adaptation to today's / tomorrow's price profile.
@@ -105,7 +118,7 @@ PREHEAT_ON_MISSING_FORECAST: Final[bool] = False
 # === DEFAULTS ===
 DEFAULT_SUMMER_THRESHOLD: Final[float] = 18.0
 DEFAULT_AGGRESSIVENESS: Final[float] = 3.0
-DEFAULT_HOUSE_INERTIA: Final[float] = 2.0
+DEFAULT_HOUSE_INERTIA: Final[float] = 2.2
 DEFAULT_TARGET_TEMP: Final[float] = 21.0
 HOLIDAY_TEMP: Final[float] = 17.0
 
