@@ -39,7 +39,8 @@
           "min_brake_strength": "Minimum brake strength",
           "max_brake_strength": "Maximum brake strength",
           "experimental_ml_enabled": "Enable Experimental ML",
-          "price_tomorrow_entity": "Tomorrow electricity price sensor"
+          "price_tomorrow_entity": "Tomorrow electricity price sensor",
+          "debug_notifications": "Enable debug notifications for all mode changes"
         },
         "data_description": {
           "pid_kp": "How strongly PumpSteer reacts to current temperature error. Typical range: 2.0 to 5.0.",
