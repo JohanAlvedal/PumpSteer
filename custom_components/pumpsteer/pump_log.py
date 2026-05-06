@@ -4,38 +4,68 @@ from __future__ import annotations
 
 import logging
 import os
+import json
+from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from typing import Any, Optional
 
 from .settings import PUMP_LOG_ENABLED
 
 _PUMP_LOG_PATH = "/config/pump.log"
 _MAX_BYTES = 1_000_000
+_TELEMETRY_DIR = "/config/pumpsteer"
+_TELEMETRY_PATH = f"{_TELEMETRY_DIR}/telemetry.jsonl"
+_TELEMETRY_MAX_BYTES = 5 * 1024 * 1024
+_TELEMETRY_BACKUP_COUNT = 3
 
 _file_logger = logging.getLogger("pumpsteer.pump_log")
 _file_logger.propagate = False
+_telemetry_logger = logging.getLogger("pumpsteer.telemetry")
+_telemetry_logger.propagate = False
 
 
 def setup_pump_log() -> None:
     """Initiera fil-handler. Ska anropas via executor, inte från event loop."""
-    if _file_logger.handlers:
+    if _file_logger.handlers and _telemetry_logger.handlers:
         return
     try:
-        if (
-            os.path.exists(_PUMP_LOG_PATH)
-            and os.path.getsize(_PUMP_LOG_PATH) > _MAX_BYTES
-        ):
-            rotated = _PUMP_LOG_PATH + ".1"
-            if os.path.exists(rotated):
-                os.remove(rotated)
-            os.rename(_PUMP_LOG_PATH, rotated)
-        handler = logging.FileHandler(_PUMP_LOG_PATH, encoding="utf-8")
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s  %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-        )
-        _file_logger.addHandler(handler)
-        _file_logger.setLevel(logging.DEBUG)
+        if not _file_logger.handlers:
+            if (
+                os.path.exists(_PUMP_LOG_PATH)
+                and os.path.getsize(_PUMP_LOG_PATH) > _MAX_BYTES
+            ):
+                rotated = _PUMP_LOG_PATH + ".1"
+                if os.path.exists(rotated):
+                    os.remove(rotated)
+                os.rename(_PUMP_LOG_PATH, rotated)
+            handler = logging.FileHandler(_PUMP_LOG_PATH, encoding="utf-8")
+            handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s  %(message)s",
+                    datefmt="%Y-%m-%d %H:%M:%S",
+                )
+            )
+            _file_logger.addHandler(handler)
+            _file_logger.setLevel(logging.DEBUG)
+
+        if not _telemetry_logger.handlers:
+            os.makedirs(_TELEMETRY_DIR, exist_ok=True)
+            telemetry_handler = RotatingFileHandler(
+                _TELEMETRY_PATH,
+                maxBytes=_TELEMETRY_MAX_BYTES,
+                backupCount=_TELEMETRY_BACKUP_COUNT,
+                encoding="utf-8",
+            )
+            telemetry_handler.setFormatter(logging.Formatter("%(message)s"))
+            _telemetry_logger.addHandler(telemetry_handler)
+            _telemetry_logger.setLevel(logging.INFO)
     except OSError:
         pass
+
+
+def _json_default(value: Any) -> str:
+    """Convert non-JSON values to strings."""
+    return str(value)
 
 
 def log_mode_change(
@@ -88,3 +118,25 @@ def log_event(msg: str, **kwargs: Any) -> None:
         _file_logger.info(f"{msg}  |  {kv}")
     else:
         _file_logger.info(msg)
+
+
+def log_telemetry_snapshot(**data: Any) -> None:
+    """Write one structured telemetry snapshot for later analysis."""
+    if not PUMP_LOG_ENABLED:
+        return
+    if not _telemetry_logger.handlers:
+        return
+
+    payload = dict(data)
+    payload.setdefault("timestamp", datetime.now().astimezone().isoformat())
+    try:
+        _telemetry_logger.info(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=_json_default,
+            )
+        )
+    except Exception:
+        return
