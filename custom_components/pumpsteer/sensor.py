@@ -24,7 +24,7 @@ from .electricity_price import (
 )
 from .holiday import async_update_holiday
 from .ohmigo import async_push_ohmigo
-from .pump_log import log_event, log_mode_change
+from .pump_log import log_event, log_mode_change, log_telemetry_snapshot
 from .settings import (
     BRAKE_DELTA_C,
     BRAKE_HOLD_MINUTES,
@@ -1529,6 +1529,36 @@ class PumpSteerSensor(RestoreEntity):
             "last_updated": now.isoformat(),
             **extra,
         }
+        telemetry_data = {
+            "mode": mode,
+            "fake_outdoor_temperature": self._state,
+            "indoor_temperature": self._attributes.get("indoor_temperature"),
+            "target_temperature": self._attributes.get("target_temperature"),
+            "outdoor_temperature": self._attributes.get("outdoor_temperature"),
+            "price_category": self._attributes.get("price_category"),
+            "price_current": self._attributes.get("price_current"),
+            "p30": self._attributes.get("p30"),
+            "p80": self._attributes.get("p80"),
+            "aggressiveness": self._attributes.get("aggressiveness"),
+            "heating_demand_c": self._attributes.get("heating_demand_c"),
+            "pi_error_c": self._attributes.get("pi_error_c"),
+            "pi_p_term": self._attributes.get("pi_p_term"),
+            "pi_i_term": self._attributes.get("pi_i_term"),
+            "brake_factor": self._attributes.get("brake_factor"),
+            "brake_active": self._attributes.get("brake_active"),
+            "ramp_in_minutes": self._attributes.get("ramp_in_minutes"),
+            "ramp_out_minutes": self._attributes.get("ramp_out_minutes"),
+            "comfort_floor_c": self._attributes.get("comfort_floor_c"),
+            "preheat_enabled": self._attributes.get("preheat_enabled"),
+            "preheat_factor": self._attributes.get("preheat_factor"),
+            "preheat_boost_c": self._attributes.get("preheat_boost_c"),
+            "thermal_k": self._attributes.get("thermal_k"),
+            "thermal_k_valid": self._attributes.get("thermal_k_valid"),
+            "thermal_k_samples": self._attributes.get("thermal_k_samples"),
+            "status": self._attributes.get("status"),
+            "timestamp": now.isoformat(),
+        }
+        log_telemetry_snapshot(**telemetry_data)
 
         self._ohmigo_last_push = await async_push_ohmigo(
             self.hass,
