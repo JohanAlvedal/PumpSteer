@@ -1331,9 +1331,7 @@ class PumpSteerSensor(RestoreEntity):
         raw_today = (
             today_attr
             if isinstance(today_attr, list)
-            else today_raw_attr
-            if isinstance(today_raw_attr, list)
-            else []
+            else today_raw_attr if isinstance(today_raw_attr, list) else []
         )
 
         tomorrow_attr = get_attr(self.hass, tomorrow_entity_id, "tomorrow")
