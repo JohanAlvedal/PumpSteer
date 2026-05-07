@@ -46,19 +46,30 @@ jobs:
   tests:
     name: Pytest
     runs-on: ubuntu-latest
-    if: ${{ github.repository != '' && hashFiles('tests/**') != '' }}
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if tests folder exists
+        id: tests_exist
+        run: |
+          if [ -d "tests" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set up Python
+        if: steps.tests_exist.outputs.exists == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: steps.tests_exist.outputs.exists == 'true'
         run: |
           pip install -r requirements.txt || true
           pip install pytest
 
       - name: Run tests
+        if: steps.tests_exist.outputs.exists == 'true'
         run: pytest -q
