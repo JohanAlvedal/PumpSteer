@@ -97,3 +97,79 @@ async def async_push_ohmigo(
     except Exception as err:
         _LOGGER.warning("Ohmigo push failed for %s: %s", ohmigo_entity, err)
         return last_push_time
+
+
+_MODBUS_DEFAULT_INTERVAL_MINUTES: float = 5.0
+
+
+async def async_push_modbus(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    fake_temp: float,
+    last_push_time: Optional[datetime],
+) -> Optional[datetime]:
+    """Push fake_temp via a configurable HA service call (e.g. modbus.write_register)."""
+    cfg = {**entry.data, **entry.options}
+    service_str: str = cfg.get("modbus_service", "").strip()
+    if not service_str:
+        return last_push_time
+
+    interval_minutes: float = float(
+        cfg.get("modbus_interval_minutes", _MODBUS_DEFAULT_INTERVAL_MINUTES)
+    )
+    now = dt_util.now()
+    if last_push_time is not None:
+        elapsed = (now - last_push_time).total_seconds() / 60.0
+        if elapsed < interval_minutes:
+            return last_push_time
+
+    if "." not in service_str:
+        _LOGGER.warning(
+            "modbus_service '%s' is not valid (expected 'domain.service')", service_str
+        )
+        return last_push_time
+
+    domain, service = service_str.split(".", 1)
+
+    # Render payload template
+    payload_template: str = cfg.get("modbus_payload_template", "").strip()
+    if not payload_template:
+        _LOGGER.warning("modbus_service is set but modbus_payload_template is empty")
+        return last_push_time
+
+    try:
+        from homeassistant.helpers import template as template_helper
+
+        tmpl = template_helper.Template(payload_template, hass)
+        rendered = tmpl.async_render({"fake_temp": fake_temp})
+    except Exception as err:
+        _LOGGER.warning("modbus_payload_template render failed: %s", err)
+        return last_push_time
+
+    # rendered may be a dict (if template produces a mapping) or a string
+    if isinstance(rendered, dict):
+        service_data = rendered
+    else:
+        # Try to parse as YAML/dict
+        try:
+            import yaml
+
+            service_data = yaml.safe_load(str(rendered))
+            if not isinstance(service_data, dict):
+                raise ValueError(f"Expected dict, got {type(service_data)}")
+        except Exception as err:
+            _LOGGER.warning("modbus_payload_template did not produce a dict: %s", err)
+            return last_push_time
+
+    try:
+        await hass.services.async_call(
+            domain,
+            service,
+            service_data,
+            blocking=False,
+        )
+        _LOGGER.debug("Modbus push: %s → fake_temp=%.1f °C", service_str, fake_temp)
+        return now
+    except Exception as err:
+        _LOGGER.warning("Modbus push failed (%s): %s", service_str, err)
+        return last_push_time

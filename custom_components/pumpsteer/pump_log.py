@@ -1,34 +1,44 @@
-"""Structured file logger for PumpSteer — writes to /config/pump.log."""
+"""Structured file logger for PumpSteer."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
-import json
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
+from time import monotonic
 from typing import Any, Optional
 
 from .settings import PUMP_LOG_ENABLED
 
-_PUMP_LOG_PATH = "/config/pump.log"
+_LOG_DIR = "/config/pumpsteer"
+
+_PUMP_LOG_PATH = f"{_LOG_DIR}/pump.log"
 _MAX_BYTES = 1_000_000
-_TELEMETRY_DIR = "/config/pumpsteer"
-_TELEMETRY_PATH = f"{_TELEMETRY_DIR}/telemetry.jsonl"
+
+_TELEMETRY_PATH = f"{_LOG_DIR}/telemetry.jsonl"
 _TELEMETRY_MAX_BYTES = 5 * 1024 * 1024
 _TELEMETRY_BACKUP_COUNT = 3
+_TELEMETRY_INTERVAL_SECONDS = 300
+
+_last_telemetry_ts: float = 0.0
 
 _file_logger = logging.getLogger("pumpsteer.pump_log")
 _file_logger.propagate = False
+
 _telemetry_logger = logging.getLogger("pumpsteer.telemetry")
 _telemetry_logger.propagate = False
 
 
 def setup_pump_log() -> None:
-    """Initiera fil-handler. Ska anropas via executor, inte från event loop."""
+    """Initialize file handlers. Must be called via executor, not from the event loop."""
     if _file_logger.handlers and _telemetry_logger.handlers:
         return
+
     try:
+        os.makedirs(_LOG_DIR, exist_ok=True)
+
         if not _file_logger.handlers:
             if (
                 os.path.exists(_PUMP_LOG_PATH)
@@ -38,6 +48,7 @@ def setup_pump_log() -> None:
                 if os.path.exists(rotated):
                     os.remove(rotated)
                 os.rename(_PUMP_LOG_PATH, rotated)
+
             handler = logging.FileHandler(_PUMP_LOG_PATH, encoding="utf-8")
             handler.setFormatter(
                 logging.Formatter(
@@ -49,7 +60,6 @@ def setup_pump_log() -> None:
             _file_logger.setLevel(logging.DEBUG)
 
         if not _telemetry_logger.handlers:
-            os.makedirs(_TELEMETRY_DIR, exist_ok=True)
             telemetry_handler = RotatingFileHandler(
                 _TELEMETRY_PATH,
                 maxBytes=_TELEMETRY_MAX_BYTES,
@@ -59,6 +69,7 @@ def setup_pump_log() -> None:
             telemetry_handler.setFormatter(logging.Formatter("%(message)s"))
             _telemetry_logger.addHandler(telemetry_handler)
             _telemetry_logger.setLevel(logging.INFO)
+
     except OSError:
         pass
 
@@ -88,7 +99,9 @@ def log_mode_change(
         return
     if not _file_logger.handlers:
         return
+
     parts = [f"MODE {old_mode or '?'} → {new_mode}", f"fake={fake_temp:.1f}°C"]
+
     if indoor is not None:
         parts.append(f"indoor={indoor:.1f}°C")
     if outdoor is not None:
@@ -105,6 +118,7 @@ def log_mode_change(
         parts.append(f"comfort_floor={comfort_floor:.1f}°C")
     if extra:
         parts.append(extra)
+
     _file_logger.info("  |  ".join(parts))
 
 
@@ -113,6 +127,7 @@ def log_event(msg: str, **kwargs: Any) -> None:
         return
     if not _file_logger.handlers:
         return
+
     if kwargs:
         kv = "  ".join(f"{k}={v}" for k, v in kwargs.items())
         _file_logger.info(f"{msg}  |  {kv}")
@@ -122,14 +137,23 @@ def log_event(msg: str, **kwargs: Any) -> None:
 
 def log_telemetry_snapshot(**data: Any) -> None:
     """Write one structured telemetry snapshot for later analysis."""
+    global _last_telemetry_ts
+
     if not PUMP_LOG_ENABLED:
         return
     if not _telemetry_logger.handlers:
         return
 
-    payload = dict(data)
-    payload.setdefault("timestamp", datetime.now().astimezone().isoformat())
     try:
+        now_ts = monotonic()
+        if now_ts - _last_telemetry_ts < _TELEMETRY_INTERVAL_SECONDS:
+            return
+
+        _last_telemetry_ts = now_ts
+
+        payload = dict(data)
+        payload.setdefault("timestamp", datetime.now().astimezone().isoformat())
+
         _telemetry_logger.info(
             json.dumps(
                 payload,

@@ -12,8 +12,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import StateType
 
-from .thermal_model import ThermalModel
-
 from .control import PIController
 from .electricity_price import (
     PRICE_EXPENSIVE,
@@ -23,7 +21,7 @@ from .electricity_price import (
     filter_short_peaks,
 )
 from .holiday import async_update_holiday
-from .ohmigo import async_push_ohmigo
+from .ohmigo import async_push_modbus, async_push_ohmigo
 from .pump_log import log_event, log_mode_change, log_telemetry_snapshot
 from .settings import (
     BRAKE_DELTA_C,
@@ -47,11 +45,12 @@ from .settings import (
     PREHEAT_BOOST_C,
     PREHEAT_ON_MISSING_FORECAST,
     PRICE_LOOKAHEAD_HOURS,
-    RAMP_OUT_FACTOR,
     RAMP_MAX_MINUTES,
     RAMP_MIN_MINUTES,
+    RAMP_OUT_FACTOR,
     RAMP_SCALE,
 )
+from .thermal_model import ThermalModel
 from .utils import (
     compute_price_slot_index,
     detect_price_interval_minutes,
@@ -109,6 +108,7 @@ class PumpSteerSensor(RestoreEntity):
         self._state: Optional[float] = None
         self._attributes: Dict[str, Any] = {}
         self._ohmigo_last_push = None
+        self._modbus_last_push = None
 
         self._pi = PIController()
         self._thermal_model = ThermalModel()
@@ -129,7 +129,9 @@ class PumpSteerSensor(RestoreEntity):
         self._last_price_categories: List[str] = []
         self._p30: float = 0.0
         self._p80: float = 0.0
-
+        self._price_current: Optional[float] = None
+        self._minutes_until_expensive_value: Optional[float] = None
+        self._upcoming_expensive_value: bool = False
         # Cache price thresholds once per calendar day per entity.
         # Recomputing every hour caused mid-slot reclassification: P80 could
         # shift just enough to flip an ongoing expensive slot to normal,
@@ -653,6 +655,27 @@ class PumpSteerSensor(RestoreEntity):
             "thermal_k_valid": self._thermal_model.is_valid,
             "thermal_k_samples": self._thermal_model.sample_count,
             "thermal_pending_samples": self._thermal_model.pending_samples,
+            "price_current": (
+                round(self._price_current, 4)
+                if self._price_current is not None
+                else None
+            ),
+            "minutes_until_expensive": (
+                round(self._minutes_until_expensive_value, 0)
+                if self._minutes_until_expensive_value is not None
+                else None
+            ),
+            "upcoming_expensive": self._upcoming_expensive_value,
+            "forecast_cold": (
+                self._last_outlook.preheat_worthwhile
+                if self._last_outlook is not None
+                else None
+            ),
+            "forecast_hot": (
+                self._last_outlook.precool_risk
+                if self._last_outlook is not None
+                else None
+            ),
         }
 
     def _enter_safe_mode(
@@ -868,6 +891,9 @@ class PumpSteerSensor(RestoreEntity):
             return
 
         current_cat = categories[current_slot] if categories else PRICE_NORMAL
+        self._price_current = (
+            prices[current_slot] if 0 <= current_slot < len(prices) else None
+        )
 
         lookahead_slots = max(
             1,
@@ -877,6 +903,13 @@ class PumpSteerSensor(RestoreEntity):
         # ramp_in/out derived directly from house_inertia — independent of price jump.
         # Higher thermal mass = longer ramp, giving a heavier house more time to respond.
         upcoming = self._upcoming_expensive(categories, current_slot, lookahead_slots)
+        self._upcoming_expensive_value = upcoming
+        self._minutes_until_expensive_value = self._minutes_until_expensive(
+            categories,
+            current_slot,
+            interval_minutes,
+            now,
+        )
         ramp_in = self._compute_ramp_minutes(house_inertia)
         ramp_out = max(RAMP_MIN_MINUTES, ramp_in * RAMP_OUT_FACTOR)
 
@@ -890,7 +923,7 @@ class PumpSteerSensor(RestoreEntity):
         _cfg_price = cfg.get("electricity_price_entity")
         if _cfg_weather and _cfg_price:
             try:
-                from .forecast import async_build_forecast, analyze_thermal_outlook
+                from .forecast import analyze_thermal_outlook, async_build_forecast
 
                 _outlook_points = await async_build_forecast(
                     self.hass,
@@ -1507,7 +1540,9 @@ class PumpSteerSensor(RestoreEntity):
             )
             log_event("SAFE_MODE_EXIT", new_mode=mode)
             self._safe_mode_warned = False
+
         self._state = round(fake_temp, 1)
+
         log_mode_change(
             old_mode=self._prev_mode,
             new_mode=mode,
@@ -1521,7 +1556,9 @@ class PumpSteerSensor(RestoreEntity):
             ramp_in=extra.get("ramp_in_minutes"),
             comfort_floor=extra.get("comfort_floor_c"),
         )
+
         self._prev_mode = mode
+
         self._attributes = {
             "mode": mode,
             "fake_outdoor_temperature": self._state,
@@ -1529,6 +1566,7 @@ class PumpSteerSensor(RestoreEntity):
             "last_updated": now.isoformat(),
             **extra,
         }
+
         telemetry_data = {
             "mode": mode,
             "fake_outdoor_temperature": self._state,
@@ -1537,6 +1575,10 @@ class PumpSteerSensor(RestoreEntity):
             "outdoor_temperature": self._attributes.get("outdoor_temperature"),
             "price_category": self._attributes.get("price_category"),
             "price_current": self._attributes.get("price_current"),
+            "minutes_until_expensive": self._attributes.get("minutes_until_expensive"),
+            "upcoming_expensive": self._attributes.get("upcoming_expensive"),
+            "forecast_cold": self._attributes.get("forecast_cold"),
+            "forecast_hot": self._attributes.get("forecast_hot"),
             "p30": self._attributes.get("p30"),
             "p80": self._attributes.get("p80"),
             "aggressiveness": self._attributes.get("aggressiveness"),
@@ -1545,7 +1587,7 @@ class PumpSteerSensor(RestoreEntity):
             "pi_p_term": self._attributes.get("pi_p_term"),
             "pi_i_term": self._attributes.get("pi_i_term"),
             "brake_factor": self._attributes.get("brake_factor"),
-            "brake_active": self._attributes.get("brake_active"),
+            "brake_active": mode in (MODE_BRAKING, MODE_PREBRAKE),
             "ramp_in_minutes": self._attributes.get("ramp_in_minutes"),
             "ramp_out_minutes": self._attributes.get("ramp_out_minutes"),
             "comfort_floor_c": self._attributes.get("comfort_floor_c"),
@@ -1558,6 +1600,7 @@ class PumpSteerSensor(RestoreEntity):
             "status": self._attributes.get("status"),
             "timestamp": now.isoformat(),
         }
+
         log_telemetry_snapshot(**telemetry_data)
 
         self._ohmigo_last_push = await async_push_ohmigo(
@@ -1565,6 +1608,12 @@ class PumpSteerSensor(RestoreEntity):
             self._config_entry,
             fake_temp,
             self._ohmigo_last_push,
+        )
+        self._modbus_last_push = await async_push_modbus(
+            self.hass,
+            self._config_entry,
+            fake_temp,
+            self._modbus_last_push,
         )
 
 
@@ -1634,7 +1683,7 @@ class ThermalOutlookSensor(SensorEntity):
 
     async def async_update(self) -> None:
         """Fetch forecast and compute ThermalOutlook."""
-        from .forecast import async_build_forecast, analyze_thermal_outlook
+        from .forecast import analyze_thermal_outlook, async_build_forecast
 
         cfg = {**self._config_entry.data, **self._config_entry.options}
         weather_entity = cfg.get("weather_entity")

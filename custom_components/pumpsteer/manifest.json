@@ -1,16 +1,10 @@
 {
   "domain": "pumpsteer",
   "name": "PumpSteer",
-  "after_dependencies": [
-    "logbook"
-  ],
-  "codeowners": [
-    "@johanalvedal"
-  ],
+  "after_dependencies": ["logbook"],
+  "codeowners": ["@johanalvedal"],
   "config_flow": true,
-  "dependencies": [
-    "recorder"
-  ],
+  "dependencies": ["recorder"],
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "integration_type": "hub",
   "iot_class": "local_polling",

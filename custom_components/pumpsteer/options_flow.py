@@ -106,6 +106,28 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                             }
                         }
                     ),
+                    vol.Optional(
+                        "modbus_service",
+                        default=current_data.get("modbus_service", ""),
+                    ): selector({"text": {}}),
+                    vol.Optional(
+                        "modbus_payload_template",
+                        default=current_data.get("modbus_payload_template", ""),
+                    ): selector({"text": {"multiline": True}}),
+                    vol.Optional(
+                        "modbus_interval_minutes",
+                        default=current_data.get("modbus_interval_minutes", 5),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 1,
+                                "max": 60,
+                                "step": 1,
+                                "unit_of_measurement": "min",
+                                "mode": "slider",
+                            }
+                        }
+                    ),
                 }
             ),
             errors=errors,
