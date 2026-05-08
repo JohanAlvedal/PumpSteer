@@ -108,31 +108,50 @@ async def async_push_modbus(
     fake_temp: float,
     last_push_time: Optional[datetime],
 ) -> Optional[datetime]:
-    """Push fake_temp via a configurable HA service call (e.g. modbus.write_register)."""
+    """Push fake_temp via a configurable HA service call."""
+
     cfg = {**entry.data, **entry.options}
-    service_str: str = cfg.get("modbus_service", "").strip()
+
+    service_str: str = str(cfg.get("modbus_service", "")).strip()
+    payload_template: str = str(cfg.get("modbus_payload_template", "")).strip()
+
+    _LOGGER.debug(
+        "Modbus push config: service=%s interval=%s template_present=%s fake_temp=%.2f last_push=%s",
+        service_str or "<empty>",
+        cfg.get("modbus_interval_minutes", _MODBUS_DEFAULT_INTERVAL_MINUTES),
+        bool(payload_template),
+        fake_temp,
+        last_push_time,
+    )
+
     if not service_str:
+        _LOGGER.debug("Modbus push skipped: modbus_service is not configured")
         return last_push_time
 
     interval_minutes: float = float(
         cfg.get("modbus_interval_minutes", _MODBUS_DEFAULT_INTERVAL_MINUTES)
     )
     now = dt_util.now()
+
     if last_push_time is not None:
         elapsed = (now - last_push_time).total_seconds() / 60.0
         if elapsed < interval_minutes:
+            _LOGGER.debug(
+                "Modbus push skipped: interval not reached (elapsed=%.1f min, interval=%.1f min)",
+                elapsed,
+                interval_minutes,
+            )
             return last_push_time
 
     if "." not in service_str:
         _LOGGER.warning(
-            "modbus_service '%s' is not valid (expected 'domain.service')", service_str
+            "modbus_service '%s' is not valid (expected 'domain.service')",
+            service_str,
         )
         return last_push_time
 
     domain, service = service_str.split(".", 1)
 
-    # Render payload template
-    payload_template: str = cfg.get("modbus_payload_template", "").strip()
     if not payload_template:
         _LOGGER.warning("modbus_service is set but modbus_payload_template is empty")
         return last_push_time
@@ -142,15 +161,14 @@ async def async_push_modbus(
 
         tmpl = template_helper.Template(payload_template, hass)
         rendered = tmpl.async_render({"fake_temp": fake_temp})
+        _LOGGER.debug("Modbus payload rendered: %s", rendered)
     except Exception as err:
         _LOGGER.warning("modbus_payload_template render failed: %s", err)
         return last_push_time
 
-    # rendered may be a dict (if template produces a mapping) or a string
     if isinstance(rendered, dict):
         service_data = rendered
     else:
-        # Try to parse as YAML/dict
         try:
             import yaml
 
@@ -160,6 +178,13 @@ async def async_push_modbus(
         except Exception as err:
             _LOGGER.warning("modbus_payload_template did not produce a dict: %s", err)
             return last_push_time
+
+    _LOGGER.debug(
+        "Modbus push calling service: %s.%s data=%s",
+        domain,
+        service,
+        service_data,
+    )
 
     try:
         await hass.services.async_call(
