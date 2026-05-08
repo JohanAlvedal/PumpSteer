@@ -1,8 +1,10 @@
 ---
 layout: default
 title: Generic Output System
-nav_order: 8
+nav_order: 7
 ---
+
+# 🔌 Generic Output System (GOS)
 
 # PumpSteer Generic Output System (GOS)
 
