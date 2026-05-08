@@ -10,6 +10,36 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
+## [2.1.1] — Release hardening & beta output support
+
+### Fixed
+- Corrected HACS repository structure.
+- Removed misplaced integration-level `hacs.json`.
+- Updated manifest version to `2.1.1`.
+- Improved CI validation with HACS, HASSFest, Ruff and Pytest.
+
+### Improved
+- Improved PumpSteer logging and telemetry.
+- Improved notification handling.
+- Improved Ohmigo push handling.
+- Expanded documentation, installation guide, dashboard examples, tuning and troubleshooting.
+- Improved internal architecture cleanup and maintainability.
+
+### Added
+- Experimental generic Modbus output support.
+- PumpSteer can now push fake outdoor temperature directly via Home Assistant services.
+- Adds groundwork for native non-Ohmigo output targets.
+- Initial testing performed with Thermia Genesis / Calibra heat pumps.
+
+---
+
+## Beta feature: Thermia Genesis / Modbus output
+
+PumpSteer 2.1.1 introduces experimental support for direct Modbus-based fake outdoor temperature control.
+
+This allows compatible heat pumps to receive PumpSteer's calculated fake outdoor temperature without requiring Ohmigo hardware.
+
+---
 
 ## [2.1.0] — Observability & Architecture
 
