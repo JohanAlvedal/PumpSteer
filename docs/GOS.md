@@ -6,338 +6,217 @@ nav_order: 7
 
 # 🔌 Generic Output System (GOS)
 
-# PumpSteer Generic Output System (GOS)
-
 ## Overview
 
 The PumpSteer Generic Output System (GOS) allows PumpSteer to send its calculated
-virtual outdoor temperature (`fake_temp`) to virtually any Home Assistant compatible
-target.
+virtual outdoor temperature (`fake_temp`) to a configurable Home Assistant service.
 
-GOS transforms PumpSteer from a heat pump specific controller into a universal
-temperature optimization engine.
+This makes it possible to connect PumpSteer to external systems such as helpers,
+MQTT, Modbus, REST commands, ESPHome entities or other Home Assistant integrations.
 
-The system is fully local and entirely based on Home Assistant service calls.
-
----
-
-# Features
-
-- Fully template-based payload generation
-- Supports all Home Assistant services
-- Supports MQTT, Modbus, REST, ESPHome and more
-- Interval-based throttling
-- Local only — no cloud dependencies
-- Compatible with virtually any system reachable from Home Assistant
-- Dynamic payload rendering using Jinja templates
+GOS is experimental in PumpSteer 2.1.1 and should be tested carefully before being
+used for production heating control.
 
 ---
 
-# Supported Integrations
+## What has been tested
 
-Examples of compatible systems:
+The following has been verified during development:
 
-- Thermia
-- Nibe
-- Mitsubishi
-- Daikin
-- ESPHome
-- PLC systems
-- MQTT brokers
-- RS232 gateways
-- REST APIs
-- Node-RED
-- Home Assistant helpers
-- Custom integrations
+- `fake_temp` is passed to the output function
+- the payload template is rendered correctly
+- YAML payloads are parsed into service data
+- `system_log.write` can be used for testing
+- `input_number.set_value` can be used to write `fake_temp` to a helper
+
+Other service targets, such as Modbus, MQTT or REST commands, depend on the user's
+Home Assistant setup and should be verified individually.
 
 ---
 
-# Configuration
+## What GOS can be used for
 
-## Generic Output Service
+GOS may be used with any Home Assistant service that accepts a YAML/dictionary payload.
 
-Defines which Home Assistant service should be called.
+Possible use cases include:
+
+- writing to a Home Assistant helper
+- publishing to MQTT
+- writing to a Modbus register
+- calling a REST command
+- updating an ESPHome number entity
+- triggering custom integrations or automations
+
+PumpSteer does not include brand-specific protocol handling. The user is responsible
+for configuring the correct Home Assistant service, register, topic, scaling and payload.
+
+---
+
+## Configuration
+
+### Generic Output Service
+
+The Home Assistant service to call.
+
+Examples:
+
+```text
+input_number.set_value
+````
+
+```text
+system_log.write
+```
+
+```text
+mqtt.publish
+```
+
+```text
+modbus.write_register
+```
+
+---
+
+### Generic Output Payload Template
+
+The YAML payload sent to the selected service.
+
+The template has access to:
+
+```jinja
+{{ fake_temp }}
+```
+
+which contains PumpSteer's calculated virtual outdoor temperature.
+
+The rendered template must produce a valid YAML dictionary.
+
+---
+
+### Generic Output Interval
+
+Defines the minimum time between output calls.
 
 Example:
 
 ```text
-modbus.write_register
-````
-
-Other examples:
-
-```text id="ik6csn"
-mqtt.publish
-```
-
-```text id="v6x1q7"
-input_number.set_value
-```
-
-```text id="d9gx59"
-rest_command.send_fake_temp
-```
-
----
-
-## Generic Output Payload Template
-
-Defines the payload sent to the selected service.
-
-The template has access to:
-
-```jinja id="wwsc1d"
-{{ fake_temp }}
-```
-
-which contains PumpSteer's current calculated virtual outdoor temperature.
-
-The template must generate valid YAML/dictionary output.
-
----
-
-## Generic Output Interval
-
-Defines how often GOS sends updates.
-
-Example:
-
-```text id="f3x7wp"
 1
 ```
 
-= send every minute
+means approximately once per minute.
 
 ---
 
-# Example 1 — Home Assistant Helper
+## Example 1 — Home Assistant helper
 
-## Service
+### Service
 
-```text id="mcq5os"
+```text
 input_number.set_value
 ```
 
-## Payload
+### Payload
 
-```yaml id="u9o2v9"
+```yaml
 entity_id: input_number.outdoor_temp_bms
 value: "{{ fake_temp | round(1) }}"
 ```
 
-## Result
-
-Updates a Home Assistant helper entity with the current fake temperature.
-
-Useful for:
-
-* testing
-* dashboards
-* debugging
+This writes the current PumpSteer fake temperature to an `input_number` helper.
 
 ---
 
-# Example 2 — MQTT
+## Example 2 — System log test
 
-## Service
+### Service
 
-```text id="21z5gj"
+```text
+system_log.write
+```
+
+### Payload
+
+```yaml
+message: "PumpSteer fake temp = {{ fake_temp | round(1) }}"
+level: info
+```
+
+This writes the current value to the Home Assistant log and is useful for testing.
+
+---
+
+## Example 3 — MQTT
+
+### Service
+
+```text
 mqtt.publish
 ```
 
-## Payload
+### Payload
 
-```yaml id="8ysv9p"
+```yaml
 topic: pumpsteer/fake_outdoor_temp
 payload: "{{ fake_temp | round(1) }}"
 retain: true
 ```
 
-## Result
+This publishes the fake temperature to MQTT.
 
-Publishes fake temperature to MQTT.
-
-Useful for:
-
-* Node-RED
-* ESPHome
-* external automation systems
-* databases
+This has not been tested in all setups and depends on a working MQTT integration.
 
 ---
 
-# Example 3 — Modbus Register
+## Example 4 — Modbus register
 
-## Service
+### Service
 
-```text id="5r7mgk"
+```text
 modbus.write_register
 ```
 
-## Payload
+### Payload
 
-```yaml id="zq6ax2"
+```yaml
 hub: thermia
-slave: 1
-address: 1000
+address: 118
 value: "{{ (fake_temp * 100) | round(0) | int }}"
 ```
 
-## Result
+This example writes a scaled temperature value to a Modbus register.
 
-Writes the temperature value to a Modbus register.
-
-Common for:
-
-* Thermia
-* Nibe
-* PLC systems
-* industrial controllers
+The register address, hub name, scaling and optional slave/addressing parameters depend
+on the specific heat pump, gateway, controller or Modbus setup.
 
 ---
 
-# Example 4 — REST API
+## Example 5 — ESPHome number entity
 
-## Service
+### Service
 
-```text id="q1n31d"
-rest_command.send_fake_temp
-```
-
-## Payload
-
-```yaml id="g9m9o5"
-temperature: "{{ fake_temp | round(1) }}"
-```
-
-## Result
-
-Sends PumpSteer data to an external REST API.
-
----
-
-# Example 5 — ESPHome Entity
-
-## Service
-
-```text id="gexu9f"
+```text
 number.set_value
 ```
 
-## Payload
+### Payload
 
-```yaml id="v9h8z8"
+```yaml
 entity_id: number.esphome_fake_outdoor_temp
 value: "{{ fake_temp | round(1) }}"
 ```
 
-## Result
-
-Directly controls an ESPHome number entity.
+This can be used with an ESPHome number entity or similar Home Assistant number entity.
 
 ---
 
-# Example 6 — Logging
+## Notes
 
-## Service
+* GOS is optional.
+* PumpSteer works normally without it.
+* The internal option keys currently still use the `modbus_*` prefix for backward compatibility.
+* Output calls are interval-limited.
+* Invalid templates or payloads are logged as warnings and should not stop PumpSteer.
+* Always verify the output with `system_log.write` or an `input_number` helper before writing to real hardware.
 
-```text id="3x3c3z"
-system_log.write
-```
-
-## Payload
-
-```yaml id="hnd6m2"
-message: "PumpSteer fake temp = {{ fake_temp | round(1) }}"
-level: info
-```
-
-## Result
-
-Writes values to the Home Assistant log for troubleshooting.
-
----
-
-# Example 7 — JSON MQTT Payload
-
-## Service
-
-```text id="6pxm5z"
-mqtt.publish
-```
-
-## Payload
-
-```yaml id="g5f3y8"
-topic: pumpsteer/status
-payload: >
-  {
-    "fake_temp": {{ fake_temp | round(1) }},
-    "timestamp": "{{ now() }}"
-  }
-retain: true
-```
-
-## Result
-
-Publishes structured JSON data.
-
-Useful for advanced integrations and external processing.
-
----
-
-# Internal Architecture
-
-GOS works by:
-
-1. Reading the configured Home Assistant service
-2. Rendering the configured Jinja payload template
-3. Converting the rendered output into a valid dictionary
-4. Calling the Home Assistant service asynchronously
-5. Applying interval throttling to avoid excessive updates
-
----
-
-# Safety
-
-GOS includes:
-
-* Payload validation
-* YAML/dictionary validation
-* Service name validation
-* Exception handling
-* Interval limiting
-* Warning logging on failures
-
-Invalid templates or invalid payloads will never crash PumpSteer.
-
----
-
-# Design Philosophy
-
-PumpSteer GOS is intentionally generic.
-
-The goal is not to support one specific heat pump brand.
-
-The goal is to allow PumpSteer to communicate with virtually any system
-that Home Assistant can access.
-
-This makes PumpSteer:
-
-* hardware independent
-* protocol independent
-* future proof
-* highly extensible
-
----
-
-# Notes
-
-* GOS is optional
-* PumpSteer works normally without it
-* All processing is local
-* No cloud services are required
-* Multiple external systems can be supported through Home Assistant
-
-```
 ```
