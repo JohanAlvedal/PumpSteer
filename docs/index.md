@@ -55,6 +55,11 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 | **Holiday mode** | Lowers target to 16 °C during absence |
 | **Fully local** | No cloud, no API keys, no ML |
 
+## Documentation
+
+- [Generic Output System (GOS)](GOS/)
+- [GitHub Repository](https://github.com/JohanAlvedal/PumpSteer)
+
 ---
 
 ## Operating modes
