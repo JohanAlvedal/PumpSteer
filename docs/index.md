@@ -57,7 +57,7 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 
 ## Documentation
 
-- [Generic Output System (GOS)]({{ site.baseurl }}/GOS/)
+- [Generic Output System (GOS)]({{ site.baseurl }}/GOS.html)
 - [GitHub Repository](https://github.com/JohanAlvedal/PumpSteer)
 
 ---
