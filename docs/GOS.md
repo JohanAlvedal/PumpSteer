@@ -94,20 +94,6 @@ The rendered template must produce a valid YAML dictionary.
 
 ---
 
-### Generic Output Interval
-
-Defines the minimum time between output calls.
-
-Example:
-
-```text
-1
-```
-
-means approximately once per minute.
-
----
-
 ## Example 1 — Home Assistant helper
 
 ### Service
