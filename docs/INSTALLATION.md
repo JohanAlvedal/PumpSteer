@@ -29,24 +29,24 @@ Before installing, make sure you have:
 
 ---
 
-## New Installation
+New Installation
+### Step 1 — Install from HACS
+Open HACS in your Home Assistant sidebar.
+Go to Integrations.
+Search for PumpSteer.
+Select PumpSteer and click Download.
 
-### Step 1 — Add via HACS
-
-1. Open HACS in your Home Assistant sidebar.
-2. Go to **Integrations** → click the three-dot menu → **Custom repositories**.
-3. Add `https://github.com/JohanAlvedal/PumpSteer` as an **Integration**.
-4. Search for **PumpSteer** and click **Download**.
+{: .note }
+PumpSteer is available directly in HACS. You no longer need to add it as a custom repository.
 
 ### Step 2 — Restart Home Assistant
 
 A full restart is required after installing a new custom integration.
 
 ### Step 3 — Add the integration
-
-1. Go to **Settings** → **Devices & Services** → **Add Integration**.
-2. Search for **PumpSteer** and select it.
-3. Fill in the required entities:
+Go to Settings → Devices & Services → Add Integration.
+Search for PumpSteer and select it.
+Fill in the required entities:
 
 | Field | Description |
 |---|---|
