@@ -24,7 +24,7 @@ from .electricity_price import (
 )
 from .holiday import async_update_holiday
 from .ohmigo import async_push_ohmigo
-from .pump_log import log_event, log_mode_change
+from .pump_log import log_event, log_mode_change, write_telemetry
 from .settings import (
     BRAKE_DELTA_C,
     BRAKE_HOLD_MINUTES,
@@ -667,7 +667,7 @@ class PumpSteerSensor(RestoreEntity):
                 reason,
             )
             self._safe_mode_warned = True
-            log_event("SAFE_MODE_ENTER", reason=reason)
+            log_event("SAFE_MODE_ENTER", reason=reason, outdoor=outdoor)
         else:
             _LOGGER.debug("PumpSteer safe mode still active: %s", reason)
 
@@ -1011,6 +1011,7 @@ class PumpSteerSensor(RestoreEntity):
                     "COMFORT_FLOOR_RELEASE",
                     indoor=round(indoor, 1),
                     floor=round(comfort_floor, 1),
+                    outdoor=round(outdoor, 1),
                 )
                 brake_requested = False
                 brake_hold = 0.0
@@ -1215,7 +1216,11 @@ class PumpSteerSensor(RestoreEntity):
         )
         bridge_short_dip = upcoming and not forecast_cold and self._brake_ramp > 0.0
         if bridge_short_dip:
-            log_event("BRIDGE_SHORT_DIP", brake_factor=round(self._brake_ramp, 3))
+            log_event(
+                "BRIDGE_SHORT_DIP",
+                brake_factor=round(self._brake_ramp, 3),
+                outdoor=round(outdoor, 1),
+            )
 
         # 6. Normal PI control.
         # If the brake is still ramping out (for example after an expensive period
@@ -1505,7 +1510,11 @@ class PumpSteerSensor(RestoreEntity):
                 "PumpSteer exited SAFE MODE and returned to normal control (mode=%s)",
                 mode,
             )
-            log_event("SAFE_MODE_EXIT", new_mode=mode)
+            log_event(
+                "SAFE_MODE_EXIT",
+                new_mode=mode,
+                outdoor=extra.get("outdoor_temperature"),
+            )
             self._safe_mode_warned = False
         self._state = round(fake_temp, 1)
         log_mode_change(
@@ -1529,6 +1538,7 @@ class PumpSteerSensor(RestoreEntity):
             "last_updated": now.isoformat(),
             **extra,
         }
+        write_telemetry(self._attributes, extra.get("outdoor_temperature"))
 
         self._ohmigo_last_push = await async_push_ohmigo(
             self.hass,
@@ -1636,7 +1646,7 @@ async def async_setup_entry(
 ) -> None:
     from .pump_log import setup_pump_log
 
-    await hass.async_add_executor_job(setup_pump_log)
+    await hass.async_add_executor_job(setup_pump_log, hass)
     sensor = PumpSteerSensor(hass, config_entry)
     outlook_sensor = ThermalOutlookSensor(hass, config_entry)
     async_add_entities([sensor, outlook_sensor], update_before_add=False)

@@ -50,3 +50,9 @@ You use this integration at your own risk. Heating is a critical system in your 
 - 🐞 [Report a Bug / Feature Request](https://github.com/JohanAlvedal/PumpSteer/issues)
 - 📝 License: AGPL-3.0
 - © Johan Älvedal
+
+## Runtime logs
+
+PumpSteer stores local runtime logs in `<config>/pumplog/`.
+
+The files `pump.log` and `telemetry.json` are only written when the outdoor temperature is `10°C` or lower. This avoids unnecessary disk writes during warmer periods when heat-pump steering is normally not relevant.

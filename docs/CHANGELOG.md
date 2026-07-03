@@ -10,6 +10,12 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
+## Unreleased
+
+### Changed
+- Runtime file logs now use `<config>/pumplog/` instead of a PumpSteer-named runtime folder.
+- `pump.log` and `telemetry.json` are written only when outdoor temperature is `10°C` or lower to reduce unnecessary disk I/O during warmer periods.
+
 ## [2.1.1] — Release hardening & beta output support
 
 ### Fixed
