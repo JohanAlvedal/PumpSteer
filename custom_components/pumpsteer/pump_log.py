@@ -56,7 +56,7 @@ def _resolve_log_dir(hass: Any | None = None) -> Path:
 
 
 def setup_pump_log(hass: Any | None = None) -> None:
-    """Initialize the file handler. Should be called via executor, not the event loop."""
+    """Resolve runtime log paths. Should be called via executor, not the event loop."""
     global _runtime_log_dir, _pump_log_path, _telemetry_path
 
     _runtime_log_dir = _resolve_log_dir(hass)
@@ -64,17 +64,27 @@ def setup_pump_log(hass: Any | None = None) -> None:
     _telemetry_path = _runtime_log_dir / TELEMETRY_FILE
     _runtime_log_dir.mkdir(parents=True, exist_ok=True)
 
-    if _file_logger.handlers:
-        for handler in _file_logger.handlers:
-            if (
-                isinstance(handler, logging.FileHandler)
-                and Path(handler.baseFilename) == _pump_log_path
-            ):
-                return
-            handler.close()
-        _file_logger.handlers.clear()
+    for handler in list(_file_logger.handlers):
+        if (
+            isinstance(handler, logging.FileHandler)
+            and Path(handler.baseFilename) == _pump_log_path
+        ):
+            continue
+        handler.close()
+        _file_logger.removeHandler(handler)
+
+
+def _ensure_pump_log_handler() -> bool:
+    """Create the pump log file handler only when a log line will be written."""
+    for handler in _file_logger.handlers:
+        if (
+            isinstance(handler, logging.FileHandler)
+            and Path(handler.baseFilename) == _pump_log_path
+        ):
+            return True
 
     try:
+        _runtime_log_dir.mkdir(parents=True, exist_ok=True)
         if _pump_log_path.exists() and _pump_log_path.stat().st_size > _MAX_BYTES:
             rotated = _pump_log_path.with_name(f"{PUMP_LOG_FILE}.1")
             if rotated.exists():
@@ -86,8 +96,9 @@ def setup_pump_log(hass: Any | None = None) -> None:
         )
         _file_logger.addHandler(handler)
         _file_logger.setLevel(logging.DEBUG)
+        return True
     except OSError:
-        pass
+        return False
 
 
 def log_mode_change(
@@ -110,7 +121,7 @@ def log_mode_change(
         return
     if not _should_write_runtime_logs(outdoor):
         return
-    if not _file_logger.handlers:
+    if not _ensure_pump_log_handler():
         return
     parts = [f"MODE {old_mode or '?'} → {new_mode}", f"fake={fake_temp:.1f}°C"]
     if indoor is not None:
@@ -138,7 +149,7 @@ def log_event(msg: str, **kwargs: Any) -> None:
     outdoor = kwargs.get("outdoor", kwargs.get("outdoor_temperature"))
     if not _should_write_runtime_logs(outdoor):
         return
-    if not _file_logger.handlers:
+    if not _ensure_pump_log_handler():
         return
     if kwargs:
         kv = "  ".join(f"{k}={v}" for k, v in kwargs.items())
