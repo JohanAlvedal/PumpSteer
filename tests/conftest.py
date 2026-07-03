@@ -1,11 +1,24 @@
+"""Shared pytest fixtures for PumpSteer tests."""
+
+import asyncio
 import sys
 from pathlib import Path
 
-# Lägg till projektrot (/config)
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+import pytest
 
-# Lägg till pumpsteer-mappen
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# 🔥 VIKTIGAST: ladda stubbar först
-import ha_test_stubs  # noqa: F401
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+
+@pytest.fixture(autouse=True)
+def enable_event_loop_debug():
+    """Provide a synchronous event loop fixture for Home Assistant test plugins."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    yield

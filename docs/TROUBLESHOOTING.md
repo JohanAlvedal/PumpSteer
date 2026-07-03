@@ -232,6 +232,8 @@ In **Developer Tools → Template**, you can inspect PumpSteer state directly:
 
 ## Enabling debug logging
 
+Runtime file logs are stored in `<config>/pumplog/`. The files `pump.log` and `telemetry.json` are only written when the outdoor temperature is `10°C` or lower to reduce unnecessary disk I/O during warmer periods when heat-pump steering is normally not relevant.
+
 Add this to your `configuration.yaml` to get detailed PumpSteer logs:
 
 ```yaml
