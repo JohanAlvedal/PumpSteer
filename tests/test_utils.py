@@ -1,6 +1,7 @@
 import builtins
 from datetime import datetime
 
+from custom_components.pumpsteer.const import INTEGRATION_VERSION
 from custom_components.pumpsteer.utils import (
     compute_price_slot_index,
     detect_price_interval_minutes,
@@ -10,8 +11,8 @@ from custom_components.pumpsteer.utils import (
 
 
 def test_get_version_reads_manifest():
-    # Keep the assertion explicit so a release version change is intentional.
-    assert get_version() == "3.0.0-alpha.1"
+    # Keep the manifest and runtime diagnostics version aligned.
+    assert get_version() == INTEGRATION_VERSION
 
 
 def test_get_version_missing_manifest(monkeypatch):

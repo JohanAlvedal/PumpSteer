@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .v3.ha.runtime import PumpSteerRuntime
 
 DOMAIN = "pumpsteer"
+INTEGRATION_VERSION = "3.0.0-alpha.1"
 PLATFORMS = ("climate",)
 
 CONF_INDOOR_ENTITY = "indoor_temp_entity"
