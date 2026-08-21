@@ -10,8 +10,8 @@ from custom_components.pumpsteer.utils import (
 
 
 def test_get_version_reads_manifest():
-    # FIX: uppdaterad till aktuell version i manifest.json
-    assert get_version() == "2.1.0"
+    # Keep the assertion explicit so a release version change is intentional.
+    assert get_version() == "3.0.0-alpha.1"
 
 
 def test_get_version_missing_manifest(monkeypatch):
@@ -35,7 +35,7 @@ def test_compute_price_slot_index_clamps_to_range():
 
 def test_get_price_window_for_hours_returns_expected_slice():
     prices = [float(i) for i in range(10)]
-    # FIX: parametern heter current_slot, inte current_slot_index
+    # The public parameter is current_slot, not current_slot_index.
     window = get_price_window_for_hours(
         prices, current_slot=2, hours=3, price_interval_minutes=60
     )

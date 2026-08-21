@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfigurera PumpSteer",
+        "description": "Välj givare för rums- och utomhustemperatur. PumpSteer V3 alpha körs i skuggläge och skriver inte till värmesystemet.",
+        "data": {
+          "indoor_temp_entity": "Inomhustemperaturgivare",
+          "outdoor_temp_entity": "Utomhustemperaturgivare",
+          "target_temperature": "Önskad rumstemperatur"
+        }
+      }
+    },
+    "error": {
+      "required": "Fältet är obligatoriskt",
+      "entity_not_found": "Den valda entiteten hittades inte",
+      "same_sensor": "Inne- och utomhustemperatur måste använda olika givare",
+      "invalid_target": "Välj en måltemperatur mellan 5 och 35 °C"
+    },
+    "abort": {
+      "already_configured": "Kombinationen av inne- och utegivare är redan konfigurerad"
+    }
+  },
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "name": "Rumstemperatur"
+      }
+    }
+  }
+}
