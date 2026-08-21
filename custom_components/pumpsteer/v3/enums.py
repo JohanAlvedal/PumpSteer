@@ -49,6 +49,7 @@ class ReasonCode(StrEnum):
     OPTIONAL_FORECAST_MISSING = "optional_forecast_missing"
     CRITICAL_SENSOR_INVALID = "critical_sensor_invalid"
     CRITICAL_SENSOR_STALE = "critical_sensor_stale"
+    SENSOR_TIME_REGRESSION = "sensor_time_regression"
     OUTPUT_RATE_LIMITED = "output_rate_limited"
     OUTPUT_SATURATED = "output_saturated"
     MODEL_OUTSIDE_VALID_DOMAIN = "model_outside_valid_domain"
