@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
-import homeassistant.util.dt as dt_util
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -49,7 +49,7 @@ class PumpSteerDataUpdateCoordinator(DataUpdateCoordinator[RuntimeResult]):
         )
 
     async def _async_update_data(self) -> RuntimeResult:
-        return await self.runtime.async_update(dt_util.utcnow())
+        return await self.runtime.async_update(datetime.now(UTC))
 
     @callback
     def async_start_source_tracking(self) -> Any:

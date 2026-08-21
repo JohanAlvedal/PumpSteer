@@ -58,13 +58,14 @@ class RecorderHistoryAdapter:
             minimal_response=False,
         )
         raw = await get_instance(self._hass).async_add_executor_job(query)
-        return merge_histories(
+        samples = merge_histories(
             raw,
             indoor_entity=indoor_entity,
             outdoor_entity=outdoor_entity,
             target_temperature=target,
             maximum_samples=cap,
         )
+        return tuple(sample for sample in samples if start <= sample.captured_at < end)
 
 
 def merge_histories(

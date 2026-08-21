@@ -40,12 +40,15 @@ from custom_components.pumpsteer.v3.ha.recorder import (  # noqa: E402
     RecorderHistoryAdapter,
     merge_histories,
 )
+from custom_components.pumpsteer.v3.ha import recorder as recorder_adapter  # noqa: E402
 from custom_components.pumpsteer.v3.learning.episodes import (  # noqa: E402
     segment_episodes,
 )
 from custom_components.pumpsteer.v3.learning.models import (  # noqa: E402
     RawRecorderSample,
 )
+
+recorder_adapter.get_instance = get_instance
 
 
 def state(
@@ -98,6 +101,34 @@ def test_executor_query_uses_required_recorder_flags() -> None:
         "significant_changes_only": False,
         "minimal_response": False,
     }
+
+
+def test_executor_result_is_clamped_to_requested_half_open_window() -> None:
+    CAPTURED.clear()
+    CAPTURED["history"] = {
+        "sensor.indoor": [
+            state("19.9", -30),
+            state("20.0", 10),
+            state("20.1", 60),
+        ],
+        "sensor.outdoor": [state("-5.0", -30), state("-4.9", 20)],
+    }
+
+    result = asyncio.run(
+        RecorderHistoryAdapter(object()).async_load(
+            start=NOW,
+            end=NOW + timedelta(hours=1),
+            indoor_entity="sensor.indoor",
+            outdoor_entity="sensor.outdoor",
+            target_temperature=21.0,
+        )
+    )
+
+    assert [sample.captured_at for sample in result] == [
+        NOW + timedelta(minutes=10),
+        NOW + timedelta(minutes=20),
+    ]
+    assert result[0].outdoor_observed_at == NOW - timedelta(minutes=30)
 
 
 def test_merge_uses_union_timestamps_and_preserves_observed_at() -> None:

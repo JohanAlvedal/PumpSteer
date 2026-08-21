@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .v3.ha.coordinator import PumpSteerDataUpdateCoordinator
+    from .v3.ha.learning_coordinator import ObservationLearningCoordinator
+    from .v3.ha.learning_runtime import ObservationLearningRuntime
     from .v3.ha.runtime import PumpSteerRuntime
 
 DOMAIN = "pumpsteer"
@@ -28,3 +30,5 @@ class PumpSteerEntryData:
 
     runtime: PumpSteerRuntime
     coordinator: PumpSteerDataUpdateCoordinator
+    learning_runtime: ObservationLearningRuntime | None = None
+    learning_coordinator: ObservationLearningCoordinator | None = None

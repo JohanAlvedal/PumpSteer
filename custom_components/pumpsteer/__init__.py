@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import UTC, datetime
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -14,6 +17,8 @@ from .const import (
     PumpSteerEntryData,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one PumpSteer V3 entry in mandatory shadow mode."""
@@ -22,27 +27,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         HomeAssistantStateProvider,
         PumpSteerDataUpdateCoordinator,
     )
+    from .v3.ha.learning_coordinator import ObservationLearningCoordinator
+    from .v3.ha.learning_runtime import (
+        LearningRuntimeConfig,
+        ObservationLearningRuntime,
+    )
+    from .v3.ha.recorder import RecorderHistoryAdapter
     from .v3.ha.runtime import PumpSteerRuntime, RuntimeConfig
 
+    target_temperature = entry.data.get(
+        CONF_TARGET_TEMPERATURE,
+        DEFAULT_TARGET_TEMPERATURE,
+    )
     runtime = PumpSteerRuntime(
         config=RuntimeConfig(
             indoor_entity=entry.data[CONF_INDOOR_ENTITY],
             outdoor_entity=entry.data[CONF_OUTDOOR_ENTITY],
-            target_temperature=entry.data.get(
-                CONF_TARGET_TEMPERATURE,
-                DEFAULT_TARGET_TEMPERATURE,
-            ),
+            target_temperature=target_temperature,
         ),
         states=HomeAssistantStateProvider(hass),
         engine=ControlEngine(),
     )
     coordinator = PumpSteerDataUpdateCoordinator(hass, runtime)
-    entry.runtime_data = PumpSteerEntryData(runtime, coordinator)
+    learning_runtime = ObservationLearningRuntime(
+        config=LearningRuntimeConfig(
+            indoor_entity=entry.data[CONF_INDOOR_ENTITY],
+            outdoor_entity=entry.data[CONF_OUTDOOR_ENTITY],
+        ),
+        recorder=RecorderHistoryAdapter(hass),
+        started_at=datetime.now(UTC),
+        target_temperature=target_temperature,
+    )
+    learning_coordinator = ObservationLearningCoordinator(hass, learning_runtime)
+    entry.runtime_data = PumpSteerEntryData(
+        runtime=runtime,
+        coordinator=coordinator,
+        learning_runtime=learning_runtime,
+        learning_coordinator=learning_coordinator,
+    )
 
     await coordinator.async_config_entry_first_refresh()
     entry.async_on_unload(coordinator.async_start_source_tracking())
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        learning_coordinator.start()
+    except Exception:
+        _LOGGER.exception("Unable to start observation-only learning")
+        learning_coordinator.stop()
+    else:
+        entry.async_on_unload(learning_coordinator.stop)
     return True
 
 

@@ -150,14 +150,18 @@ def test_setup_owns_runtime_per_entry_and_loads_only_climate(monkeypatch) -> Non
     ]
     assert first.runtime_data is not second.runtime_data
     assert first.runtime_data.runtime is not second.runtime_data.runtime
+    assert (
+        first.runtime_data.learning_runtime is not second.runtime_data.learning_runtime
+    )
     assert first.runtime_data.coordinator.first_refreshes == 1
     assert first.runtime_data.runtime.latest is not None
     assert first.runtime_data.runtime.latest.supervised.apply_physical is False
-    assert len(first.unload_callbacks) == 2
+    assert len(first.unload_callbacks) == 3
     assert first.update_listener is not None
     for cleanup in first.unload_callbacks:
         cleanup()
     assert first.runtime_data.coordinator.cleanup_calls == 1
+    assert first.runtime_data.learning_runtime.snapshot.status.value == "stopped"
 
 
 def test_unload_uses_same_single_platform() -> None:

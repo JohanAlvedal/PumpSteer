@@ -37,7 +37,7 @@ def _entry(latest) -> SimpleNamespace:
     return SimpleNamespace(
         version=3,
         minor_version=0,
-        runtime_data=SimpleNamespace(runtime=runtime),
+        runtime_data=SimpleNamespace(runtime=runtime, learning_runtime=None),
     )
 
 
@@ -83,6 +83,7 @@ def test_empty_runtime_snapshot_is_json_serializable_and_shadow_only() -> None:
     assert json.loads(json.dumps(result)) == result
     assert result["shadow_mode"] is True
     assert result["latest"] is None
+    assert result["learning"]["mode"] == "observation_only"
     assert "apply_physical" not in result
 
 

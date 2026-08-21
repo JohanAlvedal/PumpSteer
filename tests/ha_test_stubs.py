@@ -116,7 +116,12 @@ def async_track_state_change_event(hass, entity_ids, action):
     return lambda: None
 
 
+def async_track_time_interval(hass, action, interval):
+    return lambda: None
+
+
 event_mod.async_track_state_change_event = async_track_state_change_event
+event_mod.async_track_time_interval = async_track_time_interval
 sys.modules["homeassistant.helpers.event"] = event_mod
 
 # ── helpers.entity_registry ───────────────────────────────────────────────────
@@ -316,8 +321,13 @@ def get_significant_states(*args, **kwargs):
     return {}
 
 
+def get_instance(hass):
+    return None
+
+
 history_mod.get_significant_states = get_significant_states
 recorder_mod.history = history_mod
+recorder_mod.get_instance = get_instance
 sys.modules["homeassistant.components"] = components_mod
 sys.modules["homeassistant.components.sensor"] = sensor_mod
 sys.modules["homeassistant.components.recorder"] = recorder_mod

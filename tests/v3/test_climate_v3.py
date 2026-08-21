@@ -74,6 +74,14 @@ class Runtime:
         self.config.target_temperature = value
 
 
+class LearningRuntime:
+    def __init__(self) -> None:
+        self.target_epochs: list[tuple[object, float]] = []
+
+    def begin_target_epoch(self, *, changed_at, target_temperature: float) -> None:
+        self.target_epochs.append((changed_at, target_temperature))
+
+
 class Entries:
     def __init__(self) -> None:
         self.updates: list[dict] = []
@@ -89,10 +97,15 @@ def test_climate_exposes_target_and_auto_only() -> None:
     entries = Entries()
     hass = SimpleNamespace(config_entries=entries)
     entry = SimpleNamespace(entry_id="entry", data={"target_temperature": 21.0})
+    learning = LearningRuntime()
     entity = PumpSteerClimate(
         hass,
         entry,
-        PumpSteerEntryData(runtime=runtime, coordinator=coordinator),
+        PumpSteerEntryData(
+            runtime=runtime,
+            coordinator=coordinator,
+            learning_runtime=learning,
+        ),
     )
 
     assert entity.hvac_modes == [HVACMode.AUTO]
@@ -107,6 +120,14 @@ def test_climate_exposes_target_and_auto_only() -> None:
     assert coordinator.refreshes == 1
     assert entry.data["target_temperature"] == 22.5
     assert len(entries.updates) == 1
+    assert len(learning.target_epochs) == 1
+    changed_at, changed_target = learning.target_epochs[0]
+    assert changed_at.utcoffset().total_seconds() == 0
+    assert changed_target == 22.5
+
+    asyncio.run(entity.async_set_temperature(temperature=22.5))
+
+    assert len(learning.target_epochs) == 1
 
 
 def test_climate_rejects_non_auto_mode() -> None:
@@ -119,3 +140,39 @@ def test_climate_rejects_non_auto_mode() -> None:
 
     with pytest.raises(ValueError, match="only supports AUTO"):
         asyncio.run(entity.async_set_hvac_mode("off"))
+
+
+def test_learning_epoch_failure_never_blocks_target_change() -> None:
+    class FailingLearningRuntime:
+        def __init__(self) -> None:
+            self.stops = 0
+
+        def begin_target_epoch(self, **kwargs) -> None:
+            del kwargs
+            raise RuntimeError("simulated learning failure")
+
+        def stop(self) -> None:
+            self.stops += 1
+
+    coordinator = Coordinator()
+    runtime = Runtime()
+    learning = FailingLearningRuntime()
+    entries = Entries()
+    hass = SimpleNamespace(config_entries=entries)
+    entry = SimpleNamespace(entry_id="entry", data={"target_temperature": 21.0})
+    entity = PumpSteerClimate(
+        hass,
+        entry,
+        PumpSteerEntryData(
+            runtime=runtime,
+            coordinator=coordinator,
+            learning_runtime=learning,
+        ),
+    )
+
+    asyncio.run(entity.async_set_temperature(temperature=22.0))
+
+    assert runtime.config.target_temperature == 22.0
+    assert entry.data["target_temperature"] == 22.0
+    assert coordinator.refreshes == 1
+    assert learning.stops == 1
