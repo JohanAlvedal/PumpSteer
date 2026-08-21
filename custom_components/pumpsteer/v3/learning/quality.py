@@ -23,8 +23,8 @@ class ExclusionReason(StrEnum):
     STALE_SOURCE = "stale_source"
     DUPLICATE_TIME = "duplicate_time"
     NON_MONOTONIC_TIME = "non_monotonic_time"
-    DUPLICATE_SOURCE_TIME = "duplicate_source_time"
-    NON_MONOTONIC_SOURCE_TIME = "non_monotonic_source_time"
+    NO_NEW_CRITICAL_OBSERVATION = "no_new_critical_observation"
+    SOURCE_TIME_REGRESSION = "source_time_regression"
     EXCESSIVE_GAP = "excessive_gap"
     IMPLAUSIBLE_INDOOR_TEMPERATURE = "implausible_indoor_temperature"
     IMPLAUSIBLE_OUTDOOR_TEMPERATURE = "implausible_outdoor_temperature"
@@ -147,16 +147,7 @@ def screen_sample(
             reasons.append(ExclusionReason.NON_MONOTONIC_TIME)
         elif raw.captured_at - previous_raw.captured_at > policy.maximum_gap:
             reasons.append(ExclusionReason.EXCESSIVE_GAP)
-        for current_source_time, previous_source_time in (
-            (raw.indoor_observed_at, previous_raw.indoor_observed_at),
-            (raw.outdoor_observed_at, previous_raw.outdoor_observed_at),
-        ):
-            if current_source_time is None or previous_source_time is None:
-                continue
-            if current_source_time == previous_source_time:
-                reasons.append(ExclusionReason.DUPLICATE_SOURCE_TIME)
-            elif current_source_time < previous_source_time:
-                reasons.append(ExclusionReason.NON_MONOTONIC_SOURCE_TIME)
+        _check_critical_source_progress(raw, previous_raw, reasons)
 
     if previous_accepted is not None and not _required_value_problem(reasons):
         if (
@@ -248,6 +239,35 @@ def _check_source_times(
             reasons.append(ExclusionReason.SOURCE_FROM_FUTURE)
         elif raw.captured_at - observed_at > policy.maximum_source_age:
             reasons.append(ExclusionReason.STALE_SOURCE)
+
+
+def _check_critical_source_progress(
+    raw: RawRecorderSample,
+    previous: RawRecorderSample,
+    reasons: list[ExclusionReason],
+) -> None:
+    """Allow one carried-forward source while requiring some new information.
+
+    Joined Recorder histories commonly update indoor and outdoor sensors at
+    different times. A repeated timestamp for one critical source is valid when
+    the other source advanced. A regression by either source is never valid.
+    """
+    current_times = (raw.indoor_observed_at, raw.outdoor_observed_at)
+    previous_times = (
+        previous.indoor_observed_at,
+        previous.outdoor_observed_at,
+    )
+    if any(
+        current is not None and old is not None and current < old
+        for current, old in zip(current_times, previous_times)
+    ):
+        reasons.append(ExclusionReason.SOURCE_TIME_REGRESSION)
+        return
+    if all(
+        current is not None and old is not None and current == old
+        for current, old in zip(current_times, previous_times)
+    ):
+        reasons.append(ExclusionReason.NO_NEW_CRITICAL_OBSERVATION)
 
 
 def _check_ranges(

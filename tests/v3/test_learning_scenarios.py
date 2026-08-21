@@ -78,22 +78,33 @@ def test_duplicate_and_non_monotonic_capture_times_are_excluded() -> None:
     assert ExclusionReason.NON_MONOTONIC_TIME in _reasons(backwards)
 
 
-def test_duplicate_critical_source_timestamp_is_excluded() -> None:
+def test_alternating_critical_source_updates_are_accepted() -> None:
     samples = [
         _raw(0),
         _raw(5, indoor_observed_minute=0, outdoor_observed_minute=5),
     ]
 
-    assert ExclusionReason.DUPLICATE_SOURCE_TIME in _reasons(samples)
+    batch = segment_episodes(samples)
+    assert batch.excluded == ()
+    assert [len(episode.samples) for episode in batch.episodes] == [2]
 
 
-def test_non_monotonic_critical_source_timestamp_is_excluded() -> None:
+def test_both_unchanged_critical_source_timestamps_are_excluded() -> None:
+    samples = [
+        _raw(0),
+        _raw(5, indoor_observed_minute=0, outdoor_observed_minute=0),
+    ]
+
+    assert ExclusionReason.NO_NEW_CRITICAL_OBSERVATION in _reasons(samples)
+
+
+def test_critical_source_timestamp_regression_is_excluded() -> None:
     samples = [
         _raw(5),
         _raw(6, indoor_observed_minute=4, outdoor_observed_minute=6),
     ]
 
-    assert ExclusionReason.NON_MONOTONIC_SOURCE_TIME in _reasons(samples)
+    assert ExclusionReason.SOURCE_TIME_REGRESSION in _reasons(samples)
 
 
 def test_gap_target_change_window_opening_and_implausible_rate_are_excluded() -> None:
@@ -125,7 +136,7 @@ def test_no_clean_episode_crosses_any_contaminated_sample() -> None:
         _raw(5, target=22.0),
         _raw(5, indoor=20.7),
         _raw(30),
-        _raw(5, indoor_observed_minute=0),
+        _raw(5, indoor_observed_minute=0, outdoor_observed_minute=0),
     )
 
     for contaminated in contaminants:

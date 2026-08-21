@@ -146,36 +146,70 @@ def test_timeline_exclusion_paths(minute: int, reason: ExclusionReason) -> None:
     assert reason in reasons(sample(minute), previous=previous)
 
 
-@pytest.mark.parametrize(
-    ("source_minute", "reason"),
-    [
-        (0, ExclusionReason.DUPLICATE_SOURCE_TIME),
-        (-1, ExclusionReason.NON_MONOTONIC_SOURCE_TIME),
-    ],
-)
-def test_critical_source_timeline_exclusion_paths(
-    source_minute: int,
-    reason: ExclusionReason,
-) -> None:
-    previous = sample(0)
-    current = sample(5)
-    current_source_time = NOW + timedelta(minutes=source_minute)
-    current = RawRecorderSample(
-        captured_at=current.captured_at,
-        indoor_temperature_c=current.indoor_temperature_c,
-        outdoor_temperature_c=current.outdoor_temperature_c,
-        target_temperature_c=current.target_temperature_c,
-        indoor_observed_at=current_source_time,
-        outdoor_observed_at=current.outdoor_observed_at,
-        virtual_output_c=current.virtual_output_c,
-        virtual_output_observed_at=current.virtual_output_observed_at,
-        heating_power_kw=current.heating_power_kw,
-        heating_power_observed_at=current.heating_power_observed_at,
-        supply_temperature_c=current.supply_temperature_c,
-        supply_temperature_observed_at=current.supply_temperature_observed_at,
+def test_alternating_critical_sensor_updates_form_one_clean_episode() -> None:
+    first = sample(0, virtual=None, power=None, supply=None)
+    indoor_update_at = NOW + timedelta(minutes=5)
+    indoor_update = RawRecorderSample(
+        captured_at=indoor_update_at,
+        indoor_temperature_c=20.95,
+        outdoor_temperature_c=-5.0,
+        target_temperature_c=21.0,
+        indoor_observed_at=indoor_update_at,
+        outdoor_observed_at=first.outdoor_observed_at,
+    )
+    outdoor_update_at = NOW + timedelta(minutes=10)
+    outdoor_update = RawRecorderSample(
+        captured_at=outdoor_update_at,
+        indoor_temperature_c=20.95,
+        outdoor_temperature_c=-5.2,
+        target_temperature_c=21.0,
+        indoor_observed_at=indoor_update.indoor_observed_at,
+        outdoor_observed_at=outdoor_update_at,
     )
 
-    assert reason in reasons(current, previous=previous)
+    batch = segment_episodes((first, indoor_update, outdoor_update))
+
+    assert [len(episode.samples) for episode in batch.episodes] == [3]
+    assert batch.excluded == ()
+
+
+def test_both_repeated_critical_source_times_are_no_information() -> None:
+    previous = sample(0, virtual=None, power=None, supply=None)
+    repeated = RawRecorderSample(
+        captured_at=NOW + timedelta(minutes=5),
+        indoor_temperature_c=21.0,
+        outdoor_temperature_c=-5.0,
+        target_temperature_c=21.0,
+        indoor_observed_at=previous.indoor_observed_at,
+        outdoor_observed_at=previous.outdoor_observed_at,
+    )
+
+    assert ExclusionReason.NO_NEW_CRITICAL_OBSERVATION in reasons(
+        repeated, previous=previous
+    )
+
+
+@pytest.mark.parametrize("regressed_source", ["indoor", "outdoor"])
+def test_either_critical_source_regression_is_excluded(
+    regressed_source: str,
+) -> None:
+    previous = sample(0, virtual=None, power=None, supply=None)
+    current_at = NOW + timedelta(minutes=5)
+    regressed_at = NOW - timedelta(seconds=1)
+    current = RawRecorderSample(
+        captured_at=current_at,
+        indoor_temperature_c=21.0,
+        outdoor_temperature_c=-5.0,
+        target_temperature_c=21.0,
+        indoor_observed_at=(
+            regressed_at if regressed_source == "indoor" else current_at
+        ),
+        outdoor_observed_at=(
+            regressed_at if regressed_source == "outdoor" else current_at
+        ),
+    )
+
+    assert ExclusionReason.SOURCE_TIME_REGRESSION in reasons(current, previous=previous)
 
 
 def test_implausible_indoor_rate_is_excluded() -> None:
