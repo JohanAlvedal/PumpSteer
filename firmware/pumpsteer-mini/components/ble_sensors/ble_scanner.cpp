@@ -10,6 +10,7 @@
 #include "host/ble_gap.h"
 #include "host/ble_hs.h"
 #include "host/ble_hs_adv.h"
+#include "host/util/util.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 
@@ -132,7 +133,7 @@ esp_err_t BleScanner::startScan() {
         return ESP_FAIL;
     }
 
-    ble_gap_disc_params parameters{};
+    struct ble_gap_disc_params parameters{};
 
     // Keep duplicate filtering disabled because BTHome sensors advertise updated
     // measurements periodically from the same BLE address.
