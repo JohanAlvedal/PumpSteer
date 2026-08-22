@@ -5,6 +5,8 @@
 
 namespace pumpsteer::bthome {
 
+constexpr std::uint16_t kServiceUuid = 0xFCD2;
+
 enum class DecodeStatus : std::uint8_t {
     Ok,
     InvalidArgument,

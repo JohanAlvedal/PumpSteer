@@ -28,7 +28,7 @@ The correct output behavior must be verified against Ohmonwifiplus and heat-pump
 
 Implemented:
 
-- ESP-IDF project skeleton
+- ESP-IDF project skeleton for ESP32-S3-WROOM-1-N16R8
 - hardware-independent C++ control core
 - PI controller with anti-windup
 - safe mode / bypass request
@@ -41,20 +41,29 @@ Implemented:
 - forecast-gated preheat hook
 - BTHome v2 service-data decoder
 - Shelly BLU H&T temperature, humidity, battery and packet-id decoding
+- passive ESP-NimBLE BTHome discovery
+- fixed-size BLE sensor registry without heap allocation
+- indoor/outdoor sensor roles with freshness tracking
 - explicit rejection of encrypted BTHome until key support is implemented
-- host-side core and BTHome tests
+- host-side core, BTHome and registry tests
 
 Next:
 
-1. ESP32 NimBLE scanner and Shelly BLU H&T discovery
-2. indoor/outdoor BLE sensor assignment and freshness tracking
-3. Wi-Fi provisioning and NVS configuration
-4. Ohmonwifiplus local API client
-5. electricity price provider
-6. weather forecast provider
+1. persist indoor/outdoor BLE assignment in NVS
+2. Wi-Fi provisioning and local configuration API
+3. Ohmonwifiplus local API client
+4. electricity price provider
+5. weather forecast provider
+6. connect live BLE readings to PumpSteer Core
 7. precool strategy
 8. optional MQTT and Home Assistant discovery
 9. OTA and production watchdog behavior
+
+## BLE behavior
+
+PumpSteer Mini scans passively for 16-bit BTHome service data (UUID 0xFCD2).
+Duplicate filtering is intentionally disabled so periodic measurements from the same sensor continue to reach the registry.
+The registry currently holds up to 16 discovered temperature sensors and guarantees that only one sensor can have the Indoor role and one can have the Outdoor role.
 
 ## ESP-IDF build
 
@@ -72,4 +81,5 @@ cmake -S . -B build
 cmake --build build
 ./build/pumpsteer_mini_core_test
 ./build/pumpsteer_mini_bthome_test
+./build/pumpsteer_mini_sensor_registry_test
 ```
