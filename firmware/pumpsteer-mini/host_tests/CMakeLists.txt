@@ -15,3 +15,14 @@ target_include_directories(
     pumpsteer_mini_core_test
     PRIVATE ../components/pumpsteer_core/include
 )
+
+add_executable(
+    pumpsteer_mini_bthome_test
+    bthome_test.cpp
+    ../components/ble_sensors/bthome.cpp
+)
+
+target_include_directories(
+    pumpsteer_mini_bthome_test
+    PRIVATE ../components/ble_sensors/include
+)

@@ -39,12 +39,15 @@ Implemented:
 - expensive-price braking
 - pre-brake hook
 - forecast-gated preheat hook
-- host-side core tests
+- BTHome v2 service-data decoder
+- Shelly BLU H&T temperature, humidity, battery and packet-id decoding
+- explicit rejection of encrypted BTHome until key support is implemented
+- host-side core and BTHome tests
 
 Next:
 
-1. BLE scanner and BTHome decoder
-2. Shelly BLU H&T sensor discovery
+1. ESP32 NimBLE scanner and Shelly BLU H&T discovery
+2. indoor/outdoor BLE sensor assignment and freshness tracking
 3. Wi-Fi provisioning and NVS configuration
 4. Ohmonwifiplus local API client
 5. electricity price provider
@@ -61,11 +64,12 @@ idf.py set-target esp32s3
 idf.py build
 ```
 
-## Host core tests
+## Host tests
 
 ```bash
 cd firmware/pumpsteer-mini/host_tests
 cmake -S . -B build
 cmake --build build
 ./build/pumpsteer_mini_core_test
+./build/pumpsteer_mini_bthome_test
 ```
