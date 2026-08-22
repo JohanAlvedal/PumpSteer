@@ -1,0 +1,24 @@
+# ESP-IDF build output
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+
+# Host tests
+host_tests/build/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Local credentials/configuration
+secrets.*
+*.local
+
+# Temporary files
+*.tmp
+*.log
