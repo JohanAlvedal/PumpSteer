@@ -12,6 +12,7 @@ Changelog:
 import datetime as _dt
 import sys
 import types
+from typing import ClassVar
 
 # ── homeassistant (root) ──────────────────────────────────────────────────────
 ha = types.ModuleType("homeassistant")
@@ -123,6 +124,32 @@ def async_track_time_interval(hass, action, interval):
 event_mod.async_track_state_change_event = async_track_state_change_event
 event_mod.async_track_time_interval = async_track_time_interval
 sys.modules["homeassistant.helpers.event"] = event_mod
+
+# ── helpers.storage ───────────────────────────────────────────────────
+storage_mod = types.ModuleType("homeassistant.helpers.storage")
+
+
+class Store:
+    """Minimal in-memory Store stub for adapter-level tests."""
+
+    _records: ClassVar[dict] = {}
+
+    def __init__(self, hass, version, key, private=False, **kwargs):
+        self.hass = hass
+        self.version = version
+        self.key = key
+        self.private = private
+        self.kwargs = kwargs
+
+    async def async_load(self):
+        return self._records.get(self.key)
+
+    async def async_save(self, data):
+        self._records[self.key] = data
+
+
+storage_mod.Store = Store
+sys.modules["homeassistant.helpers.storage"] = storage_mod
 
 # ── helpers.entity_registry ───────────────────────────────────────────────────
 entity_registry_mod = types.ModuleType("homeassistant.helpers.entity_registry")

@@ -78,7 +78,9 @@ class LearningRuntime:
     def __init__(self) -> None:
         self.target_epochs: list[tuple[object, float]] = []
 
-    def begin_target_epoch(self, *, changed_at, target_temperature: float) -> None:
+    async def async_note_target_change(
+        self, *, changed_at, target_temperature: float
+    ) -> None:
         self.target_epochs.append((changed_at, target_temperature))
 
 
@@ -147,7 +149,7 @@ def test_learning_epoch_failure_never_blocks_target_change() -> None:
         def __init__(self) -> None:
             self.stops = 0
 
-        def begin_target_epoch(self, **kwargs) -> None:
+        async def async_note_target_change(self, **kwargs) -> None:
             del kwargs
             raise RuntimeError("simulated learning failure")
 

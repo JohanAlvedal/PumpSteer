@@ -8,7 +8,7 @@ from datetime import timedelta
 from enum import StrEnum
 
 from ..validation import finite_float
-from .models import AcceptedSample, RawRecorderSample
+from .models import AcceptedSample, RawRecorderSample, RawTimelineBoundary
 
 
 class ExclusionReason(StrEnum):
@@ -126,8 +126,8 @@ class ScreenedSample:
 def screen_sample(
     raw: RawRecorderSample,
     *,
-    policy: QualityPolicy = QualityPolicy(),
-    previous_raw: RawRecorderSample | None = None,
+    policy: QualityPolicy = QualityPolicy(),  # noqa: B008
+    previous_raw: RawRecorderSample | RawTimelineBoundary | None = None,
     previous_accepted: AcceptedSample | None = None,
 ) -> ScreenedSample:
     """Screen one observation without estimating any thermal parameter."""
@@ -243,7 +243,7 @@ def _check_source_times(
 
 def _check_critical_source_progress(
     raw: RawRecorderSample,
-    previous: RawRecorderSample,
+    previous: RawRecorderSample | RawTimelineBoundary,
     reasons: list[ExclusionReason],
 ) -> None:
     """Allow one carried-forward source while requiring some new information.

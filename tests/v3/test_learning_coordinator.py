@@ -28,6 +28,8 @@ class FakeRuntime:
         self.stops = 0
         self.entered = asyncio.Event()
         self.release = asyncio.Event()
+        self.shutdowns = 0
+        self.stopped = False
 
     async def async_collect(self, *, now_utc: datetime) -> None:
         self.calls.append(now_utc)
@@ -35,7 +37,14 @@ class FakeRuntime:
         await self.release.wait()
 
     def stop(self) -> None:
+        if self.stopped:
+            return
+        self.stopped = True
         self.stops += 1
+
+    async def async_shutdown(self) -> None:
+        self.shutdowns += 1
+        self.stop()
 
 
 class FakeHass:
@@ -136,10 +145,39 @@ def test_stop_is_idempotent_and_cancels_active_work(monkeypatch) -> None:
 
         assert cancelled == [True]
         assert runtime.stops == 1
+        assert runtime.shutdowns == 0
         assert hass.tasks[0].cancelled()
 
         callback_holder["action"](NOW_LOCAL + timedelta(hours=6))
         assert len(hass.tasks) == 1
+
+    asyncio.run(scenario())
+
+
+def test_async_shutdown_drains_active_task(monkeypatch) -> None:
+    callback_holder = {}
+    monkeypatch.setattr(
+        module,
+        "async_track_time_interval",
+        lambda _hass, action, _interval: (
+            callback_holder.update(action=action) or (lambda: None)
+        ),
+    )
+
+    async def scenario() -> None:
+        runtime = FakeRuntime()
+        hass = FakeHass()
+        coordinator = module.ObservationLearningCoordinator(hass, runtime)
+        coordinator.start()
+        callback_holder["action"](NOW_LOCAL)
+        await runtime.entered.wait()
+
+        await coordinator.async_shutdown()
+
+        assert hass.tasks[0].done()
+        assert hass.tasks[0].cancelled()
+        assert runtime.stops == 1
+        assert runtime.shutdowns == 1
 
     asyncio.run(scenario())
 

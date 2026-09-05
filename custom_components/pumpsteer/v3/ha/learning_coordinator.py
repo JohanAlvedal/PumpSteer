@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -64,6 +64,21 @@ class ObservationLearningCoordinator:
         if task is not None and not task.done():
             task.cancel()
         self._runtime.stop()
+
+    async def async_shutdown(self) -> None:
+        """Stop and drain active Recorder or checkpoint work before reload."""
+        task = self._active_task
+        self.stop()
+        if task is not None and not task.done():
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                _LOGGER.exception(
+                    "Observation learning shutdown completed with an error"
+                )
+        await self._runtime.async_shutdown()
 
     @callback
     def _interval_elapsed(self, now: datetime) -> None:

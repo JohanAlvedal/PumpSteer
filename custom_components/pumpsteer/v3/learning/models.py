@@ -46,6 +46,38 @@ class RawRecorderSample:
 
 
 @dataclass(frozen=True, slots=True)
+class RawTimelineBoundary:
+    """Compact raw ordering context safe to retain between ingestion batches.
+
+    Values are deliberately absent. Quality screening only needs these three
+    timestamps to enforce capture ordering and critical-source progress across
+    a batch boundary.
+    """
+
+    captured_at: datetime
+    indoor_observed_at: datetime | None
+    outdoor_observed_at: datetime | None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "captured_at", _utc(self.captured_at, "captured_at"))
+        for field_name in ("indoor_observed_at", "outdoor_observed_at"):
+            value = getattr(self, field_name)
+            if value is not None:
+                object.__setattr__(self, field_name, _utc(value, field_name))
+
+    @classmethod
+    def from_sample(cls, sample: RawRecorderSample) -> RawTimelineBoundary:
+        """Retain only the ordering fields needed from an untrusted sample."""
+        if not isinstance(sample, RawRecorderSample):
+            raise TypeError("sample must be a RawRecorderSample")
+        return cls(
+            captured_at=sample.captured_at,
+            indoor_observed_at=sample.indoor_observed_at,
+            outdoor_observed_at=sample.outdoor_observed_at,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class AcceptedSample:
     """A finite, normalized sample approved for an uncontaminated episode."""
 

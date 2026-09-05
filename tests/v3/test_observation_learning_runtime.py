@@ -47,6 +47,17 @@ class FakeRecorder:
         return self.samples
 
 
+class MemoryCheckpointStore:
+    def __init__(self) -> None:
+        self.saved = []
+        self.fail = False
+
+    async def async_save(self, checkpoint) -> None:
+        if self.fail:
+            raise RuntimeError("simulated durable write failure")
+        self.saved.append(checkpoint)
+
+
 def runtime(recorder, **config_overrides) -> ObservationLearningRuntime:
     return ObservationLearningRuntime(
         config=LearningRuntimeConfig(
@@ -213,7 +224,8 @@ def test_target_change_discards_late_result_and_starts_clean_epoch() -> None:
     assert result == instance.snapshot
     assert result.status is LearningRuntimeStatus.WARMING_UP
     assert result.target_epoch_started_at == START + timedelta(minutes=30)
-    assert result.cursor_at == START + timedelta(minutes=30)
+    # A target change must not skip unprocessed Recorder history.
+    assert result.cursor_at == START
     assert result.raw_sample_count == 0
 
 
@@ -271,8 +283,10 @@ def test_config_and_time_validation_are_conservative() -> None:
         )
     instance = runtime(FakeRecorder(), recorder_settle_delay=timedelta(0))
     asyncio.run(instance.async_collect(now_utc=START + timedelta(hours=1)))
-    with pytest.raises(ValueError, match="cursor"):
-        asyncio.run(instance.async_collect(now_utc=START + timedelta(minutes=59)))
+    result = asyncio.run(instance.async_collect(now_utc=START + timedelta(minutes=59)))
+    assert result.status is LearningRuntimeStatus.ERROR
+    assert result.cursor_at == START + timedelta(hours=1)
+    assert result.last_error == "clock_regression"
 
 
 def test_public_types_cannot_express_model_or_control_authority() -> None:
@@ -286,3 +300,193 @@ def test_public_types_cannot_express_model_or_control_authority() -> None:
     assert not hasattr(ObservationLearningRuntime, "write")
     assert not hasattr(ObservationLearningRuntime, "publish")
     assert not hasattr(ObservationLearningRuntime, "apply")
+
+
+def test_checkpoint_write_failure_never_advances_committed_cursor() -> None:
+    store = MemoryCheckpointStore()
+    instance = ObservationLearningRuntime(
+        config=LearningRuntimeConfig(
+            "sensor.indoor",
+            "sensor.outdoor",
+            recorder_settle_delay=timedelta(0),
+        ),
+        recorder=FakeRecorder((sample(0),)),
+        started_at=START,
+        target_temperature=21.0,
+        entry_id="entry-one",
+        store=store,
+    )
+
+    asyncio.run(instance.async_initialize())
+    store.fail = True
+    result = asyncio.run(instance.async_collect(now_utc=START + timedelta(minutes=10)))
+
+    assert result.status is LearningRuntimeStatus.ERROR
+    assert result.cursor_at == START
+    assert instance.checkpoint.cursor_at == START
+    assert result.last_error == "collection_failed:RuntimeError"
+
+
+def test_non_monotonic_recorder_batch_is_rejected_without_advancing() -> None:
+    instance = runtime(
+        FakeRecorder((sample(10), sample(5))),
+        recorder_settle_delay=timedelta(0),
+    )
+
+    result = asyncio.run(instance.async_collect(now_utc=START + timedelta(minutes=20)))
+
+    assert result.status is LearningRuntimeStatus.ERROR
+    assert result.cursor_at == START
+    assert result.last_error == "collection_failed:ValueError"
+
+
+def test_restart_restores_episode_continuity_without_double_counting() -> None:
+    store = MemoryCheckpointStore()
+    first = ObservationLearningRuntime(
+        config=LearningRuntimeConfig(
+            "sensor.indoor",
+            "sensor.outdoor",
+            recorder_settle_delay=timedelta(0),
+        ),
+        recorder=FakeRecorder((sample(0),)),
+        started_at=START,
+        target_temperature=21.0,
+        entry_id="entry-one",
+        store=store,
+    )
+    asyncio.run(first.async_initialize())
+    asyncio.run(first.async_collect(now_utc=START + timedelta(minutes=10)))
+
+    second = ObservationLearningRuntime(
+        config=first.config,
+        recorder=FakeRecorder((sample(10),)),
+        started_at=START + timedelta(minutes=20),
+        target_temperature=21.0,
+        entry_id="entry-one",
+        store=store,
+        restored_checkpoint=first.checkpoint,
+    )
+    asyncio.run(second.async_initialize())
+    result = asyncio.run(second.async_collect(now_utc=START + timedelta(minutes=20)))
+
+    assert result.accepted_sample_count == 1
+    assert result.episode_count == 0
+    assert second.checkpoint.boundary.open_episode_sample_count == 2
+
+
+def test_restart_with_unrecorded_target_change_skips_ambiguous_history() -> None:
+    store = MemoryCheckpointStore()
+    first = ObservationLearningRuntime(
+        config=LearningRuntimeConfig(
+            "sensor.indoor",
+            "sensor.outdoor",
+            recorder_settle_delay=timedelta(0),
+        ),
+        recorder=FakeRecorder(),
+        started_at=START,
+        target_temperature=21.0,
+        entry_id="entry-one",
+        store=store,
+    )
+    asyncio.run(first.async_initialize())
+    old_checkpoint = first.checkpoint
+
+    restarted_at = START + timedelta(hours=2)
+    recorder = FakeRecorder((sample(60),))
+    restarted = ObservationLearningRuntime(
+        config=first.config,
+        recorder=recorder,
+        started_at=restarted_at,
+        target_temperature=22.0,
+        entry_id="entry-one",
+        store=store,
+        restored_checkpoint=old_checkpoint,
+    )
+    asyncio.run(restarted.async_initialize())
+    result = asyncio.run(
+        restarted.async_collect(now_utc=restarted_at + timedelta(minutes=10))
+    )
+
+    assert recorder.calls[0]["start"] == restarted_at
+    assert result.raw_sample_count == 0
+    assert restarted.checkpoint.target_timeline[0].started_at == restarted_at
+    assert restarted.checkpoint.target_timeline[0].target_temperature_c == 22.0
+
+
+def test_shutdown_drains_target_write_without_reviving_old_runtime() -> None:
+    async def scenario() -> tuple[ObservationLearningRuntime, MemoryCheckpointStore]:
+        store = MemoryCheckpointStore()
+        instance = ObservationLearningRuntime(
+            config=LearningRuntimeConfig("sensor.indoor", "sensor.outdoor"),
+            recorder=FakeRecorder(),
+            started_at=START,
+            target_temperature=21.0,
+            entry_id="entry-one",
+            store=store,
+        )
+        await instance.async_initialize()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def blocking_save(checkpoint) -> None:
+            entered.set()
+            await release.wait()
+            store.saved.append(checkpoint)
+
+        store.async_save = blocking_save
+        target_task = asyncio.create_task(
+            instance.async_note_target_change(
+                changed_at=START + timedelta(minutes=10),
+                target_temperature=22.0,
+            )
+        )
+        await entered.wait()
+        shutdown_task = asyncio.create_task(instance.async_shutdown())
+        await asyncio.sleep(0)
+        assert instance.snapshot.status is LearningRuntimeStatus.STOPPED
+        assert not shutdown_task.done()
+
+        release.set()
+        await target_task
+        await shutdown_task
+        return instance, store
+
+    instance, store = asyncio.run(scenario())
+
+    assert instance.snapshot.status is LearningRuntimeStatus.STOPPED
+    assert instance.checkpoint.target_timeline[-1].target_temperature_c == 21.0
+    assert store.saved[-1].target_timeline[-1].target_temperature_c == 22.0
+
+
+def test_historical_samples_use_the_target_epoch_active_at_capture_time() -> None:
+    store = MemoryCheckpointStore()
+    recorder = FakeRecorder((sample(10), sample(20), sample(40), sample(50)))
+    instance = ObservationLearningRuntime(
+        config=LearningRuntimeConfig(
+            "sensor.indoor",
+            "sensor.outdoor",
+            recorder_settle_delay=timedelta(0),
+        ),
+        recorder=recorder,
+        started_at=START,
+        target_temperature=21.0,
+        entry_id="entry-one",
+        store=store,
+    )
+
+    asyncio.run(instance.async_initialize())
+    asyncio.run(
+        instance.async_note_target_change(
+            changed_at=START + timedelta(minutes=30),
+            target_temperature=22.0,
+        )
+    )
+    result = asyncio.run(instance.async_collect(now_utc=START + timedelta(hours=1)))
+
+    assert result.accepted_sample_count == 4
+    assert result.episode_count == 2
+    assert instance.checkpoint.target_timeline == (
+        instance.checkpoint.target_timeline[0],
+    )
+    assert instance.checkpoint.target_timeline[0].target_temperature_c == 22.0
+    assert instance.checkpoint.boundary.previous_accepted.target_temperature_c == 22.0

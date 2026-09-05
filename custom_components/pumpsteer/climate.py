@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
@@ -44,7 +45,7 @@ class PumpSteerClimate(CoordinatorEntity, ClimateEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "thermostat"
-    _attr_hvac_modes = [HVACMode.AUTO]
+    _attr_hvac_modes: ClassVar[list[HVACMode]] = [HVACMode.AUTO]
     _attr_hvac_mode = HVACMode.AUTO
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -109,12 +110,12 @@ class PumpSteerClimate(CoordinatorEntity, ClimateEntity):
         self._runtime.set_target_temperature(target)
         if self._learning_runtime is not None and target != previous_target:
             try:
-                self._learning_runtime.begin_target_epoch(
+                await self._learning_runtime.async_note_target_change(
                     changed_at=datetime.now(UTC),
                     target_temperature=target,
                 )
             except Exception:
-                _LOGGER.exception("Unable to reset observation learning target epoch")
+                _LOGGER.exception("Unable to persist observation learning target epoch")
                 self._learning_runtime.stop()
         if self._entry.data.get(CONF_TARGET_TEMPERATURE) != target:
             self._hass.config_entries.async_update_entry(
