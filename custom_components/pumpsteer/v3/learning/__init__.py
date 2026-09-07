@@ -8,6 +8,14 @@ from .quality import (
     ScreenedSample,
     screen_sample,
 )
+from .thermal_evidence import (
+    ThermalEvidenceBatch,
+    ThermalEvidenceInterval,
+    ThermalEvidencePolicy,
+    ThermalEvidenceSummary,
+    ThermalTrend,
+    extract_thermal_evidence,
+)
 
 __all__ = [
     "AcceptedSample",
@@ -19,6 +27,12 @@ __all__ = [
     "RawRecorderSample",
     "RawTimelineBoundary",
     "ScreenedSample",
+    "ThermalEvidenceBatch",
+    "ThermalEvidenceInterval",
+    "ThermalEvidencePolicy",
+    "ThermalEvidenceSummary",
+    "ThermalTrend",
+    "extract_thermal_evidence",
     "screen_sample",
     "segment_episodes",
 ]

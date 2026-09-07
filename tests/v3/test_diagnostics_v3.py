@@ -156,6 +156,25 @@ def test_diagnostics_exposes_only_aggregate_learning_snapshot() -> None:
     assert snapshot["status"] == "error"
     assert snapshot["accepted_sample_count"] == 4
     assert snapshot["exclusion_counts"] == {"stale_source": 3}
+    assert snapshot["thermal_evidence"] == {
+        "scope": "latest_committed_batch",
+        "maximum_claim": "descriptive_only",
+        "interval_count": 0,
+        "observed_duration_seconds": 0.0,
+        "trend_counts": {
+            "rising_observed": 0,
+            "falling_observed": 0,
+            "stable_observed": 0,
+        },
+        "skip_counts": {"no_indoor_progress": 0},
+        "optional_sensor_interval_counts": {
+            "virtual_output": 0,
+            "heating_power": 0,
+            "supply": 0,
+        },
+        "physical_parameters_identifiable": False,
+        "control_authority": False,
+    }
     assert snapshot["error"] == "collection_failed:RuntimeError"
     assert "temperature" not in encoded
     assert "Traceback" not in encoded

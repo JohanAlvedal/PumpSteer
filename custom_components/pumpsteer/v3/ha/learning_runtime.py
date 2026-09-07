@@ -6,9 +6,10 @@ import asyncio
 import logging
 import math
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
+from itertools import pairwise
 from typing import Protocol
 
 from ..enums import LearningStage
@@ -21,6 +22,10 @@ from ..learning.checkpoint import (
 )
 from ..learning.episodes import EpisodeBoundary, segment_episodes
 from ..learning.models import RawRecorderSample
+from ..learning.thermal_evidence import (
+    ThermalEvidenceSummary,
+    extract_thermal_evidence,
+)
 from .recorder import DEFAULT_MAX_SAMPLES, HARD_MAX_SAMPLES, MAX_LOOKBACK
 
 _MAX_ERROR_LENGTH = 240
@@ -94,6 +99,9 @@ class LearningSnapshot:
     episode_count: int = 0
     excluded_sample_count: int = 0
     exclusion_counts: tuple[tuple[str, int], ...] = ()
+    thermal_evidence: ThermalEvidenceSummary = field(
+        default_factory=ThermalEvidenceSummary
+    )
     last_error: str | None = None
 
     def __post_init__(self) -> None:
@@ -313,6 +321,7 @@ class ObservationLearningRuntime:
                         episode_count=0,
                         excluded_sample_count=0,
                         exclusion_counts=(),
+                        thermal_evidence=ThermalEvidenceSummary(),
                         last_error=_safe_error(err),
                     )
                 return self._snapshot
@@ -322,7 +331,7 @@ class ObservationLearningRuntime:
                 stage=LearningStage.OBSERVING,
                 status=(
                     LearningRuntimeStatus.READY
-                    if result.accepted_count
+                    if result.thermal_evidence.interval_count
                     else LearningRuntimeStatus.WARMING_UP
                 ),
                 target_epoch_started_at=candidate.target_timeline[-1].started_at,
@@ -335,6 +344,7 @@ class ObservationLearningRuntime:
                 episode_count=result.new_episode_count,
                 excluded_sample_count=result.excluded_count,
                 exclusion_counts=tuple(sorted(result.reason_counts.items())),
+                thermal_evidence=result.thermal_evidence,
                 last_error=None,
             )
             return self._snapshot
@@ -433,6 +443,7 @@ class _WindowResult:
     new_episode_count: int
     excluded_count: int
     reason_counts: Counter[str]
+    thermal_evidence: ThermalEvidenceSummary
 
 
 def _screen_window(
@@ -444,7 +455,7 @@ def _screen_window(
 ) -> _WindowResult:
     if any(
         current.captured_at < previous.captured_at
-        for previous, current in zip(samples, samples[1:], strict=False)
+        for previous, current in pairwise(samples)
     ):
         raise ValueError("Recorder samples must be ordered by captured_at")
     boundary = checkpoint.boundary
@@ -453,13 +464,20 @@ def _screen_window(
     new_episode_count = 0
     excluded_count = 0
     reason_counts: Counter[str] = Counter()
+    thermal_evidence = ThermalEvidenceSummary()
     group: list[RawRecorderSample] = []
 
     def screen_group() -> None:
         nonlocal boundary, accepted_count, new_episode_count, excluded_count
+        nonlocal thermal_evidence
         if not group:
             return
+        boundary_before = boundary
         batch = segment_episodes(group, boundary=boundary)
+        evidence = extract_thermal_evidence(
+            batch,
+            previous_accepted=boundary_before.previous_accepted,
+        )
         boundary = batch.boundary_after
         accepted_count += sum(len(episode.samples) for episode in batch.episodes)
         new_episode_count += batch.new_episode_count
@@ -467,6 +485,7 @@ def _screen_window(
         reason_counts.update(
             reason.value for excluded in batch.excluded for reason in excluded.reasons
         )
+        thermal_evidence = thermal_evidence.merged(evidence.summary)
         group.clear()
 
     for sample in samples:
@@ -487,6 +506,7 @@ def _screen_window(
         new_episode_count=new_episode_count,
         excluded_count=excluded_count,
         reason_counts=reason_counts,
+        thermal_evidence=thermal_evidence,
     )
 
 

@@ -202,6 +202,23 @@ Confidence shall consider:
 The estimator proposes model updates. A validator grants authority. Failed validation
 retains the previous accepted model or reduces authority.
 
+### Observation evidence boundary
+
+Before parameter identification, the Recorder pipeline extracts only descriptive
+temperature intervals. An interval requires progress of the indoor sensor's own
+observation timestamp and uses elapsed wall-clock time; outdoor-only history rows do not
+create false response samples. Intervals never cross an excluded observation, excessive
+gap, target epoch, or episode boundary. A validated boundary sample may join the first
+continued fragment after a batch or restart so that edge is counted exactly once.
+
+This evidence may report observed rising, falling, or stable room temperature plus
+coverage of optional command, power, and supply sensors. These names do not imply that
+the heat pump caused the response. Target temperature remains user intent rather than an
+actuator measurement. Latest-batch diagnostics are aggregate and explicitly grant no
+parameter identifiability, confidence, or control authority. Cumulative estimator
+evidence will require a separate versioned persistent format before it can contribute to
+model validation.
+
 ## Simulation architecture
 
 The simulator shall combine independently replaceable models for:

@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import INTEGRATION_VERSION, PumpSteerEntryData
 
-DIAGNOSTICS_SCHEMA_VERSION = 2
+DIAGNOSTICS_SCHEMA_VERSION = 3
 _MAX_ERROR_LENGTH = 240
 
 
@@ -110,6 +110,7 @@ def _learning_snapshot(runtime: Any | None) -> dict[str, Any]:
             "episode_count": 0,
             "excluded_sample_count": 0,
             "exclusion_counts": {},
+            "thermal_evidence": _thermal_evidence_snapshot(None),
             "error": None,
         }
     snapshot = runtime.snapshot
@@ -127,7 +128,57 @@ def _learning_snapshot(runtime: Any | None) -> dict[str, Any]:
         "episode_count": snapshot.episode_count,
         "excluded_sample_count": snapshot.excluded_sample_count,
         "exclusion_counts": dict(snapshot.exclusion_counts),
+        "thermal_evidence": _thermal_evidence_snapshot(
+            snapshot.thermal_evidence,
+        ),
         "error": _safe_error(snapshot.last_error),
+    }
+
+
+def _thermal_evidence_snapshot(summary: Any | None) -> dict[str, Any]:
+    """Expose counts and duration, never source values or inferred physics."""
+    if summary is None:
+        return {
+            "scope": "latest_committed_batch",
+            "maximum_claim": "descriptive_only",
+            "interval_count": 0,
+            "observed_duration_seconds": 0.0,
+            "trend_counts": {
+                "rising_observed": 0,
+                "falling_observed": 0,
+                "stable_observed": 0,
+            },
+            "skip_counts": {
+                "no_indoor_progress": 0,
+            },
+            "optional_sensor_interval_counts": {
+                "virtual_output": 0,
+                "heating_power": 0,
+                "supply": 0,
+            },
+            "physical_parameters_identifiable": False,
+            "control_authority": False,
+        }
+    return {
+        "scope": "latest_committed_batch",
+        "maximum_claim": "descriptive_only",
+        "interval_count": summary.interval_count,
+        "observed_duration_seconds": summary.observed_duration_seconds,
+        "trend_counts": {
+            "rising_observed": summary.rising_interval_count,
+            "falling_observed": summary.falling_interval_count,
+            "stable_observed": summary.stable_interval_count,
+        },
+        "skip_counts": {
+            "no_indoor_progress": summary.skipped_no_indoor_progress,
+        },
+        "optional_sensor_interval_counts": {
+            "virtual_output": summary.virtual_output_interval_count,
+            "heating_power": summary.heating_power_interval_count,
+            "supply": summary.supply_temperature_interval_count,
+        },
+        "physical_parameters_identifiable": False,
+        "control_authority": False,
     }
 
 

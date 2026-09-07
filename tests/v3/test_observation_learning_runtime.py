@@ -98,6 +98,8 @@ def test_success_uses_bounded_settled_window_and_aggregate_snapshot() -> None:
     assert result.accepted_sample_count == 2
     assert result.episode_count == 1
     assert result.excluded_sample_count == 0
+    assert result.thermal_evidence.interval_count == 1
+    assert result.thermal_evidence.observed_duration_seconds == 10 * 60
     assert not (
         {"samples", "episodes", "batch"} & {item.name for item in fields(result)}
     )
@@ -128,6 +130,16 @@ def test_empty_success_advances_cursor_but_remains_warming_up() -> None:
     assert result.raw_sample_count == 0
 
 
+def test_single_accepted_sample_is_not_yet_thermal_evidence() -> None:
+    instance = runtime(FakeRecorder((sample(0),)), recorder_settle_delay=timedelta(0))
+
+    result = asyncio.run(instance.async_collect(now_utc=START + timedelta(minutes=5)))
+
+    assert result.accepted_sample_count == 1
+    assert result.thermal_evidence.interval_count == 0
+    assert result.status is LearningRuntimeStatus.WARMING_UP
+
+
 def test_adapter_error_is_contained_sanitized_and_does_not_advance_cursor() -> None:
     class FailingRecorder:
         async def async_load(self, **kwargs):
@@ -144,6 +156,7 @@ def test_adapter_error_is_contained_sanitized_and_does_not_advance_cursor() -> N
     assert len(result.last_error) <= 240
     assert "\n" not in result.last_error
     assert "secret" not in result.last_error
+    assert result.thermal_evidence.interval_count == 0
 
 
 def test_cancelled_collection_propagates_without_state_advancement() -> None:
@@ -310,7 +323,7 @@ def test_checkpoint_write_failure_never_advances_committed_cursor() -> None:
             "sensor.outdoor",
             recorder_settle_delay=timedelta(0),
         ),
-        recorder=FakeRecorder((sample(0),)),
+        recorder=FakeRecorder((sample(0), sample(5, indoor=20.1))),
         started_at=START,
         target_temperature=21.0,
         entry_id="entry-one",
@@ -325,6 +338,7 @@ def test_checkpoint_write_failure_never_advances_committed_cursor() -> None:
     assert result.cursor_at == START
     assert instance.checkpoint.cursor_at == START
     assert result.last_error == "collection_failed:RuntimeError"
+    assert result.thermal_evidence.interval_count == 0
 
 
 def test_non_monotonic_recorder_batch_is_rejected_without_advancing() -> None:
@@ -371,6 +385,7 @@ def test_restart_restores_episode_continuity_without_double_counting() -> None:
 
     assert result.accepted_sample_count == 1
     assert result.episode_count == 0
+    assert result.thermal_evidence.interval_count == 1
     assert second.checkpoint.boundary.open_episode_sample_count == 2
 
 
