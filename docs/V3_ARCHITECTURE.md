@@ -141,6 +141,25 @@ The initial comfort controller may be PI-based. It shall implement anti-windup f
 planner intervention and actuator saturation. The architecture shall not assume that PI
 is the only possible future explainable comfort controller.
 
+### Economy preference
+
+V3 exposes one integer saving level instead of percentile, ramp, and brake controls.
+It maps deterministically to classification intent:
+
+| Level | Cheap band | Expensive band |
+|---:|---:|---:|
+| 0 | Disabled | Disabled |
+| 1 | <= P20 | >= P90 |
+| 2 | <= P25 | >= P85 |
+| 3 | <= P30 | >= P80 |
+| 4 | <= P35 | >= P70 |
+| 5 | <= P40 | >= P60 |
+
+The level changes when price shifting may be considered, never how much thermal risk is
+permitted. The learned validity domain, comfort budget, recovery guard, and output
+supervisor remain independent upper bounds. Until the price planner is validated, the
+Home Assistant number and its diagnostics are shadow-only.
+
 ## Building and actuator models
 
 ### Reference 1R1C model

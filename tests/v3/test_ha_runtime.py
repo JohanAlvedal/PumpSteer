@@ -111,6 +111,17 @@ def test_target_update_reaches_injected_engine() -> None:
     assert engine.targets == [22.5]
 
 
+def test_saving_level_changes_only_economic_intent() -> None:
+    instance = runtime(FakeStates({}), FakeEngine())
+
+    instance.set_saving_level(4)
+
+    assert instance.config.saving_level == 4
+    assert instance.output.publish_count == 0
+    with pytest.raises(ValueError, match="between 0 and 5"):
+        instance.set_saving_level(6)
+
+
 def test_stale_indoor_sensor_publishes_active_shadow_fallback() -> None:
     instance = runtime(
         FakeStates(

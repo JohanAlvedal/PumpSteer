@@ -26,6 +26,11 @@
       "thermostat": {
         "name": "Room temperature"
       }
+    },
+    "number": {
+      "saving_level": {
+        "name": "Saving level"
+      }
     }
   }
 }

@@ -33,12 +33,15 @@ from custom_components.pumpsteer.v3.ha.learning_runtime import (
 NOW = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
 
 
-def entry_with_latest(latest, learning_runtime=None) -> SimpleNamespace:
+def entry_with_latest(
+    latest, learning_runtime=None, *, saving_level: int = 3
+) -> SimpleNamespace:
     runtime = SimpleNamespace(
         config=SimpleNamespace(
             indoor_entity="sensor.indoor",
             outdoor_entity="sensor.outdoor",
             target_temperature=21.5,
+            saving_level=saving_level,
         ),
         latest=latest,
     )
@@ -64,10 +67,43 @@ def test_diagnostics_handles_runtime_without_latest_result() -> None:
         "outdoor_temperature": "sensor.outdoor",
     }
     assert result["target_temperature"] == 21.5
+    assert result["economy"] == {
+        "mode": "shadow_only",
+        "saving_level": 3,
+        "price_classification_requested": True,
+        "cheap_percentile": 30,
+        "expensive_percentile": 80,
+        "price_planner_authority": False,
+        "physical_control_authority": False,
+    }
     assert result["learning"]["mode"] == "observation_only"
     assert result["learning"]["status"] == "unavailable"
     assert result["latest"] is None
     json.dumps(result)
+
+
+def test_diagnostics_maps_changed_and_disabled_saving_levels() -> None:
+    maximum = asyncio.run(
+        async_get_config_entry_diagnostics(
+            None,
+            entry_with_latest(None, saving_level=5),
+        )
+    )["economy"]
+    disabled = asyncio.run(
+        async_get_config_entry_diagnostics(
+            None,
+            entry_with_latest(None, saving_level=0),
+        )
+    )["economy"]
+
+    assert (maximum["cheap_percentile"], maximum["expensive_percentile"]) == (
+        40,
+        60,
+    )
+    assert maximum["price_planner_authority"] is False
+    assert disabled["price_classification_requested"] is False
+    assert disabled["cheap_percentile"] is None
+    assert disabled["expensive_percentile"] is None
 
 
 def test_diagnostics_contains_only_defined_runtime_snapshot() -> None:

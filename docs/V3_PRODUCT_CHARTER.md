@@ -27,6 +27,9 @@ select an uncertain source.
 - All control and learning run locally in Home Assistant.
 - Normal users do not tune PI gains, inertia, ramps, preheat duration, brake depth,
   thermal time constants, or price percentiles.
+- Economy preference is one `saving_level` from 0 to 5. Level 0 disables price
+  classification; higher levels select fixed internal cheap/expensive percentiles.
+  This preference can never increase model or physical-control authority.
 - Adaptation is bounded, confidence-aware, reversible, and explainable.
 - Every decision exposes a stable reason code and the constraints that affected it.
 - Missing optional data produces a defined capability reduction.

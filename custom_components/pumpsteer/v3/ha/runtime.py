@@ -16,6 +16,7 @@ from ..models import (
     SafetyPolicy,
     SensorReading,
 )
+from ..pricing import DEFAULT_SAVING_LEVEL, normalize_saving_level
 from ..validation import aware_datetime, finite_float, supported_unit
 
 
@@ -26,6 +27,7 @@ class RuntimeConfig:
     indoor_entity: str
     outdoor_entity: str
     target_temperature: float = 21.0
+    saving_level: int = DEFAULT_SAVING_LEVEL
     update_interval: timedelta = timedelta(minutes=1)
 
     def __post_init__(self) -> None:
@@ -37,6 +39,11 @@ class RuntimeConfig:
         if not 5.0 <= target <= 35.0:
             raise ValueError("target_temperature must be between 5 and 35 °C")
         object.__setattr__(self, "target_temperature", target)
+        object.__setattr__(
+            self,
+            "saving_level",
+            normalize_saving_level(self.saving_level),
+        )
         if not isinstance(self.update_interval, timedelta):
             raise TypeError("update_interval must be a timedelta")
         if self.update_interval <= timedelta(0):
@@ -135,6 +142,13 @@ class PumpSteerRuntime:
         self._config = replace(
             self._config,
             target_temperature=target_temperature,
+        )
+
+    def set_saving_level(self, saving_level: object) -> None:
+        """Update economic intent without changing any control authority."""
+        self._config = replace(
+            self._config,
+            saving_level=normalize_saving_level(saving_level),
         )
 
     async def async_update(self, now: datetime) -> RuntimeResult:

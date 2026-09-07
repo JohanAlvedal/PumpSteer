@@ -10,6 +10,20 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
+## [3.0.0-alpha.2] — Saving-level shadow policy
+
+### Added
+
+- One Home Assistant `number.pumpsteer_saving_level` control from 0 to 5.
+- Deterministic internal cheap/expensive percentile mapping.
+- Shadow diagnostics for the selected level and derived price bands.
+
+### Safety
+
+- The setting has no price-planner or physical-control authority in this alpha.
+- Level 0 disables price classification explicitly.
+- Legacy ramp, inertia, and percentile number controls are not loaded by V3.
+
 ## [2.1.1] — Release hardening & beta output support
 
 ### Fixed

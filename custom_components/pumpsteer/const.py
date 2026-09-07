@@ -12,12 +12,13 @@ if TYPE_CHECKING:
     from .v3.ha.runtime import PumpSteerRuntime
 
 DOMAIN = "pumpsteer"
-INTEGRATION_VERSION = "3.0.0-alpha.1"
-PLATFORMS = ("climate",)
+INTEGRATION_VERSION = "3.0.0-alpha.2"
+PLATFORMS = ("climate", "number")
 
 CONF_INDOOR_ENTITY = "indoor_temp_entity"
 CONF_OUTDOOR_ENTITY = "outdoor_temp_entity"
 CONF_TARGET_TEMPERATURE = "target_temperature"
+CONF_SAVING_LEVEL = "saving_level"
 
 DEFAULT_TARGET_TEMPERATURE = 21.0
 MIN_TARGET_TEMPERATURE = 5.0

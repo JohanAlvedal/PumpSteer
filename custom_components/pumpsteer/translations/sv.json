@@ -26,6 +26,11 @@
       "thermostat": {
         "name": "Rumstemperatur"
       }
+    },
+    "number": {
+      "saving_level": {
+        "name": "Besparingsnivå"
+      }
     }
   }
 }

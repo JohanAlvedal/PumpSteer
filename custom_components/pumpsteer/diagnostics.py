@@ -8,8 +8,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import INTEGRATION_VERSION, PumpSteerEntryData
+from .v3.pricing import DEFAULT_SAVING_LEVEL, price_policy_for_saving_level
 
-DIAGNOSTICS_SCHEMA_VERSION = 3
+DIAGNOSTICS_SCHEMA_VERSION = 4
 _MAX_ERROR_LENGTH = 240
 
 
@@ -35,6 +36,9 @@ async def async_get_config_entry_diagnostics(
             "outdoor_temperature": config.outdoor_entity,
         },
         "target_temperature": config.target_temperature,
+        "economy": _economy_snapshot(
+            getattr(config, "saving_level", DEFAULT_SAVING_LEVEL)
+        ),
         "learning": _learning_snapshot(
             getattr(data, "learning_runtime", None),
         ),
@@ -59,6 +63,20 @@ async def async_get_config_entry_diagnostics(
         "error": _safe_error(latest.error),
     }
     return snapshot
+
+
+def _economy_snapshot(saving_level: object) -> dict[str, Any]:
+    """Expose derived classification intent with no implied authority."""
+    policy = price_policy_for_saving_level(saving_level)
+    return {
+        "mode": "shadow_only",
+        "saving_level": policy.saving_level,
+        "price_classification_requested": policy.classification_enabled,
+        "cheap_percentile": policy.cheap_percentile,
+        "expensive_percentile": policy.expensive_percentile,
+        "price_planner_authority": False,
+        "physical_control_authority": False,
+    }
 
 
 def _observation_snapshot(observation: Any | None) -> dict[str, Any] | None:
