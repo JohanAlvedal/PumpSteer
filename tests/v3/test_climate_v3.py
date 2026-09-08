@@ -47,8 +47,7 @@ sys.modules["homeassistant.components.climate"] = climate_module
 sys.modules["homeassistant.components.climate.const"] = climate_const
 sys.modules["homeassistant.helpers.update_coordinator"] = coordinator_module
 
-from homeassistant import const as ha_const  # noqa: E402
-
+ha_const = sys.modules["homeassistant.const"]
 ha_const.UnitOfTemperature = SimpleNamespace(CELSIUS="°C")
 
 from custom_components.pumpsteer.climate import PumpSteerClimate  # noqa: E402
