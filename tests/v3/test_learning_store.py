@@ -94,10 +94,19 @@ def test_empty_store_returns_none_without_decoding(monkeypatch) -> None:
     )
 
 
-def test_load_delegates_all_identity_and_time_validation(monkeypatch) -> None:
+def test_load_validates_against_stored_source_identity(monkeypatch) -> None:
     adapter = create()
-    encoded = {"schema_version": 1}
-    expected = object()
+    encoded = {
+        "schema_version": 1,
+        "source_identity": {
+            "indoor_entity_id": "sensor.indoor",
+            "outdoor_entity_id": "sensor.outdoor",
+        },
+    }
+    expected = SimpleNamespace(
+        indoor_entity_id="sensor.indoor",
+        outdoor_entity_id="sensor.outdoor",
+    )
     FakeStore.instances[0].value = encoded
     calls = []
 
@@ -128,6 +137,69 @@ def test_load_delegates_all_identity_and_time_validation(monkeypatch) -> None:
             },
         )
     ]
+
+
+def test_sensor_source_change_returns_none_after_full_decode(monkeypatch) -> None:
+    adapter = create()
+    encoded = {
+        "schema_version": 1,
+        "source_identity": {
+            "indoor_entity_id": "sensor.indoor.old",
+            "outdoor_entity_id": "sensor.outdoor.old",
+        },
+    }
+    restored = SimpleNamespace(
+        indoor_entity_id="sensor.indoor.old",
+        outdoor_entity_id="sensor.outdoor.old",
+    )
+    FakeStore.instances[0].value = encoded
+    calls = []
+
+    def decode(data, **kwargs):
+        calls.append((data, kwargs))
+        return restored
+
+    monkeypatch.setattr(module, "decode_learning_checkpoint", decode)
+
+    result = asyncio.run(
+        adapter.async_load(
+            expected_entry_id="entry-one",
+            expected_indoor_entity="sensor.indoor.new",
+            expected_outdoor_entity="sensor.outdoor.new",
+            not_after=NOW,
+        )
+    )
+
+    assert result is None
+    assert len(calls) == 1
+    assert calls[0][1]["expected_indoor_entity_id"] == "sensor.indoor.old"
+    assert calls[0][1]["expected_outdoor_entity_id"] == "sensor.outdoor.old"
+
+
+def test_checkpoint_validation_failure_is_not_hidden(monkeypatch) -> None:
+    adapter = create()
+    FakeStore.instances[0].value = {
+        "source_identity": {
+            "indoor_entity_id": "sensor.indoor.old",
+            "outdoor_entity_id": "sensor.outdoor.old",
+        }
+    }
+
+    def fail_decode(*args, **kwargs):
+        del args, kwargs
+        raise ValueError("checkpoint checksum mismatch")
+
+    monkeypatch.setattr(module, "decode_learning_checkpoint", fail_decode)
+
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        asyncio.run(
+            adapter.async_load(
+                expected_entry_id="entry-one",
+                expected_indoor_entity="sensor.indoor.new",
+                expected_outdoor_entity="sensor.outdoor.new",
+                not_after=NOW,
+            )
+        )
 
 
 def test_save_awaits_store_and_accepts_exact_readback(monkeypatch) -> None:
