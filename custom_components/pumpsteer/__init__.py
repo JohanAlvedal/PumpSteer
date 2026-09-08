@@ -36,14 +36,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .v3.ha.recorder import RecorderHistoryAdapter
     from .v3.ha.runtime import PumpSteerRuntime, RuntimeConfig
 
+    source_config = {**entry.data, **entry.options}
+    indoor_entity = source_config[CONF_INDOOR_ENTITY]
+    outdoor_entity = source_config[CONF_OUTDOOR_ENTITY]
     target_temperature = entry.data.get(
         CONF_TARGET_TEMPERATURE,
         DEFAULT_TARGET_TEMPERATURE,
     )
     runtime = PumpSteerRuntime(
         config=RuntimeConfig(
-            indoor_entity=entry.data[CONF_INDOOR_ENTITY],
-            outdoor_entity=entry.data[CONF_OUTDOOR_ENTITY],
+            indoor_entity=indoor_entity,
+            outdoor_entity=outdoor_entity,
             target_temperature=target_temperature,
         ),
         states=HomeAssistantStateProvider(hass),
@@ -57,14 +60,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         restored_checkpoint = await learning_store.async_load(
             expected_entry_id=entry.entry_id,
-            expected_indoor_entity=entry.data[CONF_INDOOR_ENTITY],
-            expected_outdoor_entity=entry.data[CONF_OUTDOOR_ENTITY],
+            expected_indoor_entity=indoor_entity,
+            expected_outdoor_entity=outdoor_entity,
             not_after=learning_started_at,
         )
         learning_runtime = ObservationLearningRuntime(
             config=LearningRuntimeConfig(
-                indoor_entity=entry.data[CONF_INDOOR_ENTITY],
-                outdoor_entity=entry.data[CONF_OUTDOOR_ENTITY],
+                indoor_entity=indoor_entity,
+                outdoor_entity=outdoor_entity,
             ),
             recorder=RecorderHistoryAdapter(hass),
             started_at=learning_started_at,
