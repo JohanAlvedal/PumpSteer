@@ -21,6 +21,23 @@
       "already_configured": "Kombinationen av inne- och utegivare är redan konfigurerad"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Konfigurera PumpSteer-givare",
+        "description": "Välj vilka temperaturgivare i Home Assistant som PumpSteer ska använda. När du sparar laddas integrationen om och PumpSteer V3 fortsätter i skuggläge.",
+        "data": {
+          "indoor_temp_entity": "Inomhustemperaturgivare",
+          "outdoor_temp_entity": "Utomhustemperaturgivare"
+        }
+      }
+    },
+    "error": {
+      "required": "Fältet är obligatoriskt",
+      "entity_not_found": "Den valda entiteten hittades inte",
+      "same_sensor": "Inne- och utomhustemperatur måste använda olika givare"
+    }
+  },
   "entity": {
     "climate": {
       "thermostat": {
