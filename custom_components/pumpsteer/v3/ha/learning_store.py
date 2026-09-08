@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Mapping
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -17,6 +19,8 @@ from ..learning.checkpoint_codec import (
 if TYPE_CHECKING:
     from ..learning.checkpoint import LearningCheckpoint
 
+
+_LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = "pumpsteer.v3.observation_learning"
@@ -53,13 +57,30 @@ class HomeAssistantLearningStore:
         encoded = await self._store.async_load()
         if encoded is None:
             return None
-        return decode_learning_checkpoint(
+
+        source_identity = encoded.get("source_identity")
+        stored_indoor = None
+        stored_outdoor = None
+        if isinstance(source_identity, Mapping):
+            stored_indoor = source_identity.get("indoor_entity_id")
+            stored_outdoor = source_identity.get("outdoor_entity_id")
+
+        checkpoint = decode_learning_checkpoint(
             encoded,
             expected_entry_id=expected_entry_id,
-            expected_indoor_entity_id=expected_indoor_entity,
-            expected_outdoor_entity_id=expected_outdoor_entity,
+            expected_indoor_entity_id=stored_indoor,
+            expected_outdoor_entity_id=stored_outdoor,
             not_after=not_after,
         )
+        if (
+            checkpoint.indoor_entity_id != expected_indoor_entity
+            or checkpoint.outdoor_entity_id != expected_outdoor_entity
+        ):
+            _LOGGER.info(
+                "Ignoring observation-learning checkpoint because configured sensor sources changed"
+            )
+            return None
+        return checkpoint
 
     async def async_save(self, checkpoint: LearningCheckpoint) -> None:
         """Save and read-verify one complete immutable checkpoint."""
