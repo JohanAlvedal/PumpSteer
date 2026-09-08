@@ -52,8 +52,8 @@ number_module.NumberEntityDescription = NumberEntityDescription
 number_module.NumberMode = NumberMode
 sys.modules["homeassistant.components.number"] = number_module
 
-from custom_components.pumpsteer.const import PumpSteerEntryData
-from custom_components.pumpsteer.number import (
+from custom_components.pumpsteer.const import PumpSteerEntryData  # noqa: E402
+from custom_components.pumpsteer.number import (  # noqa: E402
     SAVING_LEVEL_DESCRIPTION,
     PumpSteerSavingLevel,
     async_setup_entry,
