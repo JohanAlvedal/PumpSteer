@@ -6,6 +6,13 @@ from .comfort_controller import (
     ComfortControllerResult,
     ComfortControllerState,
 )
+from .preheat import (
+    AutomaticPreheatPolicy,
+    PreheatContext,
+    PreheatPlan,
+    PreheatReason,
+    plan_automatic_preheat,
+)
 from .supervisor import (
     OutputConstraint,
     SupervisedOutput,
@@ -14,12 +21,17 @@ from .supervisor import (
 )
 
 __all__ = [
+    "AutomaticPreheatPolicy",
     "ComfortController",
     "ComfortControllerConfig",
     "ComfortControllerResult",
     "ComfortControllerState",
     "OutputConstraint",
+    "PreheatContext",
+    "PreheatPlan",
+    "PreheatReason",
     "SupervisedOutput",
     "SupervisorPolicy",
+    "plan_automatic_preheat",
     "supervise_output",
 ]

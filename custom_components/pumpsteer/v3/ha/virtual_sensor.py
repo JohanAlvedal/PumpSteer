@@ -58,6 +58,8 @@ class PumpSteerVirtualOutdoorSensor(CoordinatorEntity, SensorEntity):
 
         decision = latest.supervised.decision
         observation = latest.observation
+        engine_result = getattr(latest, "engine_result", None)
+        preheat_plan = getattr(engine_result, "preheat_plan", None)
         return {
             "mode": str(decision.state.value),
             "real_outdoor_temperature": (
@@ -77,6 +79,21 @@ class PumpSteerVirtualOutdoorSensor(CoordinatorEntity, SensorEntity):
             "reason_codes": [str(reason.value) for reason in decision.reason_codes],
             "fallback_active": bool(latest.supervised.fallback_active),
             "physical_output_active": bool(latest.supervised.apply_physical),
+            "preheat_active": bool(preheat_plan and preheat_plan.active),
+            "preheat_reason": (
+                str(preheat_plan.reason.value) if preheat_plan is not None else None
+            ),
+            "preheat_target_temperature": (
+                round(float(preheat_plan.effective_target_temperature), 2)
+                if preheat_plan is not None and preheat_plan.active
+                else None
+            ),
+            "predicted_min_indoor_temperature": (
+                round(float(preheat_plan.predicted_min_indoor_temperature), 2)
+                if preheat_plan is not None
+                and preheat_plan.predicted_min_indoor_temperature is not None
+                else None
+            ),
         }
 
 

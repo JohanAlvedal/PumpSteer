@@ -216,6 +216,7 @@ class PumpSteerRuntime:
                 dt=dt,
                 shadow=shadow,
                 fallback_outdoor_temperature=fallback_outdoor,
+                saving_level=self._config.saving_level,
             )
         except Exception as err:
             engine_result = self._engine.fail_safe(

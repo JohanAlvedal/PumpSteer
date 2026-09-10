@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
 from ..enums import ControlState, ReasonCode
@@ -13,6 +13,7 @@ from .comfort_controller import (
     ComfortControllerResult,
     ComfortControllerState,
 )
+from .preheat import PreheatContext, PreheatPlan, plan_automatic_preheat
 from .supervisor import (
     SupervisedOutput,
     SupervisorPolicy,
@@ -48,6 +49,7 @@ class EngineResult:
     comfort_result: ComfortControllerResult | None
     input_reasons: tuple[ReasonCode, ...]
     next_state: EngineState
+    preheat_plan: PreheatPlan | None = None
 
     @property
     def apply_physical(self) -> bool:
@@ -79,12 +81,15 @@ class ControlEngine:
         shadow: bool = False,
         override_active: bool = False,
         fallback_outdoor_temperature: float | None = None,
+        saving_level: object = 0,
+        preheat_context: PreheatContext | None = None,
     ) -> EngineResult:
         """Run one deterministic control cycle.
 
-        Price and weather fields are deliberately ignored by comfort-only control.
-        Invalid critical inputs take the same output-supervisor path as all other
-        commands and actively request passthrough or the configured safe fallback.
+        Price and weather remain optional capabilities. Automatic preheat is only
+        considered when a validated future price opportunity and an authorized
+        thermal prediction are supplied. Invalid critical inputs always take the
+        same output-supervisor fail-safe path.
         """
         now = _require_utc(now_utc)
         if not isinstance(comfort_policy, ComfortPolicy):
@@ -130,29 +135,54 @@ class ControlEngine:
                 comfort_result=None,
                 input_reasons=reasons,
                 next_state=next_state,
+                preheat_plan=None,
             )
 
         assert observation is not None
+        preheat_plan = plan_automatic_preheat(
+            observation=observation,
+            comfort_policy=comfort_policy,
+            saving_level=saving_level,
+            context=preheat_context,
+        )
+        effective_policy = comfort_policy
+        planner_override = bool(override_active)
+        requested_state = ControlState.COMFORT
+        if preheat_plan.active:
+            effective_policy = replace(
+                comfort_policy,
+                target_temperature=preheat_plan.effective_target_temperature,
+            )
+            planner_override = True
+            requested_state = ControlState.PREHEAT
+
         comfort_result = self._comfort.step(
             observation=observation,
-            policy=comfort_policy,
+            policy=effective_policy,
             safety_policy=safety_policy,
             state=state.comfort,
             now_utc=now,
             dt=dt,
-            override_active=override_active,
+            override_active=planner_override,
         )
-        primary_reason = (
-            ReasonCode.COMFORT_BELOW_TARGET
-            if comfort_result.effective_error > 0.0
-            else ReasonCode.COMFORT_WITHIN_BAND
-        )
+        if preheat_plan.active:
+            decision_reasons = (
+                ReasonCode.PREDICTED_COMFORT_RISK,
+                ReasonCode.PRICE_SHIFT_BENEFICIAL,
+            )
+        else:
+            primary_reason = (
+                ReasonCode.COMFORT_BELOW_TARGET
+                if comfort_result.effective_error > 0.0
+                else ReasonCode.COMFORT_WITHIN_BAND
+            )
+            decision_reasons = (primary_reason,)
         requested = ControlDecision.create(
             decided_at=now,
-            state=ControlState.COMFORT,
+            state=requested_state,
             outdoor_temperature=observation.outdoor.value,
             heating_request=comfort_result.heating_request,
-            reason_codes=(primary_reason,),
+            reason_codes=decision_reasons,
         )
         supervised = supervise_output(
             requested,
@@ -174,6 +204,7 @@ class ControlEngine:
             comfort_result=comfort_result,
             input_reasons=(),
             next_state=next_state,
+            preheat_plan=preheat_plan,
         )
 
     def fail_safe(
@@ -209,6 +240,7 @@ class ControlEngine:
             comfort_result=None,
             input_reasons=(ReasonCode.INTERNAL_FAILSAFE,),
             next_state=next_state,
+            preheat_plan=None,
         )
 
 
