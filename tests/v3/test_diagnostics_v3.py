@@ -44,6 +44,8 @@ def entry_with_latest(
             saving_level=saving_level,
         ),
         latest=latest,
+        physical_control_enabled=False,
+        output=SimpleNamespace(publish_count=0),
     )
     return SimpleNamespace(
         version=3,
@@ -67,6 +69,15 @@ def test_diagnostics_handles_runtime_without_latest_result() -> None:
         "outdoor_temperature": "sensor.outdoor",
     }
     assert result["target_temperature"] == 21.5
+    assert result["physical_output"] == {
+        "mode": "disabled",
+        "state": "shadow",
+        "physical_control_enabled": False,
+        "attempted_at": None,
+        "commanded_temperature": None,
+        "publish_count": 0,
+        "last_error": None,
+    }
     assert result["economy"] == {
         "mode": "shadow_only",
         "saving_level": 3,

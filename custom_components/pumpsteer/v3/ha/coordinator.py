@@ -1,4 +1,4 @@
-"""Home Assistant coordinator adapter for the PumpSteer V3 shadow runtime."""
+"""Home Assistant coordinator adapter for the PumpSteer V3 runtime."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ class PumpSteerDataUpdateCoordinator(DataUpdateCoordinator[RuntimeResult]):
         super().__init__(
             hass,
             logger=_LOGGER,
-            name="PumpSteer V3 shadow runtime",
+            name="PumpSteer V3 runtime",
             update_interval=runtime.config.update_interval,
         )
 

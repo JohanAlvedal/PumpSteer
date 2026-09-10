@@ -14,6 +14,22 @@ a different approach was considered and rejected.
 Use this to avoid relitigating settled questions and to understand the trade-offs
 before proposing changes.
 
+## V3 OhmOnWiFi active test boundary
+
+### Why active control is opt-in and fail-to-bypass
+
+**Decision:** Alpha.5 may physically apply only the supervised comfort output through
+an OhmOnWiFi/Plus MQTT adapter. The adapter sends temperature before `ON`, never retains
+commands, and requests `OFF` on setup, unload, degraded input, or failure. Configuration
+requires an exact per-device base topic and explicit confirmation of a tested hardware
+watchdog. A write fault latches out further `ON` commands until a successful reload.
+
+An MQTT publish succeeding proves broker acceptance, not that the device changed relay
+state. The adapter therefore records `active_command_sent` and `bypass_requested`
+rather than claiming acknowledgement. Device feedback and timeout behaviour must be
+verified on the spare installation before broader active testing. Price classification
+remains outside this authority boundary.
+
 ## V3 price-preview boundaries
 
 ### Why nearest-rank percentiles are fixed before planner development

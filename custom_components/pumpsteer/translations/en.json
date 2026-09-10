@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up PumpSteer",
-        "description": "Choose the room and outdoor temperature sensors. PumpSteer V3 alpha runs in shadow mode and does not write to heating hardware.",
+        "description": "Choose the room and outdoor temperature sensors. PumpSteer starts without physical output; an OhmOnWiFi test output can be enabled later under Configure.",
         "data": {
           "indoor_temp_entity": "Indoor temperature sensor",
           "outdoor_temp_entity": "Outdoor temperature sensor",
@@ -26,10 +26,13 @@
     "step": {
       "init": {
         "title": "Configure PumpSteer sensors",
-        "description": "Choose which Home Assistant temperature sensors PumpSteer should use. Saving changes reloads the integration and keeps PumpSteer V3 in shadow mode.",
+        "description": "Choose temperature sensors and physical output. Active OhmOnWiFi control requires its MQTT watchdog so communication loss returns the relay to the real outdoor sensor.",
         "data": {
           "indoor_temp_entity": "Indoor temperature sensor",
-          "outdoor_temp_entity": "Outdoor temperature sensor"
+          "outdoor_temp_entity": "Outdoor temperature sensor",
+          "output_mode": "Physical output",
+          "ohmon_mqtt_base_topic": "OhmOnWiFi MQTT base topic",
+          "ohmon_watchdog_confirmed": "I have enabled and verified the OhmOnWiFi watchdog"
         }
       }
     },
@@ -37,7 +40,18 @@
       "required": "This field is required",
       "entity_not_found": "The selected entity was not found",
       "same_sensor": "Indoor and outdoor temperature must use different sensors",
-      "already_configured": "This indoor and outdoor sensor pair is already configured"
+      "already_configured": "This indoor and outdoor sensor pair is already configured",
+      "invalid_output_mode": "Choose a supported physical output",
+      "invalid_mqtt_topic": "Enter a concrete MQTT base topic ending with /, for example ohmonwifiplus/123456/",
+      "watchdog_required": "Enable and verify the OhmOnWiFi watchdog before active control"
+    }
+  },
+  "selector": {
+    "output_mode": {
+      "options": {
+        "shadow": "No physical output",
+        "ohmon_mqtt": "OhmOnWiFi / Plus via MQTT (active test)"
+      }
     }
   },
   "entity": {

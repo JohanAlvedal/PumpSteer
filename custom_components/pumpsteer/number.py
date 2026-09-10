@@ -46,7 +46,7 @@ async def async_setup_entry(
 
 
 class PumpSteerSavingLevel(RestoreNumber, NumberEntity):
-    """Select economic intent while V3 remains in mandatory shadow mode."""
+    """Select economic intent without granting the price planner authority."""
 
     _attr_has_entity_name = True
     entity_description = SAVING_LEVEL_DESCRIPTION
@@ -76,7 +76,7 @@ class PumpSteerSavingLevel(RestoreNumber, NumberEntity):
         self._set_level(level)
 
     async def async_set_native_value(self, value: float) -> None:
-        """Apply one validated integer level without physical output."""
+        """Apply one validated integer level without price-control authority."""
         self._set_level(normalize_saving_level(value))
         self.async_write_ha_state()
 

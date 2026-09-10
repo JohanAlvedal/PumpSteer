@@ -51,6 +51,23 @@ class FailingEngine(ControlEngine):
         raise RuntimeError("simulated engine failure")
 
 
+class ActiveOutput:
+    physical_enabled = True
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.outputs = []
+        self.fail = fail
+        self.shutdown_count = 0
+
+    async def async_publish(self, output) -> None:
+        if self.fail:
+            raise RuntimeError("simulated output failure")
+        self.outputs.append(output)
+
+    async def async_shutdown(self) -> None:
+        self.shutdown_count += 1
+
+
 def state(value: object, entity_id: str, age_minutes: int = 0) -> RawState:
     return RawState(
         value=value,
@@ -90,6 +107,86 @@ def test_valid_cycle_builds_observation_and_never_applies_output() -> None:
     assert not result.supervised.apply_physical
     assert output.latest is result.supervised
     assert output.publish_count == 1
+
+
+def test_explicit_active_adapter_receives_physical_comfort_output() -> None:
+    output = ActiveOutput()
+    instance = PumpSteerRuntime(
+        config=RuntimeConfig("sensor.indoor", "sensor.outdoor", 21.0),
+        states=FakeStates(
+            {
+                "sensor.indoor": state(20.0, "sensor.indoor"),
+                "sensor.outdoor": state(-5.0, "sensor.outdoor"),
+            }
+        ),
+        engine=ControlEngine(),
+        output=output,
+    )
+
+    result = asyncio.run(instance.async_update(NOW))
+
+    assert instance.physical_control_enabled is True
+    assert result.error is None
+    assert result.supervised.apply_physical is True
+    assert output.outputs == [result.supervised]
+
+
+def test_active_adapter_receives_bypass_for_stale_critical_input() -> None:
+    output = ActiveOutput()
+    instance = PumpSteerRuntime(
+        config=RuntimeConfig("sensor.indoor", "sensor.outdoor", 21.0),
+        states=FakeStates(
+            {
+                "sensor.indoor": state(20.0, "sensor.indoor", age_minutes=11),
+                "sensor.outdoor": state(-5.0, "sensor.outdoor"),
+            }
+        ),
+        engine=ControlEngine(),
+        output=output,
+    )
+
+    result = asyncio.run(instance.async_update(NOW))
+
+    assert result.supervised.fallback_active is True
+    assert result.supervised.apply_physical is True
+    assert output.outputs == [result.supervised]
+
+
+def test_output_failure_enters_shadow_failsafe_and_resets_comfort_state() -> None:
+    output = ActiveOutput(fail=True)
+    instance = PumpSteerRuntime(
+        config=RuntimeConfig("sensor.indoor", "sensor.outdoor", 21.0),
+        states=FakeStates(
+            {
+                "sensor.indoor": state(20.0, "sensor.indoor"),
+                "sensor.outdoor": state(-5.0, "sensor.outdoor"),
+            }
+        ),
+        engine=ControlEngine(),
+        output=output,
+    )
+
+    result = asyncio.run(instance.async_update(NOW))
+
+    assert result.error == "RuntimeError: simulated output failure"
+    assert result.supervised.decision.state is ControlState.FAILSAFE
+    assert result.supervised.fallback_active is True
+    assert result.supervised.apply_physical is False
+    assert result.engine_result.next_state.comfort.integral == 0
+
+
+def test_runtime_shutdown_delegates_to_output_adapter() -> None:
+    output = ActiveOutput()
+    instance = PumpSteerRuntime(
+        config=RuntimeConfig("sensor.indoor", "sensor.outdoor", 21.0),
+        states=FakeStates({}),
+        engine=ControlEngine(),
+        output=output,
+    )
+
+    asyncio.run(instance.async_shutdown())
+
+    assert output.shutdown_count == 1
 
 
 def test_target_update_reaches_injected_engine() -> None:

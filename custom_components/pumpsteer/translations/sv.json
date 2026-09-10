@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Konfigurera PumpSteer",
-        "description": "Välj givare för rums- och utomhustemperatur. PumpSteer V3 alpha körs i skuggläge och skriver inte till värmesystemet.",
+        "description": "Välj givare för rums- och utomhustemperatur. PumpSteer startar utan fysisk utgång; en OhmOnWiFi-testutgång kan aktiveras senare under Konfigurera.",
         "data": {
           "indoor_temp_entity": "Inomhustemperaturgivare",
           "outdoor_temp_entity": "Utomhustemperaturgivare",
@@ -26,10 +26,13 @@
     "step": {
       "init": {
         "title": "Konfigurera PumpSteer-givare",
-        "description": "Välj vilka temperaturgivare i Home Assistant som PumpSteer ska använda. När du sparar laddas integrationen om och PumpSteer V3 fortsätter i skuggläge.",
+        "description": "Välj temperaturgivare och fysisk utgång. Aktiv OhmOnWiFi-styrning kräver enhetens MQTT-watchdog så att reläet återgår till den riktiga utegivaren om kommunikationen försvinner.",
         "data": {
           "indoor_temp_entity": "Inomhustemperaturgivare",
-          "outdoor_temp_entity": "Utomhustemperaturgivare"
+          "outdoor_temp_entity": "Utomhustemperaturgivare",
+          "output_mode": "Fysisk utgång",
+          "ohmon_mqtt_base_topic": "OhmOnWiFi MQTT-bastopic",
+          "ohmon_watchdog_confirmed": "Jag har aktiverat och verifierat OhmOnWiFi-watchdog"
         }
       }
     },
@@ -37,7 +40,18 @@
       "required": "Fältet är obligatoriskt",
       "entity_not_found": "Den valda entiteten hittades inte",
       "same_sensor": "Inne- och utomhustemperatur måste använda olika givare",
-      "already_configured": "Kombinationen av inne- och utegivare är redan konfigurerad"
+      "already_configured": "Kombinationen av inne- och utegivare är redan konfigurerad",
+      "invalid_output_mode": "Välj en fysisk utgång som stöds",
+      "invalid_mqtt_topic": "Ange en konkret MQTT-bastopic som slutar med /, till exempel ohmonwifiplus/123456/",
+      "watchdog_required": "Aktivera och verifiera OhmOnWiFi-watchdog före aktiv styrning"
+    }
+  },
+  "selector": {
+    "output_mode": {
+      "options": {
+        "shadow": "Ingen fysisk utgång",
+        "ohmon_mqtt": "OhmOnWiFi / Plus via MQTT (aktivt test)"
+      }
     }
   },
   "entity": {

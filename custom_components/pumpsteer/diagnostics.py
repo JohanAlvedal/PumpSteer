@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from .const import INTEGRATION_VERSION, PumpSteerEntryData
 from .v3.pricing import DEFAULT_SAVING_LEVEL, price_policy_for_saving_level
 
-DIAGNOSTICS_SCHEMA_VERSION = 4
+DIAGNOSTICS_SCHEMA_VERSION = 5
 _MAX_ERROR_LENGTH = 240
 
 
@@ -30,12 +30,13 @@ async def async_get_config_entry_diagnostics(
         "config_entry_version": getattr(entry, "version", 3),
         "config_entry_minor_version": getattr(entry, "minor_version", 0),
         "diagnostics_schema_version": DIAGNOSTICS_SCHEMA_VERSION,
-        "shadow_mode": True,
+        "shadow_mode": not getattr(runtime, "physical_control_enabled", False),
         "sources": {
             "indoor_temperature": config.indoor_entity,
             "outdoor_temperature": config.outdoor_entity,
         },
         "target_temperature": config.target_temperature,
+        "physical_output": _output_snapshot(runtime),
         "economy": _economy_snapshot(
             getattr(config, "saving_level", DEFAULT_SAVING_LEVEL)
         ),
@@ -76,6 +77,33 @@ def _economy_snapshot(saving_level: object) -> dict[str, Any]:
         "expensive_percentile": policy.expensive_percentile,
         "price_planner_authority": False,
         "physical_control_authority": False,
+    }
+
+
+def _output_snapshot(runtime: Any) -> dict[str, Any]:
+    """Expose physical-output state without MQTT credentials or payload history."""
+    output = getattr(runtime, "output", None)
+    snapshot = getattr(output, "snapshot", None)
+    if snapshot is None:
+        return {
+            "mode": "disabled",
+            "state": "shadow",
+            "physical_control_enabled": False,
+            "attempted_at": None,
+            "commanded_temperature": None,
+            "publish_count": getattr(output, "publish_count", 0),
+            "last_error": None,
+        }
+    return {
+        "mode": "ohmon_mqtt",
+        "state": _enum_value(snapshot.state),
+        "physical_control_enabled": bool(
+            getattr(runtime, "physical_control_enabled", False)
+        ),
+        "attempted_at": _optional_timestamp(snapshot.attempted_at),
+        "commanded_temperature": snapshot.commanded_temperature,
+        "publish_count": snapshot.publish_count,
+        "last_error": _safe_error(snapshot.last_error),
     }
 
 

@@ -10,9 +10,14 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_INDOOR_ENTITY,
+    CONF_OHMON_MQTT_BASE_TOPIC,
+    CONF_OHMON_WATCHDOG_CONFIRMED,
     CONF_OUTDOOR_ENTITY,
+    CONF_OUTPUT_MODE,
     CONF_TARGET_TEMPERATURE,
     DEFAULT_TARGET_TEMPERATURE,
+    OUTPUT_MODE_OHMON_MQTT,
+    OUTPUT_MODE_SHADOW,
     PLATFORMS,
     PumpSteerEntryData,
 )
@@ -21,7 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up one PumpSteer V3 entry in mandatory shadow mode."""
+    """Set up one isolated PumpSteer V3 runtime and its selected output."""
     from .v3.control.engine import ControlEngine
     from .v3.ha.coordinator import (
         HomeAssistantStateProvider,
@@ -33,6 +38,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ObservationLearningRuntime,
     )
     from .v3.ha.learning_store import HomeAssistantLearningStore
+    from .v3.ha.ohmon_output import (
+        HomeAssistantMqttTransport,
+        OhmonMqttConfig,
+        OhmonMqttOutput,
+    )
     from .v3.ha.recorder import RecorderHistoryAdapter
     from .v3.ha.runtime import PumpSteerRuntime, RuntimeConfig
 
@@ -43,6 +53,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_TARGET_TEMPERATURE,
         DEFAULT_TARGET_TEMPERATURE,
     )
+    output = None
+    output_mode = source_config.get(CONF_OUTPUT_MODE, OUTPUT_MODE_SHADOW)
+    if output_mode == OUTPUT_MODE_OHMON_MQTT:
+        output = OhmonMqttOutput(
+            config=OhmonMqttConfig(
+                base_topic=source_config.get(CONF_OHMON_MQTT_BASE_TOPIC, ""),
+                watchdog_confirmed=source_config.get(
+                    CONF_OHMON_WATCHDOG_CONFIRMED, False
+                ),
+            ),
+            transport=HomeAssistantMqttTransport(hass),
+        )
+        await output.async_initialize()
     runtime = PumpSteerRuntime(
         config=RuntimeConfig(
             indoor_entity=indoor_entity,
@@ -51,6 +74,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ),
         states=HomeAssistantStateProvider(hass),
         engine=ControlEngine(),
+        output=output,
     )
     coordinator = PumpSteerDataUpdateCoordinator(hass, runtime)
     learning_runtime = None
@@ -91,10 +115,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         learning_coordinator=learning_coordinator,
     )
 
-    await coordinator.async_config_entry_first_refresh()
-    entry.async_on_unload(coordinator.async_start_source_tracking())
-    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await coordinator.async_config_entry_first_refresh()
+        entry.async_on_unload(coordinator.async_start_source_tracking())
+        entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception:
+        try:
+            await runtime.async_shutdown()
+        except Exception:
+            _LOGGER.exception(
+                "Unable to request physical-output bypass after setup failure"
+            )
+        if learning_runtime is not None:
+            learning_runtime.stop()
+        raise
     if learning_coordinator is not None:
         try:
             learning_coordinator.start()
@@ -109,6 +144,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload all V3 platforms and registered listeners."""
     data: PumpSteerEntryData | None = getattr(entry, "runtime_data", None)
+    if data is not None:
+        try:
+            await data.runtime.async_shutdown()
+        except Exception:
+            _LOGGER.exception("Unable to request physical-output bypass during unload")
     if data is not None and data.learning_coordinator is not None:
         await data.learning_coordinator.async_shutdown()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

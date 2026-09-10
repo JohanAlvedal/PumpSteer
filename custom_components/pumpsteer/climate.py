@@ -41,7 +41,7 @@ async def async_setup_entry(
 
 
 class PumpSteerClimate(CoordinatorEntity, ClimateEntity):
-    """Expose the V3 room target and shadow control request."""
+    """Expose the V3 room target and supervised comfort output."""
 
     _attr_has_entity_name = True
     _attr_translation_key = "thermostat"
@@ -97,11 +97,11 @@ class PumpSteerClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def hvac_action(self) -> HVACAction:
-        """Remain idle because shadow mode never operates heating hardware."""
+        """Never claim compressor activity without measured pump feedback."""
         return HVACAction.IDLE
 
     async def async_set_temperature(self, **kwargs) -> None:
-        """Set room target and immediately request a shadow calculation."""
+        """Set room target and immediately request a supervised calculation."""
         temperature = kwargs.get("temperature")
         if temperature is None:
             return

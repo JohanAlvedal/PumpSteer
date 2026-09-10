@@ -43,6 +43,10 @@ reverse this order.
 7. Restart recovery may not produce a larger output step than continuous operation would
    permit.
 8. Shadow mode performs no physical write while producing otherwise identical decisions.
+9. A broker-accepted MQTT command is recorded as requested or sent, not as verified
+   actuator state; only explicit device feedback may grant acknowledgement.
+10. An active OhmOn adapter refreshes the device watchdog without retained messages and
+    requests hardware bypass on setup, unload, degraded input, and write failure.
 
 ## Comfort invariants
 

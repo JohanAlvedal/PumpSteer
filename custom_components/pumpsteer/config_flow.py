@@ -13,12 +13,17 @@ from homeassistant.helpers.selector import selector
 
 from .const import (
     CONF_INDOOR_ENTITY,
+    CONF_OHMON_MQTT_BASE_TOPIC,
+    CONF_OHMON_WATCHDOG_CONFIRMED,
     CONF_OUTDOOR_ENTITY,
+    CONF_OUTPUT_MODE,
     CONF_TARGET_TEMPERATURE,
     DEFAULT_TARGET_TEMPERATURE,
     DOMAIN,
     MAX_TARGET_TEMPERATURE,
     MIN_TARGET_TEMPERATURE,
+    OUTPUT_MODE_OHMON_MQTT,
+    OUTPUT_MODE_SHADOW,
 )
 
 LEGACY_OUTDOOR_ENTITY = "real_outdoor_entity"
@@ -203,6 +208,17 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
                         **self.config_entry.options,
                         CONF_INDOOR_ENTITY: user_input[CONF_INDOOR_ENTITY],
                         CONF_OUTDOOR_ENTITY: user_input[CONF_OUTDOOR_ENTITY],
+                        CONF_OUTPUT_MODE: user_input.get(
+                            CONF_OUTPUT_MODE, OUTPUT_MODE_SHADOW
+                        ),
+                        CONF_OHMON_MQTT_BASE_TOPIC: user_input.get(
+                            CONF_OHMON_MQTT_BASE_TOPIC, ""
+                        ).strip(),
+                        CONF_OHMON_WATCHDOG_CONFIRMED: bool(
+                            user_input.get(CONF_OHMON_WATCHDOG_CONFIRMED, False)
+                        )
+                        if user_input.get(CONF_OUTPUT_MODE) == OUTPUT_MODE_OHMON_MQTT
+                        else False,
                     },
                 )
 
@@ -218,6 +234,32 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
                         CONF_OUTDOOR_ENTITY,
                         default=self._current_value(CONF_OUTDOOR_ENTITY),
                     ): _temperature_entity_selector(),
+                    vol.Required(
+                        CONF_OUTPUT_MODE,
+                        default=self._current_value(CONF_OUTPUT_MODE)
+                        or OUTPUT_MODE_SHADOW,
+                    ): selector(
+                        {
+                            "select": {
+                                "options": [
+                                    OUTPUT_MODE_SHADOW,
+                                    OUTPUT_MODE_OHMON_MQTT,
+                                ],
+                                "translation_key": CONF_OUTPUT_MODE,
+                                "mode": "dropdown",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        CONF_OHMON_MQTT_BASE_TOPIC,
+                        default=self._current_value(CONF_OHMON_MQTT_BASE_TOPIC) or "",
+                    ): selector({"text": {"type": "text"}}),
+                    vol.Optional(
+                        CONF_OHMON_WATCHDOG_CONFIRMED,
+                        default=bool(
+                            self._current_value(CONF_OHMON_WATCHDOG_CONFIRMED)
+                        ),
+                    ): selector({"boolean": {}}),
                 }
             ),
             errors=errors,
@@ -242,6 +284,21 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
                 errors[field] = "required"
             elif not self._entity_exists(entity_id):
                 errors[field] = "entity_not_found"
+        output_mode = user_input.get(CONF_OUTPUT_MODE, OUTPUT_MODE_SHADOW)
+        if output_mode not in {OUTPUT_MODE_SHADOW, OUTPUT_MODE_OHMON_MQTT}:
+            errors[CONF_OUTPUT_MODE] = "invalid_output_mode"
+        elif output_mode == OUTPUT_MODE_OHMON_MQTT:
+            base_topic = user_input.get(CONF_OHMON_MQTT_BASE_TOPIC, "")
+            if not isinstance(base_topic, str) or (
+                not base_topic.strip()
+                or not base_topic.strip().endswith("/")
+                or "+" in base_topic
+                or "#" in base_topic
+                or any(character.isspace() for character in base_topic.strip())
+            ):
+                errors[CONF_OHMON_MQTT_BASE_TOPIC] = "invalid_mqtt_topic"
+            if user_input.get(CONF_OHMON_WATCHDOG_CONFIRMED) is not True:
+                errors[CONF_OHMON_WATCHDOG_CONFIRMED] = "watchdog_required"
         return errors
 
     def _entity_exists(self, entity_id: str) -> bool:

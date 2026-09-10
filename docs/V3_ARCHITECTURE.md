@@ -141,6 +141,26 @@ The initial comfort controller may be PI-based. It shall implement anti-windup f
 planner intervention and actuator saturation. The architecture shall not assume that PI
 is the only possible future explainable comfort controller.
 
+### OhmOnWiFi active-output boundary
+
+Alpha.5 adds an opt-in physical adapter for a dedicated OhmOnWiFi or OhmOnWiFiPlus
+test device. The domain controller remains hardware-independent. Only output that has
+passed the output supervisor reaches this adapter.
+
+For a healthy cycle the adapter publishes the bounded and quantized virtual outdoor
+temperature first, then refreshes the relay watchdog with `ON`. Startup, shutdown,
+fallback, and every caught write failure publish `OFF`. MQTT messages use QoS 1 and
+`retain=false` so an old active command is not replayed to a reconnecting device.
+A write failure latches the adapter against further `ON` commands until a deliberate
+entry reload performs a successful startup bypass. Broker publication is bounded by a
+timeout so a stalled service call cannot silently hold the control cycle forever.
+
+Broker acceptance is not device acknowledgement. Diagnostics therefore report
+`active_command_sent` or `bypass_requested`, never confirmed relay state. Closed-loop
+acknowledgement remains a release gate and must be implemented after the real device's
+feedback topics and timing have been captured. Active output in this alpha belongs to
+comfort control only; the price preview remains disconnected from decisions.
+
 ### Economy preference
 
 V3 exposes one integer saving level instead of percentile, ramp, and brake controls.

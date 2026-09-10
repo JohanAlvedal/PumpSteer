@@ -9,6 +9,7 @@
   ],
   "config_flow": true,
   "dependencies": [
+    "mqtt",
     "recorder"
   ],
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
@@ -16,5 +17,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/JohanAlvedal/pumpsteer/issues",
   "requirements": [],
-  "version": "3.0.0-alpha.4"
+  "version": "3.0.0-alpha.5"
 }

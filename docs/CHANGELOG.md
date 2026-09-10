@@ -10,6 +10,28 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
+## [3.0.0-alpha.5] — Active OhmOnWiFi test output
+
+### Added
+
+- An explicitly enabled MQTT output for OhmOnWiFi and OhmOnWiFiPlus test devices.
+- The supervised comfort controller can now send a bounded virtual outdoor
+  temperature followed by the relay watchdog command.
+- Output diagnostics distinguish a command accepted by the MQTT broker from verified
+  device feedback.
+
+### Safety
+
+- Active output requires a concrete per-device MQTT topic and explicit confirmation
+  that the device watchdog has been enabled and physically tested.
+- Startup, shutdown, stale or invalid critical sensors, controller failure, and output
+  failure all request relay `OFF`, returning control to the physical outdoor sensor.
+- MQTT commands use QoS 1 and are never retained.
+- A write fault is latched against further `ON` commands until the entry is reloaded.
+- Price classification and saving level still have no physical-control authority.
+- This alpha does not claim device acknowledgement; it is intended only for a spare
+  test installation until feedback topics have been verified on real hardware.
+
 ## [3.0.0-alpha.4] — Safe price classification preview
 
 ### Added

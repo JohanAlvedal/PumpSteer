@@ -1,4 +1,4 @@
-"""Testable shadow runtime at the Home Assistant adapter boundary."""
+"""Testable runtime at the Home Assistant adapter boundary."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from ..validation import aware_datetime, finite_float, supported_unit
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    """Minimal user configuration for the V3 shadow runtime."""
+    """Minimal user configuration shared by shadow and active V3 runtimes."""
 
     indoor_entity: str
     outdoor_entity: str
@@ -67,9 +67,21 @@ class StateProvider(Protocol):
         """Return the latest state without performing I/O."""
 
 
+class OutputSink(Protocol):
+    """Apply only output that has passed the domain supervisor."""
+
+    physical_enabled: bool
+
+    async def async_publish(self, output: SupervisedOutput) -> None:
+        """Publish one supervised output or raise on delivery failure."""
+
+    async def async_shutdown(self) -> None:
+        """Return the physical adapter to its safe state."""
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeResult:
-    """Observable result of one complete shadow cycle."""
+    """Observable result of one complete supervised cycle."""
 
     observation: Observation | None
     engine_result: EngineResult
@@ -89,6 +101,8 @@ class RuntimeResult:
 class NullOutput:
     """Shadow-only output sink that never performs a physical write."""
 
+    physical_enabled = False
+
     def __init__(self) -> None:
         self.latest: SupervisedOutput | None = None
         self.publish_count = 0
@@ -100,9 +114,12 @@ class NullOutput:
         self.latest = output
         self.publish_count += 1
 
+    async def async_shutdown(self) -> None:
+        """No-op because shadow mode owns no physical state."""
+
 
 class PumpSteerRuntime:
-    """Coordinate state conversion, engine execution and shadow publication."""
+    """Coordinate state conversion, supervision, and output publication."""
 
     def __init__(
         self,
@@ -111,7 +128,7 @@ class PumpSteerRuntime:
         states: StateProvider,
         engine: ControlEngine,
         safety_policy: SafetyPolicy | None = None,
-        output: NullOutput | None = None,
+        output: OutputSink | None = None,
     ) -> None:
         self._config = config
         self._states = states
@@ -133,9 +150,18 @@ class PumpSteerRuntime:
         return self._latest
 
     @property
-    def output(self) -> NullOutput:
-        """Return the shadow output sink."""
+    def output(self) -> OutputSink:
+        """Return the configured output adapter."""
         return self._output
+
+    @property
+    def physical_control_enabled(self) -> bool:
+        """Return whether this entry has an explicitly active output adapter."""
+        return self._output.physical_enabled
+
+    async def async_shutdown(self) -> None:
+        """Release physical output before the config entry unloads."""
+        await self._output.async_shutdown()
 
     def set_target_temperature(self, target_temperature: float) -> None:
         """Update only the user-facing target while preserving source selection."""
@@ -152,7 +178,7 @@ class PumpSteerRuntime:
         )
 
     async def async_update(self, now: datetime) -> RuntimeResult:
-        """Run one cycle through the canonical engine in mandatory shadow mode."""
+        """Run one cycle and publish only through the configured output adapter."""
         now = aware_datetime(now, "now")
         if now.utcoffset() != timedelta(0):
             raise ValueError("now must use UTC")
@@ -179,6 +205,7 @@ class PumpSteerRuntime:
         else:
             input_error = None
 
+        shadow = not self._output.physical_enabled
         try:
             engine_result = self._engine.step(
                 observation=observation,
@@ -187,7 +214,7 @@ class PumpSteerRuntime:
                 state=self._engine_state,
                 now_utc=now,
                 dt=dt,
-                shadow=True,
+                shadow=shadow,
                 fallback_outdoor_temperature=fallback_outdoor,
             )
         except Exception as err:
@@ -195,21 +222,34 @@ class PumpSteerRuntime:
                 safety_policy=self._safety,
                 state=self._engine_state,
                 now_utc=now,
-                shadow=True,
+                shadow=shadow,
                 fallback_outdoor_temperature=fallback_outdoor,
             )
             engine_error = f"{type(err).__name__}: {err}"
             input_error = (
                 f"{input_error}; {engine_error}" if input_error else engine_error
             )
-        if engine_result.apply_physical:
-            raise RuntimeError("V3 HA runtime must remain in shadow mode")
+        if engine_result.apply_physical != self._output.physical_enabled:
+            raise RuntimeError("engine and output adapter authority do not match")
+        try:
+            await self._output.async_publish(engine_result.supervised_output)
+        except Exception as err:
+            output_error = f"{type(err).__name__}: {err}"
+            input_error = (
+                f"{input_error}; {output_error}" if input_error else output_error
+            )
+            engine_result = self._engine.fail_safe(
+                safety_policy=self._safety,
+                state=self._engine_state,
+                now_utc=now,
+                shadow=True,
+                fallback_outdoor_temperature=fallback_outdoor,
+            )
         result = RuntimeResult(
             observation=observation,
             engine_result=engine_result,
             error=input_error,
         )
-        await self._output.async_publish(engine_result.supervised_output)
         self._engine_state = engine_result.next_state
         self._last_update_at = now
         self._latest = result

@@ -3,6 +3,8 @@
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from custom_components.pumpsteer import async_migrate_entry
 from custom_components.pumpsteer.config_flow import (
     PumpSteerConfigFlow,
@@ -11,8 +13,13 @@ from custom_components.pumpsteer.config_flow import (
 )
 from custom_components.pumpsteer.const import (
     CONF_INDOOR_ENTITY,
+    CONF_OHMON_MQTT_BASE_TOPIC,
+    CONF_OHMON_WATCHDOG_CONFIRMED,
     CONF_OUTDOOR_ENTITY,
+    CONF_OUTPUT_MODE,
     CONF_TARGET_TEMPERATURE,
+    OUTPUT_MODE_OHMON_MQTT,
+    OUTPUT_MODE_SHADOW,
 )
 
 
@@ -142,7 +149,76 @@ def test_options_flow_saves_sensor_overrides_and_preserves_other_options() -> No
         "future_setting": "keep",
         CONF_INDOOR_ENTITY: "sensor.indoor_new",
         CONF_OUTDOOR_ENTITY: "sensor.outdoor_new",
+        CONF_OUTPUT_MODE: OUTPUT_MODE_SHADOW,
+        CONF_OHMON_MQTT_BASE_TOPIC: "",
+        CONF_OHMON_WATCHDOG_CONFIRMED: False,
     }
+
+
+def test_options_enable_active_ohmon_only_with_concrete_topic_and_watchdog() -> None:
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+        },
+        options={},
+    )
+    flow = options_flow_with_states(entry, "sensor.indoor", "sensor.outdoor")
+
+    result = asyncio.run(
+        flow.async_step_init(
+            {
+                CONF_INDOOR_ENTITY: "sensor.indoor",
+                CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+                CONF_OUTPUT_MODE: OUTPUT_MODE_OHMON_MQTT,
+                CONF_OHMON_MQTT_BASE_TOPIC: " ohmonwifiplus/123456/ ",
+                CONF_OHMON_WATCHDOG_CONFIRMED: True,
+            }
+        )
+    )
+
+    assert result["data"][CONF_OUTPUT_MODE] == OUTPUT_MODE_OHMON_MQTT
+    assert result["data"][CONF_OHMON_MQTT_BASE_TOPIC] == ("ohmonwifiplus/123456/")
+    assert result["data"][CONF_OHMON_WATCHDOG_CONFIRMED] is True
+
+
+@pytest.mark.parametrize(
+    ("topic", "watchdog", "field"),
+    [
+        ("ohmonwifiplus/123456", True, CONF_OHMON_MQTT_BASE_TOPIC),
+        ("ohmonwifiplus/+/", True, CONF_OHMON_MQTT_BASE_TOPIC),
+        (
+            "ohmonwifiplus/123456/",
+            False,
+            CONF_OHMON_WATCHDOG_CONFIRMED,
+        ),
+    ],
+)
+def test_options_reject_unsafe_active_ohmon_configuration(
+    topic: str, watchdog: bool, field: str
+) -> None:
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+        },
+        options={},
+    )
+    flow = options_flow_with_states(entry, "sensor.indoor", "sensor.outdoor")
+
+    errors = flow._validate_input(
+        {
+            CONF_INDOOR_ENTITY: "sensor.indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+            CONF_OUTPUT_MODE: OUTPUT_MODE_OHMON_MQTT,
+            CONF_OHMON_MQTT_BASE_TOPIC: topic,
+            CONF_OHMON_WATCHDOG_CONFIRMED: watchdog,
+        }
+    )
+
+    assert field in errors
 
 
 def test_setup_rejects_sensor_pair_owned_by_an_existing_entry() -> None:

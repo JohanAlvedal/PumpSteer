@@ -14,8 +14,12 @@ from custom_components.pumpsteer import (
 from custom_components.pumpsteer.config_flow import PumpSteerConfigFlow
 from custom_components.pumpsteer.const import (
     CONF_INDOOR_ENTITY,
+    CONF_OHMON_MQTT_BASE_TOPIC,
+    CONF_OHMON_WATCHDOG_CONFIRMED,
     CONF_OUTDOOR_ENTITY,
+    CONF_OUTPUT_MODE,
     CONF_TARGET_TEMPERATURE,
+    OUTPUT_MODE_OHMON_MQTT,
     PLATFORMS,
 )
 
@@ -66,6 +70,18 @@ class FakeHass:
     def __init__(self) -> None:
         self.states = FakeStates()
         self.config_entries = FakeConfigEntries()
+        self.services = SimpleNamespace(
+            has_service=lambda domain, service: (
+                (domain, service) == ("mqtt", "publish")
+            ),
+            async_call=self._async_call,
+        )
+        self.service_calls: list[tuple[str, str, dict, bool]] = []
+
+    async def _async_call(
+        self, domain: str, service: str, data: dict, *, blocking: bool
+    ) -> None:
+        self.service_calls.append((domain, service, data, blocking))
 
 
 class FakeEntry:
@@ -162,6 +178,40 @@ def test_setup_owns_runtime_per_entry_and_loads_v3_platforms(monkeypatch) -> Non
         cleanup()
     assert first.runtime_data.coordinator.cleanup_calls == 1
     assert first.runtime_data.learning_runtime.snapshot.status.value == "stopped"
+
+
+def test_active_ohmon_entry_starts_bypassed_then_publishes_temperature_and_on(
+    monkeypatch,
+) -> None:
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.pumpsteer.v3.ha.coordinator",
+        _coordinator_module(),
+    )
+    hass = FakeHass()
+    hass.states.values[INDOOR].state = 19.0
+    hass.states.values[OUTDOOR].state = -5.0
+    entry = FakeEntry("active")
+    entry.options = {
+        CONF_OUTPUT_MODE: OUTPUT_MODE_OHMON_MQTT,
+        CONF_OHMON_MQTT_BASE_TOPIC: "ohmonwifiplus/123456/",
+        CONF_OHMON_WATCHDOG_CONFIRMED: True,
+    }
+
+    assert asyncio.run(async_setup_entry(hass, entry)) is True
+
+    assert entry.runtime_data.runtime.latest.error is None
+    expected_temperature = entry.runtime_data.runtime.latest.supervised.value
+    payloads = [call[2]["payload"] for call in hass.service_calls]
+    topics = [call[2]["topic"] for call in hass.service_calls]
+    assert payloads == ["OFF", f"{expected_temperature:.2f}", "ON"]
+    assert topics == [
+        "ohmonwifiplus/123456/relay/set",
+        "ohmonwifiplus/123456/temperature/set",
+        "ohmonwifiplus/123456/relay/set",
+    ]
+    assert entry.runtime_data.runtime.physical_control_enabled is True
+    assert entry.runtime_data.runtime.latest.supervised.apply_physical is True
 
 
 def test_unload_uses_same_v3_platforms() -> None:

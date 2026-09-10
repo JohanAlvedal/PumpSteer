@@ -12,13 +12,19 @@ if TYPE_CHECKING:
     from .v3.ha.runtime import PumpSteerRuntime
 
 DOMAIN = "pumpsteer"
-INTEGRATION_VERSION = "3.0.0-alpha.4"
+INTEGRATION_VERSION = "3.0.0-alpha.5"
 PLATFORMS = ("climate", "number")
 
 CONF_INDOOR_ENTITY = "indoor_temp_entity"
 CONF_OUTDOOR_ENTITY = "outdoor_temp_entity"
 CONF_TARGET_TEMPERATURE = "target_temperature"
 CONF_SAVING_LEVEL = "saving_level"
+CONF_OUTPUT_MODE = "output_mode"
+CONF_OHMON_MQTT_BASE_TOPIC = "ohmon_mqtt_base_topic"
+CONF_OHMON_WATCHDOG_CONFIRMED = "ohmon_watchdog_confirmed"
+
+OUTPUT_MODE_SHADOW = "shadow"
+OUTPUT_MODE_OHMON_MQTT = "ohmon_mqtt"
 
 DEFAULT_TARGET_TEMPERATURE = 21.0
 MIN_TARGET_TEMPERATURE = 5.0
