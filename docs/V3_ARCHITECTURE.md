@@ -160,6 +160,28 @@ permitted. The learned validity domain, comfort budget, recovery guard, and outp
 supervisor remain independent upper bounds. Until the price planner is validated, the
 Home Assistant number and its diagnostics are shadow-only.
 
+### Price classification preview
+
+Alpha.4 introduces a pure preview between the saving-level policy and any future
+planner. The adapter must supply the exact UTC boundaries of one deterministic
+comparison period; the core will not infer a period from whichever points happen to be
+available. The future HA adapter will define which tariff day supplies those boundaries.
+The preview uses the deterministic nearest-rank method
+(`rank = ceil(percentile * sample_count / 100)`). Intervals may be hourly, 15 minutes,
+or another explicit positive duration; the implementation assumes neither 24 hours nor
+96 slots per day.
+
+One classification timeline must use one provider identity, SEK/kWh, and one interval
+duration. Mixed 60- and 15-minute input is rejected until a time-weighted method is
+specified; otherwise quarter-hour periods would receive disproportionate weight.
+
+The preview reports `disabled`, `unavailable`, `uninformative`, or `classified` with a
+stable reason code. A missing current interval is never filled from a neighbouring
+price. Unseparated thresholds are `uninformative`, negative prices are valid, and
+threshold boundaries are inclusive. `ShadowPricePlan` always denies physical control,
+preheat, and curtailment authority. It is not connected to `ControlDecision` in this
+alpha.
+
 ## Building and actuator models
 
 ### Reference 1R1C model

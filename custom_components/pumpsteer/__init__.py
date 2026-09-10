@@ -36,7 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .v3.ha.recorder import RecorderHistoryAdapter
     from .v3.ha.runtime import PumpSteerRuntime, RuntimeConfig
 
-    source_config = {**entry.data, **entry.options}
+    source_config = {**entry.data, **getattr(entry, "options", {})}
     indoor_entity = source_config[CONF_INDOOR_ENTITY]
     outdoor_entity = source_config[CONF_OUTDOOR_ENTITY]
     target_temperature = entry.data.get(

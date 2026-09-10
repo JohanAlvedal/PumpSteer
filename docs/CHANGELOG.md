@@ -10,6 +10,44 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
+## [3.0.0-alpha.4] — Safe price classification preview
+
+### Added
+
+- Immutable UTC price intervals and validated price timelines.
+- Deterministic nearest-rank classification for saving levels 1–5.
+- Explicit results for disabled, missing, incomplete-period, unseparated-threshold, and
+  classified price data.
+- Coverage for negative prices, 15-minute markets, gaps, boundaries, variable slot
+  counts, and real Stockholm 23/25-hour tariff days.
+
+### Fixed
+
+- Config-entry identity no longer changes conceptually when indoor or outdoor sensors
+  are replaced in the options flow.
+- Duplicate sensor pairs are rejected independently of the stable entry identity.
+- Existing alpha.3 entries migrate to the new stable identity without changing their
+  selected sensors or other options.
+- English option-flow translations now match the integration strings.
+
+### Safety
+
+- The price preview cannot request heating, preheating, curtailment, or physical output.
+- Price data errors remain separate from the comfort controller.
+- No price provider is selected automatically in this alpha.
+
+## [3.0.0-alpha.3] — Editable temperature sources
+
+### Added
+
+- Indoor and outdoor temperature sensors can be replaced through the Home Assistant
+  Configure flow.
+- Source changes reload V3 and reset incompatible learned evidence safely.
+
+### Safety
+
+- Source changes preserve shadow mode and cannot activate physical output.
+
 ## [3.0.0-alpha.2] — Saving-level shadow policy
 
 ### Added

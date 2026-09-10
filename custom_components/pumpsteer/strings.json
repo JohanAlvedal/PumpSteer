@@ -15,7 +15,8 @@
       "required": "This field is required",
       "entity_not_found": "The selected entity was not found",
       "same_sensor": "Indoor and outdoor temperature must use different sensors",
-      "invalid_target": "Choose a target temperature between 5 and 35 °C"
+      "invalid_target": "Choose a target temperature between 5 and 35 °C",
+      "already_configured": "This indoor and outdoor sensor pair is already configured"
     },
     "abort": {
       "already_configured": "This indoor and outdoor sensor pair is already configured"
@@ -35,7 +36,8 @@
     "error": {
       "required": "This field is required",
       "entity_not_found": "The selected entity was not found",
-      "same_sensor": "Indoor and outdoor temperature must use different sensors"
+      "same_sensor": "Indoor and outdoor temperature must use different sensors",
+      "already_configured": "This indoor and outdoor sensor pair is already configured"
     }
   },
   "entity": {

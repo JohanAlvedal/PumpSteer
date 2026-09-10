@@ -15,7 +15,8 @@
       "required": "Fältet är obligatoriskt",
       "entity_not_found": "Den valda entiteten hittades inte",
       "same_sensor": "Inne- och utomhustemperatur måste använda olika givare",
-      "invalid_target": "Välj en måltemperatur mellan 5 och 35 °C"
+      "invalid_target": "Välj en måltemperatur mellan 5 och 35 °C",
+      "already_configured": "Kombinationen av inne- och utegivare är redan konfigurerad"
     },
     "abort": {
       "already_configured": "Kombinationen av inne- och utegivare är redan konfigurerad"
@@ -35,7 +36,8 @@
     "error": {
       "required": "Fältet är obligatoriskt",
       "entity_not_found": "Den valda entiteten hittades inte",
-      "same_sensor": "Inne- och utomhustemperatur måste använda olika givare"
+      "same_sensor": "Inne- och utomhustemperatur måste använda olika givare",
+      "already_configured": "Kombinationen av inne- och utegivare är redan konfigurerad"
     }
   },
   "entity": {

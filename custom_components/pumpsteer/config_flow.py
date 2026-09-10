@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from uuid import uuid4
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -23,9 +24,47 @@ from .const import (
 LEGACY_OUTDOOR_ENTITY = "real_outdoor_entity"
 
 
-def _entry_unique_id(indoor_entity: str, outdoor_entity: str) -> str:
-    """Return a deterministic identity for one controlled sensor pair."""
-    return f"{indoor_entity.strip().lower()}::{outdoor_entity.strip().lower()}"
+def _entry_unique_id(entry_identity: str) -> str:
+    """Return a stable identity that is independent of editable sensor sources."""
+    identity = entry_identity.strip().lower()
+    if not identity:
+        raise ValueError("entry_identity must be a non-empty string")
+    return f"pumpsteer-v3:{identity}"
+
+
+def _effective_sensor_pair(entry) -> tuple[str | None, str | None]:
+    """Return the active sensor pair, including option overrides."""
+    effective = {**entry.data, **entry.options}
+    return (
+        effective.get(CONF_INDOOR_ENTITY),
+        effective.get(CONF_OUTDOOR_ENTITY),
+    )
+
+
+def _sensor_pair_is_configured(
+    hass,
+    indoor_entity: str,
+    outdoor_entity: str,
+    *,
+    exclude_entry_id: str | None = None,
+) -> bool:
+    """Return whether another PumpSteer entry already owns the sensor pair."""
+    async_entries = getattr(
+        getattr(hass, "config_entries", None), "async_entries", None
+    )
+    if async_entries is None:
+        return False
+    wanted = (indoor_entity.strip().lower(), outdoor_entity.strip().lower())
+    for entry in async_entries(DOMAIN):
+        if getattr(entry, "entry_id", None) == exclude_entry_id:
+            continue
+        indoor, outdoor = _effective_sensor_pair(entry)
+        if not indoor or not outdoor:
+            continue
+        existing = (indoor.strip().lower(), outdoor.strip().lower())
+        if existing == wanted:
+            return True
+    return False
 
 
 def _temperature_entity_selector():
@@ -44,7 +83,7 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure the intentionally minimal PumpSteer V3 experience."""
 
     VERSION = 3
-    MINOR_VERSION = 0
+    MINOR_VERSION = 1
 
     @staticmethod
     @callback
@@ -60,13 +99,14 @@ class PumpSteerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             errors = self._validate_input(user_input)
+            if not errors and _sensor_pair_is_configured(
+                self.hass,
+                user_input[CONF_INDOOR_ENTITY],
+                user_input[CONF_OUTDOOR_ENTITY],
+            ):
+                errors["base"] = "already_configured"
             if not errors:
-                unique_id = _entry_unique_id(
-                    user_input[CONF_INDOOR_ENTITY],
-                    user_input[CONF_OUTDOOR_ENTITY],
-                )
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_configured()
+                await self.async_set_unique_id(_entry_unique_id(uuid4().hex))
                 return self.async_create_entry(
                     title="PumpSteer",
                     data={
@@ -149,6 +189,13 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             errors = self._validate_input(user_input)
+            if not errors and _sensor_pair_is_configured(
+                self.hass,
+                user_input[CONF_INDOOR_ENTITY],
+                user_input[CONF_OUTDOOR_ENTITY],
+                exclude_entry_id=getattr(self.config_entry, "entry_id", None),
+            ):
+                errors["base"] = "already_configured"
             if not errors:
                 return self.async_create_entry(
                     title="",
@@ -208,7 +255,17 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
 
 async def async_migrate_entry(hass, entry: config_entries.ConfigEntry) -> bool:
     """Migrate useful V2 identity without importing old tuning parameters."""
-    if entry.version >= 3:
+    if entry.version > 3:
+        return False
+    if entry.version == 3 and entry.minor_version >= 1:
+        return True
+    if entry.version == 3:
+        hass.config_entries.async_update_entry(
+            entry,
+            unique_id=_entry_unique_id(entry.entry_id),
+            version=3,
+            minor_version=1,
+        )
         return True
     legacy = {**entry.data, **entry.options}
     indoor = legacy.get(CONF_INDOOR_ENTITY)
@@ -231,8 +288,8 @@ async def async_migrate_entry(hass, entry: config_entries.ConfigEntry) -> bool:
             CONF_TARGET_TEMPERATURE: target,
         },
         options={},
-        unique_id=_entry_unique_id(indoor, outdoor),
+        unique_id=_entry_unique_id(entry.entry_id),
         version=3,
-        minor_version=0,
+        minor_version=1,
     )
     return True

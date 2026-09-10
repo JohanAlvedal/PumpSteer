@@ -35,7 +35,9 @@ def _migrate(entry):
 
 def test_version_one_migration_keeps_only_three_user_fields() -> None:
     entry = SimpleNamespace(
+        entry_id="legacy-one",
         version=1,
+        minor_version=0,
         data={
             "indoor_temp_entity": "sensor.indoor",
             "real_outdoor_entity": "sensor.outdoor",
@@ -55,19 +57,21 @@ def test_version_one_migration_keeps_only_three_user_fields() -> None:
     assert len(updates) == 1
     changes = updates[0][1]
     assert changes["version"] == 3
-    assert changes["minor_version"] == 0
+    assert changes["minor_version"] == 1
     assert changes["options"] == {}
     assert changes["data"] == {
         CONF_INDOOR_ENTITY: "sensor.indoor",
         CONF_OUTDOOR_ENTITY: "sensor.outdoor",
         CONF_TARGET_TEMPERATURE: 22.5,
     }
-    assert changes["unique_id"] == "sensor.indoor::sensor.outdoor"
+    assert changes["unique_id"] == "pumpsteer-v3:legacy-one"
 
 
 def test_migration_is_idempotent_for_version_three() -> None:
     entry = SimpleNamespace(
+        entry_id="current-entry",
         version=3,
+        minor_version=1,
         data={
             CONF_INDOOR_ENTITY: "sensor.indoor",
             CONF_OUTDOOR_ENTITY: "sensor.outdoor",
@@ -84,9 +88,44 @@ def test_migration_is_idempotent_for_version_three() -> None:
     assert second_updates == []
 
 
+def test_alpha_three_entry_gets_stable_identity_without_data_changes() -> None:
+    data = {
+        CONF_INDOOR_ENTITY: "sensor.indoor",
+        CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+        CONF_TARGET_TEMPERATURE: 21.0,
+    }
+    options = {CONF_INDOOR_ENTITY: "sensor.indoor_new"}
+    entry = SimpleNamespace(
+        entry_id="alpha-three-entry",
+        unique_id="sensor.indoor::sensor.outdoor",
+        version=3,
+        minor_version=0,
+        data=data,
+        options=options,
+    )
+
+    migrated, updates = _migrate(entry)
+
+    assert migrated is True
+    assert updates == [
+        (
+            entry,
+            {
+                "unique_id": "pumpsteer-v3:alpha-three-entry",
+                "version": 3,
+                "minor_version": 1,
+            },
+        )
+    ]
+    assert entry.data is data
+    assert entry.options is options
+
+
 def test_version_one_migration_is_noop_on_second_call() -> None:
     entry = SimpleNamespace(
+        entry_id="legacy-two",
         version=1,
+        minor_version=0,
         data={
             "indoor_temp_entity": "sensor.indoor",
             "real_outdoor_entity": "sensor.outdoor",
@@ -105,7 +144,9 @@ def test_version_one_migration_is_noop_on_second_call() -> None:
 
 def test_invalid_legacy_target_uses_safe_default() -> None:
     entry = SimpleNamespace(
+        entry_id="legacy-invalid-target",
         version=1,
+        minor_version=0,
         data={
             "indoor_temp_entity": "sensor.indoor",
             "real_outdoor_entity": "sensor.outdoor",
@@ -122,7 +163,9 @@ def test_invalid_legacy_target_uses_safe_default() -> None:
 
 def test_migration_refuses_entry_without_critical_sensor_identity() -> None:
     entry = SimpleNamespace(
+        entry_id="legacy-missing-source",
         version=1,
+        minor_version=0,
         data={"indoor_temp_entity": "sensor.indoor"},
         options={"pid_kp": 8.0},
     )

@@ -15,9 +15,28 @@
       "required": "This field is required",
       "entity_not_found": "The selected entity was not found",
       "same_sensor": "Indoor and outdoor temperature must use different sensors",
-      "invalid_target": "Choose a target temperature between 5 and 35 °C"
+      "invalid_target": "Choose a target temperature between 5 and 35 °C",
+      "already_configured": "This indoor and outdoor sensor pair is already configured"
     },
     "abort": {
+      "already_configured": "This indoor and outdoor sensor pair is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure PumpSteer sensors",
+        "description": "Choose which Home Assistant temperature sensors PumpSteer should use. Saving changes reloads the integration and keeps PumpSteer V3 in shadow mode.",
+        "data": {
+          "indoor_temp_entity": "Indoor temperature sensor",
+          "outdoor_temp_entity": "Outdoor temperature sensor"
+        }
+      }
+    },
+    "error": {
+      "required": "This field is required",
+      "entity_not_found": "The selected entity was not found",
+      "same_sensor": "Indoor and outdoor temperature must use different sensors",
       "already_configured": "This indoor and outdoor sensor pair is already configured"
     }
   },

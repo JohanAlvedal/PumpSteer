@@ -32,6 +32,15 @@ def flow_with_states(*entity_ids: str) -> PumpSteerConfigFlow:
     return flow
 
 
+class ConfigEntries:
+    def __init__(self, entries=()) -> None:
+        self.entries = list(entries)
+
+    def async_entries(self, domain: str):
+        assert domain == "pumpsteer"
+        return self.entries
+
+
 def options_flow_with_states(entry, *entity_ids: str) -> PumpSteerOptionsFlow:
     flow = PumpSteerOptionsFlow()
     flow.hass = SimpleNamespace(states=States(set(entity_ids)))
@@ -71,10 +80,8 @@ def test_same_sensor_is_rejected() -> None:
     assert errors[CONF_OUTDOOR_ENTITY] == "same_sensor"
 
 
-def test_unique_id_is_deterministic_for_sensor_pair() -> None:
-    assert _entry_unique_id("Sensor.Inside", "sensor.OUTSIDE") == (
-        "sensor.inside::sensor.outside"
-    )
+def test_unique_id_is_stable_entry_identity_not_sensor_pair() -> None:
+    assert _entry_unique_id("ABC-123") == "pumpsteer-v3:abc-123"
 
 
 def test_options_flow_is_available_for_existing_entry() -> None:
@@ -87,6 +94,7 @@ def test_options_flow_is_available_for_existing_entry() -> None:
 
 def test_options_flow_rejects_same_sensor() -> None:
     entry = SimpleNamespace(
+        entry_id="entry-1",
         data={
             CONF_INDOOR_ENTITY: "sensor.indoor",
             CONF_OUTDOOR_ENTITY: "sensor.outdoor",
@@ -107,6 +115,7 @@ def test_options_flow_rejects_same_sensor() -> None:
 
 def test_options_flow_saves_sensor_overrides_and_preserves_other_options() -> None:
     entry = SimpleNamespace(
+        entry_id="entry-1",
         data={
             CONF_INDOOR_ENTITY: "sensor.indoor_old",
             CONF_OUTDOOR_ENTITY: "sensor.outdoor_old",
@@ -136,6 +145,128 @@ def test_options_flow_saves_sensor_overrides_and_preserves_other_options() -> No
     }
 
 
+def test_setup_rejects_sensor_pair_owned_by_an_existing_entry() -> None:
+    existing = SimpleNamespace(
+        entry_id="existing",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+        },
+        options={},
+    )
+    flow = flow_with_states("sensor.indoor", "sensor.outdoor")
+    flow.hass.config_entries = ConfigEntries([existing])
+    flow.async_show_form = lambda **kwargs: kwargs
+
+    result = asyncio.run(
+        flow.async_step_user(
+            {
+                CONF_INDOOR_ENTITY: "sensor.indoor",
+                CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+                CONF_TARGET_TEMPERATURE: 21.0,
+            }
+        )
+    )
+
+    assert result["errors"]["base"] == "already_configured"
+
+
+def test_successful_setup_uses_stable_identity_namespace(monkeypatch) -> None:
+    flow = flow_with_states("sensor.indoor", "sensor.outdoor")
+    flow.hass.config_entries = ConfigEntries()
+    captured = []
+
+    async def set_unique_id(unique_id: str) -> None:
+        captured.append(unique_id)
+
+    flow.async_set_unique_id = set_unique_id
+    monkeypatch.setattr(
+        "custom_components.pumpsteer.config_flow.uuid4",
+        lambda: SimpleNamespace(hex="fixed-entry-identity"),
+    )
+
+    result = asyncio.run(
+        flow.async_step_user(
+            {
+                CONF_INDOOR_ENTITY: "sensor.indoor",
+                CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+                CONF_TARGET_TEMPERATURE: 21.0,
+            }
+        )
+    )
+
+    assert captured == ["pumpsteer-v3:fixed-entry-identity"]
+    assert result["data"][CONF_INDOOR_ENTITY] == "sensor.indoor"
+
+
+def test_duplicate_check_uses_existing_option_overrides() -> None:
+    existing = SimpleNamespace(
+        entry_id="existing",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.old_indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.old_outdoor",
+        },
+        options={
+            CONF_INDOOR_ENTITY: "sensor.new_indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.new_outdoor",
+        },
+    )
+    flow = flow_with_states("sensor.new_indoor", "sensor.new_outdoor")
+    flow.hass.config_entries = ConfigEntries([existing])
+    flow.async_show_form = lambda **kwargs: kwargs
+
+    result = asyncio.run(
+        flow.async_step_user(
+            {
+                CONF_INDOOR_ENTITY: "sensor.new_indoor",
+                CONF_OUTDOOR_ENTITY: "sensor.new_outdoor",
+                CONF_TARGET_TEMPERATURE: 21.0,
+            }
+        )
+    )
+
+    assert result["errors"]["base"] == "already_configured"
+
+
+def test_options_reject_pair_owned_by_another_entry() -> None:
+    current = SimpleNamespace(
+        entry_id="current",
+        unique_id="pumpsteer-v3:current",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.current_indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.current_outdoor",
+        },
+        options={},
+    )
+    other = SimpleNamespace(
+        entry_id="other",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.other_indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.other_outdoor",
+        },
+        options={},
+    )
+    flow = options_flow_with_states(
+        current,
+        "sensor.other_indoor",
+        "sensor.other_outdoor",
+    )
+    flow.hass.config_entries = ConfigEntries([current, other])
+    flow.async_show_form = lambda **kwargs: kwargs
+
+    result = asyncio.run(
+        flow.async_step_init(
+            {
+                CONF_INDOOR_ENTITY: "sensor.other_indoor",
+                CONF_OUTDOOR_ENTITY: "sensor.other_outdoor",
+            }
+        )
+    )
+
+    assert result["errors"]["base"] == "already_configured"
+    assert current.unique_id == "pumpsteer-v3:current"
+
+
 def test_v2_migration_keeps_sources_but_discards_tuning() -> None:
     updates = {}
 
@@ -145,7 +276,9 @@ def test_v2_migration_keeps_sources_but_discards_tuning() -> None:
 
     hass = SimpleNamespace(config_entries=Entries())
     entry = SimpleNamespace(
+        entry_id="legacy-entry",
         version=1,
+        minor_version=0,
         data={
             "indoor_temp_entity": "sensor.indoor",
             "real_outdoor_entity": "sensor.outdoor",
@@ -156,6 +289,8 @@ def test_v2_migration_keeps_sources_but_discards_tuning() -> None:
 
     assert asyncio.run(async_migrate_entry(hass, entry))
     assert updates["version"] == 3
+    assert updates["minor_version"] == 1
+    assert updates["unique_id"] == "pumpsteer-v3:legacy-entry"
     assert updates["data"] == {
         CONF_INDOOR_ENTITY: "sensor.indoor",
         CONF_OUTDOOR_ENTITY: "sensor.outdoor",

@@ -14,6 +14,26 @@ a different approach was considered and rejected.
 Use this to avoid relitigating settled questions and to understand the trade-offs
 before proposing changes.
 
+## V3 price-preview boundaries
+
+### Why nearest-rank percentiles are fixed before planner development
+
+**Decision:** V3 uses the nearest-rank percentile method for the shadow price preview.
+The saving-level mapping chooses percentiles, while one explicitly bounded comparison
+period provides the sample set. The future HA adapter will define the tariff-day scope
+and supply its UTC boundaries; missing coverage makes the preview unavailable instead
+of silently changing the sample.
+
+This avoids library-dependent interpolation and makes replay identical across Home
+Assistant installations. Negative prices are ordinary relative values. Equal cheap and
+expensive thresholds are reported as uninformative instead of assigning contradictory
+bands. A price band describes the market only; it does not authorize a thermal action.
+
+Provider discovery, unit normalization, tariff additions, thermal prediction, and
+physical output stay outside the pure classifier and require their own validation gates.
+Each alpha.4 timeline uses one source, SEK/kWh, and one interval duration. Mixed market
+time units are rejected until a time-weighted percentile contract is defined.
+
 <details open markdown="block">
   <summary>Contents</summary>
   {: .text-delta }
