@@ -55,7 +55,9 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         "weather_entity",
-                        default=current_data.get("weather_entity"),
+                        description={
+                            "suggested_value": current_data.get("weather_entity")
+                        },
                     ): selector({"entity": {"domain": "weather"}}),
                     vol.Required(
                         "electricity_price_entity",
