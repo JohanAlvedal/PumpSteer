@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 DOMAIN = "pumpsteer"
 INTEGRATION_VERSION = "3.0.0-alpha.5"
-PLATFORMS = ("climate", "number")
+PLATFORMS = ("climate", "number", "sensor")
 
 CONF_INDOOR_ENTITY = "indoor_temp_entity"
 CONF_OUTDOOR_ENTITY = "outdoor_temp_entity"
