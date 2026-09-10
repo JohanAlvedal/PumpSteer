@@ -61,7 +61,9 @@ def test_cheap_electricity_alone_never_authorizes_preheat() -> None:
 
 
 def test_authorized_predicted_comfort_risk_enables_bounded_preheat() -> None:
-    policy = ComfortPolicy(target_temperature=21.0, minimum_temperature=19.5, maximum_temperature=23.0)
+    policy = ComfortPolicy(
+        target_temperature=21.0, minimum_temperature=19.5, maximum_temperature=23.0
+    )
     plan = plan_automatic_preheat(
         observation=observation(21.3),
         comfort_policy=policy,

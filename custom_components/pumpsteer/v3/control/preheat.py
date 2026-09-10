@@ -37,7 +37,9 @@ class PreheatContext:
     prediction_authorized: bool = False
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "current_price_band", PriceBand(self.current_price_band))
+        object.__setattr__(
+            self, "current_price_band", PriceBand(self.current_price_band)
+        )
         for name in ("time_until_expensive", "expensive_duration"):
             value = getattr(self, name)
             if value is not None:
@@ -155,7 +157,9 @@ def plan_automatic_preheat(
             reason=reason,
             effective_target_temperature=comfort_policy.target_temperature,
             predicted_min_indoor_temperature=(
-                context.predicted_min_indoor_temperature if context is not None else None
+                context.predicted_min_indoor_temperature
+                if context is not None
+                else None
             ),
         )
 
