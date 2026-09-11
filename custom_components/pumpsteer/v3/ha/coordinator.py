@@ -16,6 +16,16 @@ from .runtime import PumpSteerRuntime, RawState, RuntimeResult
 _LOGGER = logging.getLogger(__name__)
 
 
+def _normalize_state_value(value: object) -> object:
+    """Convert numeric Home Assistant state strings at the platform boundary."""
+    if not isinstance(value, str):
+        return value
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
 class HomeAssistantStateProvider:
     """Translate Home Assistant states at the platform boundary."""
 
@@ -30,7 +40,7 @@ class HomeAssistantStateProvider:
         unit = state.attributes.get("unit_of_measurement", Unit.CELSIUS.value)
         observed_at = getattr(state, "last_reported", None) or state.last_updated
         return RawState(
-            value=state.state,
+            value=_normalize_state_value(state.state),
             observed_at=observed_at,
             unit=unit,
             source=entity_id,
