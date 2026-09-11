@@ -1,4 +1,4 @@
-"""Tests for Home Assistant state timestamp handling in PumpSteer V3."""
+"""Tests for Home Assistant state handling in PumpSteer V3."""
 
 import sys
 import types
@@ -38,6 +38,39 @@ class FakeStateMachine:
         return self._state
 
 
+def test_state_provider_converts_numeric_state_string_to_float() -> None:
+    """Numeric Home Assistant state strings must become domain-ready numbers."""
+    state = SimpleNamespace(
+        state="21.35",
+        attributes={"unit_of_measurement": "°C"},
+        last_updated=NOW - timedelta(seconds=20),
+        last_reported=NOW - timedelta(seconds=10),
+    )
+    hass = SimpleNamespace(states=FakeStateMachine(state))
+
+    raw = HomeAssistantStateProvider(hass).get_state("sensor.indoor")
+
+    assert raw is not None
+    assert raw.value == 21.35
+    assert isinstance(raw.value, float)
+
+
+def test_state_provider_preserves_non_numeric_state_for_domain_validation() -> None:
+    """Unavailable states must remain invalid instead of being hidden or coerced."""
+    state = SimpleNamespace(
+        state="unavailable",
+        attributes={"unit_of_measurement": "°C"},
+        last_updated=NOW - timedelta(seconds=20),
+        last_reported=NOW - timedelta(seconds=10),
+    )
+    hass = SimpleNamespace(states=FakeStateMachine(state))
+
+    raw = HomeAssistantStateProvider(hass).get_state("sensor.indoor")
+
+    assert raw is not None
+    assert raw.value == "unavailable"
+
+
 def test_state_provider_prefers_last_reported_over_last_updated() -> None:
     """An unchanged but recently reported sensor must remain fresh."""
     state = SimpleNamespace(
@@ -51,6 +84,7 @@ def test_state_provider_prefers_last_reported_over_last_updated() -> None:
     raw = HomeAssistantStateProvider(hass).get_state("sensor.outdoor")
 
     assert raw is not None
+    assert raw.value == 12.5
     assert raw.observed_at == state.last_reported
 
 
@@ -66,4 +100,5 @@ def test_state_provider_falls_back_to_last_updated_when_last_reported_missing() 
     raw = HomeAssistantStateProvider(hass).get_state("sensor.outdoor")
 
     assert raw is not None
+    assert raw.value == 12.5
     assert raw.observed_at == state.last_updated
