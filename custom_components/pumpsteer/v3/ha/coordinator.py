@@ -28,9 +28,10 @@ class HomeAssistantStateProvider:
         if state is None:
             return None
         unit = state.attributes.get("unit_of_measurement", Unit.CELSIUS.value)
+        observed_at = getattr(state, "last_reported", None) or state.last_updated
         return RawState(
             value=state.state,
-            observed_at=state.last_updated,
+            observed_at=observed_at,
             unit=unit,
             source=entity_id,
         )
