@@ -51,7 +51,8 @@ class ConfigEntries:
 def options_flow_with_states(entry, *entity_ids: str) -> PumpSteerOptionsFlow:
     flow = PumpSteerOptionsFlow()
     flow.hass = SimpleNamespace(states=States(set(entity_ids)))
-    flow.config_entry = entry
+    # Home Assistant injects the config entry before running an options flow.
+    flow._config_entry = entry
     flow.async_create_entry = lambda title="", data=None: {
         "title": title,
         "data": data or {},
