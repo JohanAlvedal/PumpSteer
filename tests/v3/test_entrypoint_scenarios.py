@@ -159,10 +159,10 @@ def test_setup_owns_runtime_per_entry_and_loads_v3_platforms(monkeypatch) -> Non
     assert asyncio.run(async_setup_entry(hass, first)) is True
     assert asyncio.run(async_setup_entry(hass, second)) is True
 
-    assert PLATFORMS == ("climate", "number")
+    assert PLATFORMS == ("climate", "number", "sensor")
     assert hass.config_entries.forwarded == [
-        (first, ("climate", "number")),
-        (second, ("climate", "number")),
+        (first, ("climate", "number", "sensor")),
+        (second, ("climate", "number", "sensor")),
     ]
     assert first.runtime_data is not second.runtime_data
     assert first.runtime_data.runtime is not second.runtime_data.runtime
@@ -220,7 +220,9 @@ def test_unload_uses_same_v3_platforms() -> None:
 
     assert asyncio.run(async_unload_entry(hass, entry)) is True
 
-    assert hass.config_entries.unloaded == [(entry, ("climate", "number"))]
+    assert hass.config_entries.unloaded == [
+        (entry, ("climate", "number", "sensor"))
+    ]
 
 
 def test_config_form_has_exactly_three_fields() -> None:
