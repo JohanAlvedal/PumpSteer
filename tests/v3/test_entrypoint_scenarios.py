@@ -220,9 +220,7 @@ def test_unload_uses_same_v3_platforms() -> None:
 
     assert asyncio.run(async_unload_entry(hass, entry)) is True
 
-    assert hass.config_entries.unloaded == [
-        (entry, ("climate", "number", "sensor"))
-    ]
+    assert hass.config_entries.unloaded == [(entry, ("climate", "number", "sensor"))]
 
 
 def test_config_form_has_exactly_three_fields() -> None:
