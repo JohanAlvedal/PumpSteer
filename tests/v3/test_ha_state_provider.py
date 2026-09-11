@@ -1,9 +1,28 @@
 """Tests for Home Assistant state timestamp handling in PumpSteer V3."""
 
+import sys
+import types
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-from custom_components.pumpsteer.v3.ha.coordinator import HomeAssistantStateProvider
+
+update_coordinator = types.ModuleType("homeassistant.helpers.update_coordinator")
+
+
+class DataUpdateCoordinator:
+    """Minimal coordinator stub required to import the HA adapter."""
+
+    @classmethod
+    def __class_getitem__(cls, _item):
+        return cls
+
+
+update_coordinator.DataUpdateCoordinator = DataUpdateCoordinator
+sys.modules["homeassistant.helpers.update_coordinator"] = update_coordinator
+
+from custom_components.pumpsteer.v3.ha.coordinator import (  # noqa: E402
+    HomeAssistantStateProvider,
+)
 
 
 NOW = datetime(2026, 9, 11, 10, 0, tzinfo=UTC)
