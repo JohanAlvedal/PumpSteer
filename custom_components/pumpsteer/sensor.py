@@ -25,8 +25,8 @@ async def async_setup_entry(
 
 
 def __getattr__(name: str):
-    """Keep legacy class imports working without loading V2 during V3 setup."""
-    if name in {"PumpSteerSensor", "ThermalOutlookSensor"}:
+    """Keep legacy imports working without loading V2 during V3 setup."""
+    if name in {"PumpSteerSensor", "ThermalOutlookSensor", "MODE_SAFE"}:
         from . import sensor_v2
 
         return getattr(sensor_v2, name)
