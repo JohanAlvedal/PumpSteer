@@ -1,0 +1,60 @@
+name: Temporary CI repair
+
+on:
+  push:
+    branches: [v3-development]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio pylint homeassistant pytest-homeassistant-custom-component
+          pip install ruff==0.15.8
+
+      - name: Format repository
+        run: ruff format .
+
+      - name: Commit formatting if needed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -u
+          if git diff --cached --quiet; then
+            echo "No formatting changes required"
+          else
+            git commit -m "ci: apply Ruff formatting"
+            git push
+          fi
+
+      - name: Run pytest diagnostics
+        shell: bash
+        run: |
+          set +e
+          pytest tests/ -q --tb=short > .ci_pytest_diagnostics.txt 2>&1
+          status=$?
+          echo "PYTEST_EXIT_CODE=$status" >> .ci_pytest_diagnostics.txt
+          exit 0
+
+      - name: Commit pytest diagnostics
+        run: |
+          git add -f .ci_pytest_diagnostics.txt
+          if git diff --cached --quiet; then
+            echo "No diagnostic changes"
+          else
+            git commit -m "ci: capture pytest diagnostics"
+            git push
+          fi
