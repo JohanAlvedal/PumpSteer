@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from custom_components.pumpsteer.v3 import (
     ComfortPolicy,
     ControlState,
@@ -73,8 +75,8 @@ def test_authorized_predicted_comfort_risk_enables_bounded_preheat() -> None:
 
     assert plan.active
     assert plan.reason is PreheatReason.PREHEAT_REQUIRED
-    assert plan.effective_target_temperature == 21.8
-    assert plan.target_lift_c == 0.8
+    assert plan.effective_target_temperature == pytest.approx(21.8)
+    assert plan.target_lift_c == pytest.approx(0.8)
     assert plan.effective_target_temperature <= policy.maximum_temperature
 
 
