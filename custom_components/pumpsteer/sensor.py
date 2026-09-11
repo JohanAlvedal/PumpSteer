@@ -1,4 +1,4 @@
-"""Version-aware sensor platform dispatcher for PumpSteer."""
+"""Sensor platform for PumpSteer V3 with legacy import compatibility."""
 
 from __future__ import annotations
 
@@ -12,16 +12,10 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the sensor platform for the active PumpSteer generation."""
-    if getattr(config_entry, "version", 1) >= 3:
-        from .v3.ha.virtual_sensor import async_setup_virtual_sensor
+    """Set up the PumpSteer V3 sensor platform."""
+    from .v3.ha.virtual_sensor import async_setup_virtual_sensor
 
-        await async_setup_virtual_sensor(hass, config_entry, async_add_entities)
-        return
-
-    from .sensor_v2 import async_setup_entry as async_setup_v2_sensors
-
-    await async_setup_v2_sensors(hass, config_entry, async_add_entities)
+    await async_setup_virtual_sensor(hass, config_entry, async_add_entities)
 
 
 def __getattr__(name: str):
