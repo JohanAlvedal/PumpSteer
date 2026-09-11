@@ -18,7 +18,9 @@ from custom_components.pumpsteer.v3.control.engine import ControlEngine, EngineS
 NOW = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
 
 
-def _temperature(value: float, source: str, *, observed_at: datetime = NOW) -> SensorReading:
+def _temperature(
+    value: float, source: str, *, observed_at: datetime = NOW
+) -> SensorReading:
     """Create one temperature reading for a deterministic control cycle."""
     return SensorReading(value, observed_at, Unit.CELSIUS, source)
 
@@ -40,9 +42,7 @@ def _observation(
         indoor=_temperature(20.0, "indoor.test"),
         outdoor=_temperature(-5.0, "outdoor.test"),
         electricity_price=(
-            _price(1.25, observed_at=optional_observed_at)
-            if include_price
-            else None
+            _price(1.25, observed_at=optional_observed_at) if include_price else None
         ),
         forecast_outdoor=(
             (_temperature(-6.0, "weather.test", observed_at=optional_observed_at),)
