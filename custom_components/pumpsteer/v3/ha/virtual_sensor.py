@@ -60,7 +60,9 @@ class PumpSteerVirtualOutdoorSensor(CoordinatorEntity, SensorEntity):
         observation = latest.observation
         engine_result = getattr(latest, "engine_result", None)
         preheat_plan = getattr(engine_result, "preheat_plan", None)
-        requested = latest.requested
+        requested = getattr(latest, "requested", None)
+        input_reasons = getattr(engine_result, "input_reasons", ())
+        constraints = getattr(latest.supervised, "constraints", ())
         return {
             "mode": str(decision.state.value),
             "real_outdoor_temperature": (
@@ -88,13 +90,9 @@ class PumpSteerVirtualOutdoorSensor(CoordinatorEntity, SensorEntity):
             "heating_request": round(float(decision.heating_request), 2),
             "curtailment": round(float(decision.curtailment), 2),
             "reason_codes": [str(reason.value) for reason in decision.reason_codes],
-            "input_reasons": [
-                str(reason.value) for reason in latest.engine_result.input_reasons
-            ],
-            "constraints": [
-                str(constraint.value) for constraint in latest.supervised.constraints
-            ],
-            "runtime_error": latest.error,
+            "input_reasons": [str(reason.value) for reason in input_reasons],
+            "constraints": [str(constraint.value) for constraint in constraints],
+            "runtime_error": getattr(latest, "error", None),
             "fallback_active": bool(latest.supervised.fallback_active),
             "physical_output_active": bool(latest.supervised.apply_physical),
             "preheat_active": bool(preheat_plan and preheat_plan.active),
