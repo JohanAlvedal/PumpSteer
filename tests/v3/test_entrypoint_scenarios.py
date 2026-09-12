@@ -92,6 +92,7 @@ class FakeEntry:
             CONF_OUTDOOR_ENTITY: OUTDOOR,
             CONF_TARGET_TEMPERATURE: 21.0,
         }
+        self.options = {}
         self.runtime_data = None
         self.unload_callbacks: list = []
         self.update_listener = None
@@ -128,11 +129,11 @@ def _coordinator_module() -> ModuleType:
         def __init__(self, hass, runtime) -> None:
             self.hass = hass
             self.runtime = runtime
-            self.first_refreshes = 0
+            self.refreshes = 0
             self.cleanup_calls = 0
 
-        async def async_config_entry_first_refresh(self) -> None:
-            self.first_refreshes += 1
+        async def async_refresh(self) -> None:
+            self.refreshes += 1
             await self.runtime.async_update(START)
 
         def async_start_source_tracking(self):
@@ -169,7 +170,7 @@ def test_setup_owns_runtime_per_entry_and_loads_v3_platforms(monkeypatch) -> Non
     assert (
         first.runtime_data.learning_runtime is not second.runtime_data.learning_runtime
     )
-    assert first.runtime_data.coordinator.first_refreshes == 1
+    assert first.runtime_data.coordinator.refreshes == 1
     assert first.runtime_data.runtime.latest is not None
     assert first.runtime_data.runtime.latest.supervised.apply_physical is False
     assert len(first.unload_callbacks) == 3
@@ -178,6 +179,27 @@ def test_setup_owns_runtime_per_entry_and_loads_v3_platforms(monkeypatch) -> Non
         cleanup()
     assert first.runtime_data.coordinator.cleanup_calls == 1
     assert first.runtime_data.learning_runtime.snapshot.status.value == "stopped"
+
+
+def test_setup_loads_platforms_when_required_sensor_is_unavailable(monkeypatch) -> None:
+    """An initial sensor failure must not prevent V3 entities from loading."""
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.pumpsteer.v3.ha.coordinator",
+        _coordinator_module(),
+    )
+    hass = FakeHass()
+    hass.states.values[INDOOR].state = "unavailable"
+    entry = FakeEntry("startup-failsafe")
+
+    assert asyncio.run(async_setup_entry(hass, entry)) is True
+
+    assert hass.config_entries.forwarded == [
+        (entry, ("climate", "number", "sensor")),
+    ]
+    assert entry.runtime_data.runtime.latest is not None
+    assert entry.runtime_data.runtime.latest.supervised.fallback_active is True
+    assert entry.runtime_data.runtime.latest.supervised.decision.state.value == "failsafe"
 
 
 def test_active_ohmon_entry_starts_bypassed_then_publishes_temperature_and_on(
