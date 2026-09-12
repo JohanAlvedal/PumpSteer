@@ -34,7 +34,10 @@
           "notify_service": "Notifieringstjänst (valfri, t.ex. notify.mobile_app_min_telefon)",
           "preheat_boost_enabled": "Aktivera förvärmning",
           "ohmigo_entity": "Ohmigo-entitet (valfri)",
-          "ohmigo_interval_minutes": "Ohmigo push-intervall"
+          "ohmigo_interval_minutes": "Ohmigo push-intervall",
+          "modbus_service": "Generisk utgångstjänst",
+          "modbus_payload_template": "Mall för generisk utgångspayload",
+          "modbus_interval_minutes": "Intervall för generisk utgång"
         },
         "data_description": {
           "pid_kp": "Hur kraftigt PumpSteer reagerar på aktuell temperaturdifferens. Typiskt intervall: 2,0 till 5,0.",
@@ -45,7 +48,10 @@
           "notify_service": "Lämna tomt för att använda beständiga notifieringar i HA:s sidofält istället.",
           "preheat_boost_enabled": "När aktiverad värmer PumpSteer extra inför dyra perioder för att bygga upp termisk massa.",
           "ohmigo_entity": "PumpSteer skickar den virtuella utetemperaturen till den här entiteten efter varje uppdatering. Lämna tomt för att inaktivera. Slå av/på utan att konfigurera om via brytaren 'Ohmigo Push'.",
-          "ohmigo_interval_minutes": "Minsta tid mellan push-uppdateringar till Ohmigo. Standard 5 minuter. Push hoppas även över om förändringen är mindre än 0,2 °C."
+          "ohmigo_interval_minutes": "Minsta tid mellan push-uppdateringar till Ohmigo. Standard 5 minuter. Push hoppas även över om förändringen är mindre än 0,2 °C.",
+          "modbus_service": "Home Assistant-tjänsten som ska anropas, till exempel modbus.write_register, mqtt.publish eller input_number.set_value.",
+          "modbus_payload_template": "YAML-mall för tjänsteanropets payload. Mallen kan använda {{ fake_temp }}.",
+          "modbus_interval_minutes": "Minsta tid mellan anrop från Generic Output System."
         }
       }
     },
