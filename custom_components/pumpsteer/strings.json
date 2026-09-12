@@ -39,7 +39,10 @@
           "min_brake_strength": "Minimum brake strength",
           "max_brake_strength": "Maximum brake strength",
           "experimental_ml_enabled": "Enable Experimental ML",
-          "price_tomorrow_entity": "Tomorrow electricity price sensor"
+          "price_tomorrow_entity": "Tomorrow electricity price sensor",
+          "modbus_service": "Generic output service",
+          "modbus_payload_template": "Generic output payload template",
+          "modbus_interval_minutes": "Generic output push interval"
         },
         "data_description": {
           "pid_kp": "How strongly PumpSteer reacts to current temperature error. Typical range: 2.0 to 5.0.",
@@ -50,7 +53,10 @@
           "pi_price_feedforward_gain": "How much the electricity price affects the pump before a temp drop occurs.",
           "brake_ramp_in_minutes": "How many minutes to transition from normal operation to full brake. Protects the compressor.",
           "experimental_ml_enabled": "Uses historical data to learn your house's thermal inertia automatically.",
-          "pid_kd": "How much PumpSteer reacts to fast temperature changes. Keep at 0.0 unless you tune it intentionally."
+          "pid_kd": "How much PumpSteer reacts to fast temperature changes. Keep at 0.0 unless you tune it intentionally.",
+          "modbus_service": "Home Assistant service to call, for example modbus.write_register, mqtt.publish or input_number.set_value.",
+          "modbus_payload_template": "YAML payload template for the service call. The template can use {{ fake_temp }}.",
+          "modbus_interval_minutes": "Minimum time between Generic Output System service calls."
         }
       }
     },
