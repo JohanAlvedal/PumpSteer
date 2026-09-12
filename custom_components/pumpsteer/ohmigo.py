@@ -103,7 +103,9 @@ async def async_push_modbus(
             service_data,
             blocking=False,
         )
-        _LOGGER.debug("Generic output push: %s → fake_temp=%.1f °C", service_str, fake_temp)
+        _LOGGER.debug(
+            "Generic output push: %s → fake_temp=%.1f °C", service_str, fake_temp
+        )
         return now
     except Exception as err:
         _LOGGER.warning("Generic output push failed (%s): %s", service_str, err)
