@@ -1,4 +1,4 @@
-"""PumpSteer — Ohmigo setpoint push logic."""
+"""PumpSteer output push logic for Ohmigo and Generic Output System."""
 
 from __future__ import annotations
 
@@ -16,6 +16,14 @@ from .settings import OHMIGO_DEFAULT_INTERVAL_MINUTES, OHMIGO_HYSTERESIS_C
 
 _LOGGER = logging.getLogger(__name__)
 
+_MODBUS_DEFAULT_INTERVAL_MINUTES: float = 5.0
+
+# GOS used to keep its last-push timestamp in sensor.py. Version 2.1.2 lost
+# that runtime path together with the options fields. Keep the timestamp in
+# the output module for the hotfix so GOS remains independent from Ohmigo
+# timing without replacing or downgrading the current sensor implementation.
+_modbus_last_push_by_entry: dict[str, datetime] = {}
+
 
 def _switch_entity_id(hass: HomeAssistant, entry_id: str) -> Optional[str]:
     registry = er.async_get(hass)
@@ -32,12 +40,110 @@ def _ohmigo_push_enabled(hass: HomeAssistant, entry_id: str) -> bool:
     return state.state == "on"
 
 
+async def async_push_modbus(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    fake_temp: float,
+    last_push_time: Optional[datetime],
+) -> Optional[datetime]:
+    """Push fake_temp through a configurable Home Assistant service call."""
+    cfg = {**entry.data, **entry.options}
+    service_str: str = str(cfg.get("modbus_service", "")).strip()
+    if not service_str:
+        return last_push_time
+
+    interval_minutes: float = float(
+        cfg.get("modbus_interval_minutes", _MODBUS_DEFAULT_INTERVAL_MINUTES)
+    )
+    now = dt_util.now()
+    if last_push_time is not None:
+        elapsed = (now - last_push_time).total_seconds() / 60.0
+        if elapsed < interval_minutes:
+            return last_push_time
+
+    if "." not in service_str:
+        _LOGGER.warning(
+            "modbus_service '%s' is not valid (expected 'domain.service')", service_str
+        )
+        return last_push_time
+
+    domain, service = service_str.split(".", 1)
+
+    payload_template: str = str(cfg.get("modbus_payload_template", "")).strip()
+    if not payload_template:
+        _LOGGER.warning("modbus_service is set but modbus_payload_template is empty")
+        return last_push_time
+
+    try:
+        from homeassistant.helpers import template as template_helper
+
+        tmpl = template_helper.Template(payload_template, hass)
+        rendered = tmpl.async_render({"fake_temp": fake_temp})
+    except Exception as err:
+        _LOGGER.warning("modbus_payload_template render failed: %s", err)
+        return last_push_time
+
+    if isinstance(rendered, dict):
+        service_data = rendered
+    else:
+        try:
+            import yaml
+
+            service_data = yaml.safe_load(str(rendered))
+            if not isinstance(service_data, dict):
+                raise ValueError(f"Expected dict, got {type(service_data)}")
+        except Exception as err:
+            _LOGGER.warning("modbus_payload_template did not produce a dict: %s", err)
+            return last_push_time
+
+    try:
+        await hass.services.async_call(
+            domain,
+            service,
+            service_data,
+            blocking=False,
+        )
+        _LOGGER.debug("Generic output push: %s → fake_temp=%.1f °C", service_str, fake_temp)
+        return now
+    except Exception as err:
+        _LOGGER.warning("Generic output push failed (%s): %s", service_str, err)
+        return last_push_time
+
+
+async def _async_push_generic_output(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    fake_temp: float,
+) -> None:
+    """Run GOS independently from Ohmigo while keeping its own interval state."""
+    cfg = {**entry.data, **entry.options}
+    service_str = str(cfg.get("modbus_service", "")).strip()
+
+    if not service_str:
+        _modbus_last_push_by_entry.pop(entry.entry_id, None)
+        return
+
+    last_push_time = _modbus_last_push_by_entry.get(entry.entry_id)
+    updated_last_push = await async_push_modbus(
+        hass,
+        entry,
+        fake_temp,
+        last_push_time,
+    )
+    if updated_last_push is not None:
+        _modbus_last_push_by_entry[entry.entry_id] = updated_last_push
+
+
 async def async_push_ohmigo(
     hass: HomeAssistant,
     entry: ConfigEntry,
     fake_temp: float,
     last_push_time: Optional[datetime],
 ) -> Optional[datetime]:
+    """Push fake_temp to GOS and, when configured, to an Ohmigo number entity."""
+    # GOS is independent from Ohmigo and must run even if no Ohmigo entity is configured.
+    await _async_push_generic_output(hass, entry, fake_temp)
+
     cfg = {**entry.data, **entry.options}
     ohmigo_entity: str = cfg.get("ohmigo_entity", "")
     if not ohmigo_entity:
