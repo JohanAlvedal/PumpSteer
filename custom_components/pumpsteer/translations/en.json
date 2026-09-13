@@ -33,7 +33,10 @@
           "notify_service": "Notification service (optional, e.g. notify.mobile_app_my_phone)",
           "preheat_boost_enabled": "Enable preheat boost",
           "ohmigo_entity": "Ohmigo setpoint entity (optional)",
-          "ohmigo_interval_minutes": "Ohmigo push interval"
+          "ohmigo_interval_minutes": "Ohmigo push interval",
+          "modbus_service": "Generic output service",
+          "modbus_payload_template": "Generic output payload template",
+          "modbus_interval_minutes": "Generic output push interval"
         },
         "data_description": {
           "pid_kp": "How strongly PumpSteer reacts to current temperature error. Typical range: 2.0 to 5.0.",
@@ -44,7 +47,10 @@
           "notify_service": "Leave empty to use persistent notifications in the HA sidebar instead.",
           "preheat_boost_enabled": "When enabled, PumpSteer heats extra before expensive periods to build up thermal mass.",
           "ohmigo_entity": "PumpSteer will push the fake outdoor temperature to this number entity after each update. Leave empty to disable. Toggle without reconfiguring using the 'Ohmigo Push' switch.",
-          "ohmigo_interval_minutes": "Minimum time between pushes to Ohmigo. Default 5 minutes. Pushes are also skipped when the change is less than 0.2 °C."
+          "ohmigo_interval_minutes": "Minimum time between pushes to Ohmigo. Default 5 minutes. Pushes are also skipped when the change is less than 0.2 °C.",
+          "modbus_service": "Home Assistant service to call, for example modbus.write_register, mqtt.publish or input_number.set_value.",
+          "modbus_payload_template": "YAML payload template for the service call. The template can use {{ fake_temp }}.",
+          "modbus_interval_minutes": "Minimum time between Generic Output System service calls."
         }
       }
     },
