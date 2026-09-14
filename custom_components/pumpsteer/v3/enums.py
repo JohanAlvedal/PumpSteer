@@ -42,6 +42,7 @@ class ReasonCode(StrEnum):
     """Stable, machine-readable explanations for control decisions."""
 
     COMFORT_BELOW_TARGET = "comfort_below_target"
+    COMFORT_ABOVE_TARGET = "comfort_above_target"
     COMFORT_WITHIN_BAND = "comfort_within_band"
     PREDICTED_COMFORT_RISK = "predicted_comfort_risk"
     PRICE_SHIFT_BENEFICIAL = "price_shift_beneficial"
@@ -50,6 +51,9 @@ class ReasonCode(StrEnum):
     CRITICAL_SENSOR_INVALID = "critical_sensor_invalid"
     CRITICAL_SENSOR_STALE = "critical_sensor_stale"
     SENSOR_TIME_REGRESSION = "sensor_time_regression"
+    SENSOR_OUT_OF_RANGE = "sensor_out_of_range"
+    STARTUP_BASELINE = "startup_baseline"
+    RECOVERY_VALIDATION_PENDING = "recovery_validation_pending"
     OUTPUT_RATE_LIMITED = "output_rate_limited"
     OUTPUT_SATURATED = "output_saturated"
     MODEL_OUTSIDE_VALID_DOMAIN = "model_outside_valid_domain"

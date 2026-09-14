@@ -2,20 +2,19 @@
   "domain": "pumpsteer",
   "name": "PumpSteer",
   "after_dependencies": [
-    "logbook"
+    "logbook",
+    "mqtt",
+    "recorder"
   ],
   "codeowners": [
     "@johanalvedal"
   ],
   "config_flow": true,
-  "dependencies": [
-    "mqtt",
-    "recorder"
-  ],
+  "dependencies": [],
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/JohanAlvedal/pumpsteer/issues",
   "requirements": [],
-  "version": "3.0.0-alpha.5"
+  "version": "3.0.0-alpha.6"
 }

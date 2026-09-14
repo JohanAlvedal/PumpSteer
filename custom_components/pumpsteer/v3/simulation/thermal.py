@@ -11,10 +11,10 @@ kWh/K, conductances are kW/K, and time constants are seconds.
 
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
 import math
 import random
+from collections import deque
+from dataclasses import dataclass
 from typing import Deque
 
 
@@ -70,6 +70,62 @@ class ActuatorConfig:
             raise ValueError("source_time_constant_seconds cannot be negative")
         if self.emitter_time_constant_seconds < 0:
             raise ValueError("emitter_time_constant_seconds cannot be negative")
+
+
+@dataclass(frozen=True)
+class VirtualOutdoorCurve:
+    """Translate a virtual outdoor temperature into normalized heat demand.
+
+    This is a deliberately small heat-pump curve model for closed-loop tests.
+    A colder virtual temperature requests more heat; temperatures at or above
+    ``heating_stop_c`` request no heat, while ``design_outdoor_c`` and colder
+    request the configured maximum. The model keeps controller degrees and
+    actuator power separate instead of treating them as interchangeable units.
+    """
+
+    design_outdoor_c: float = -20.0
+    heating_stop_c: float = 17.0
+    minimum_command: float = 0.0
+    maximum_command: float = 1.0
+    exponent: float = 1.0
+
+    def __post_init__(self) -> None:
+        for name in (
+            "design_outdoor_c",
+            "heating_stop_c",
+            "minimum_command",
+            "maximum_command",
+            "exponent",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise TypeError(f"{name} must be numeric")
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                raise ValueError(f"{name} must be finite")
+            object.__setattr__(self, name, numeric)
+        if self.design_outdoor_c >= self.heating_stop_c:
+            raise ValueError("design_outdoor_c must be below heating_stop_c")
+        if not 0.0 <= self.minimum_command <= self.maximum_command <= 1.0:
+            raise ValueError("commands must satisfy 0 <= minimum <= maximum <= 1")
+        if self.exponent <= 0.0:
+            raise ValueError("exponent must be positive")
+
+    def command_for(self, virtual_outdoor_c: float) -> float:
+        """Return bounded normalized heat demand for one virtual temperature."""
+        if isinstance(virtual_outdoor_c, bool) or not isinstance(
+            virtual_outdoor_c, (int, float)
+        ):
+            raise TypeError("virtual_outdoor_c must be numeric")
+        temperature = float(virtual_outdoor_c)
+        if not math.isfinite(temperature):
+            raise ValueError("virtual_outdoor_c must be finite")
+        span = self.heating_stop_c - self.design_outdoor_c
+        position = min(1.0, max(0.0, (self.heating_stop_c - temperature) / span))
+        shaped = position**self.exponent
+        return self.minimum_command + shaped * (
+            self.maximum_command - self.minimum_command
+        )
 
 
 @dataclass(frozen=True)

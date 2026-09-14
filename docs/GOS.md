@@ -6,6 +6,29 @@ nav_order: 7
 
 # 🔌 Generic Output System (GOS)
 
+## V3 comfort-beta contract
+
+V3 includes a new fail-safe GOS adapter. It is not the unrestricted V2 output path.
+Active V3 GOS requires all of the following:
+
+- a normal `domain.service` command and YAML/Jinja payload using `fake_temp`,
+- a separate static safe/bypass service and payload,
+- explicit confirmation that the safe action has been tested,
+- successful safe-action execution during integration startup.
+
+The adapter requests the safe action during startup, shutdown, controller fail-safe,
+normal-write failure, and software-watchdog timeout. A write fault is latched; normal
+physical writes remain blocked until the integration is successfully reloaded.
+
+Without explicit device feedback, diagnostics report only that a command was sent, not
+that the actuator changed. The software watchdog can act while Home Assistant's event
+loop is alive. It cannot act if the complete Home Assistant process, host, network, or
+power supply fails. Hardware with its own independently verified watchdog/bypass is
+therefore strongly recommended for physical beta testing.
+
+The examples below document the older V2 experimental interface. They remain useful as
+payload examples, but they do not by themselves satisfy the V3 safe-action contract.
+
 ## Overview
 
 The PumpSteer Generic Output System (GOS) allows PumpSteer to send its calculated

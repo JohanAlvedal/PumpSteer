@@ -13,8 +13,11 @@ from custom_components.pumpsteer.v3 import (
     SensorReading,
     Unit,
 )
-from custom_components.pumpsteer.v3.control.engine import ControlEngine, EngineState
-
+from custom_components.pumpsteer.v3.control.engine import (
+    ControlEngine,
+    ControlEngineConfig,
+    EngineState,
+)
 
 NOW = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
 
@@ -25,6 +28,8 @@ def make_observation(
     indoor_observed_at: datetime | None = None,
     outdoor_observed_at: datetime | None = None,
     with_optional_data: bool = False,
+    indoor: float = 20.0,
+    outdoor: float = -5.0,
 ) -> Observation:
     indoor_at = indoor_observed_at or now
     outdoor_at = outdoor_observed_at or now
@@ -40,8 +45,8 @@ def make_observation(
     )
     return Observation(
         captured_at=now,
-        indoor=SensorReading(20.0, indoor_at, Unit.CELSIUS, "indoor.test"),
-        outdoor=SensorReading(-5.0, outdoor_at, Unit.CELSIUS, "outdoor.test"),
+        indoor=SensorReading(indoor, indoor_at, Unit.CELSIUS, "indoor.test"),
+        outdoor=SensorReading(outdoor, outdoor_at, Unit.CELSIUS, "outdoor.test"),
         electricity_price=price,
         forecast_outdoor=forecast,
     )
@@ -90,6 +95,183 @@ def test_optional_price_and_weather_do_not_change_comfort_only_result() -> None:
 
     assert without_optional.requested_decision == with_optional.requested_decision
     assert without_optional.supervised_output == with_optional.supervised_output
+
+
+def test_above_target_requests_comfort_curtailment_with_explainable_reason() -> None:
+    result = run(ControlEngine(), observation=make_observation(indoor=22.0))
+
+    assert result.requested_decision is not None
+    assert result.requested_decision.heating_request == 0.0
+    assert result.requested_decision.curtailment > 0.0
+    assert result.requested_decision.virtual_temperature > -5.0
+    assert ReasonCode.COMFORT_ABOVE_TARGET in result.requested_decision.reason_codes
+
+
+def test_first_active_command_uses_outdoor_as_slew_limited_startup_baseline() -> None:
+    result = run(ControlEngine(), observation=make_observation(indoor=15.0))
+
+    assert result.requested_decision is not None
+    assert result.requested_decision.heating_request > 2.0
+    assert result.supervised_output.value == pytest.approx(-6.0)
+    assert ReasonCode.OUTPUT_RATE_LIMITED in (
+        result.supervised_output.decision.reason_codes
+    )
+
+
+def test_summer_passthrough_has_hysteresis_and_clears_integral() -> None:
+    engine = ControlEngine(
+        config=ControlEngineConfig(summer_threshold=18.0, summer_hysteresis=1.0)
+    )
+    entered = run(engine, observation=make_observation(outdoor=18.0))
+    assert entered.supervised_output.decision.state is ControlState.SUMMER_PASSTHROUGH
+    assert entered.supervised_output.fallback_active is True
+    assert entered.supervised_output.value == 18.0
+    assert entered.next_state.summer_passthrough_active
+
+    within_hysteresis_at = NOW + timedelta(minutes=1)
+    held = run(
+        engine,
+        observation=make_observation(now=within_hysteresis_at, outdoor=17.5),
+        state=entered.next_state,
+        now=within_hysteresis_at,
+    )
+    assert held.supervised_output.decision.state is ControlState.SUMMER_PASSTHROUGH
+    assert held.supervised_output.value == 17.5
+    assert held.next_state.comfort.integral == 0.0
+
+    exit_at = within_hysteresis_at + timedelta(minutes=1)
+    exited = run(
+        engine,
+        observation=make_observation(now=exit_at, outdoor=17.0),
+        state=held.next_state,
+        now=exit_at,
+    )
+    assert exited.supervised_output.decision.state is ControlState.COMFORT
+    assert not exited.next_state.summer_passthrough_active
+
+
+def test_recovery_requires_three_consecutive_valid_observations() -> None:
+    engine = ControlEngine(config=ControlEngineConfig(recovery_valid_observations=3))
+    stale = NOW - timedelta(minutes=11)
+    failed = run(
+        engine,
+        observation=make_observation(indoor_observed_at=stale),
+    )
+    assert failed.next_state.recovery_required
+
+    state = failed.next_state
+    for cycle in (1, 2):
+        now = NOW + timedelta(minutes=cycle)
+        recovering = run(
+            engine,
+            observation=make_observation(now=now),
+            state=state,
+            now=now,
+        )
+        assert recovering.supervised_output.decision.state is ControlState.RECOVERY
+        assert recovering.supervised_output.fallback_active is True
+        assert recovering.supervised_output.value == -5.0
+        assert ReasonCode.RECOVERY_VALIDATION_PENDING in (
+            recovering.supervised_output.decision.reason_codes
+        )
+        state = recovering.next_state
+
+    recovered_at = NOW + timedelta(minutes=3)
+    recovered = run(
+        engine,
+        observation=make_observation(now=recovered_at),
+        state=state,
+        now=recovered_at,
+    )
+    assert recovered.supervised_output.decision.state is ControlState.COMFORT
+    assert not recovered.next_state.recovery_required
+
+
+def test_invalid_observation_resets_recovery_streak() -> None:
+    engine = ControlEngine()
+    stale = NOW - timedelta(minutes=11)
+    failed = run(
+        engine,
+        observation=make_observation(indoor_observed_at=stale),
+    )
+    first_valid_at = NOW + timedelta(minutes=1)
+    first_valid = run(
+        engine,
+        observation=make_observation(now=first_valid_at),
+        state=failed.next_state,
+        now=first_valid_at,
+    )
+    assert first_valid.next_state.consecutive_valid_observations == 1
+
+    failed_again_at = NOW + timedelta(minutes=2)
+    stale_again = failed_again_at - timedelta(minutes=11)
+    failed_again = run(
+        engine,
+        observation=make_observation(
+            now=failed_again_at,
+            indoor_observed_at=stale_again,
+        ),
+        state=first_valid.next_state,
+        now=failed_again_at,
+    )
+    assert failed_again.next_state.recovery_required
+    assert failed_again.next_state.consecutive_valid_observations == 0
+
+
+def test_recovery_does_not_count_repeated_source_timestamps_twice() -> None:
+    engine = ControlEngine()
+    stale = NOW - timedelta(minutes=11)
+    failed = run(
+        engine,
+        observation=make_observation(indoor_observed_at=stale),
+    )
+    first_valid_at = NOW + timedelta(minutes=1)
+    first_valid = run(
+        engine,
+        observation=make_observation(now=first_valid_at),
+        state=failed.next_state,
+        now=first_valid_at,
+    )
+
+    next_cycle_at = NOW + timedelta(minutes=2)
+    repeated = run(
+        engine,
+        observation=make_observation(
+            now=next_cycle_at,
+            indoor_observed_at=first_valid_at,
+            outdoor_observed_at=first_valid_at,
+        ),
+        state=first_valid.next_state,
+        now=next_cycle_at,
+    )
+
+    assert repeated.supervised_output.decision.state is ControlState.RECOVERY
+    assert repeated.next_state.consecutive_valid_observations == 1
+
+
+@pytest.mark.parametrize(
+    ("indoor", "outdoor", "specific_reason"),
+    [
+        (4.9, -5.0, ReasonCode.INDOOR_SENSOR_INVALID),
+        (35.1, -5.0, ReasonCode.INDOOR_SENSOR_INVALID),
+        (20.0, -50.1, ReasonCode.OUTDOOR_SENSOR_INVALID),
+        (20.0, 50.1, ReasonCode.OUTDOOR_SENSOR_INVALID),
+    ],
+)
+def test_implausible_critical_temperature_enters_failsafe(
+    indoor: float,
+    outdoor: float,
+    specific_reason: ReasonCode,
+) -> None:
+    result = run(
+        ControlEngine(),
+        observation=make_observation(indoor=indoor, outdoor=outdoor),
+    )
+
+    assert result.requested_decision is None
+    assert result.supervised_output.decision.state is ControlState.FAILSAFE
+    assert specific_reason in result.input_reasons
+    assert ReasonCode.SENSOR_OUT_OF_RANGE in result.input_reasons
 
 
 def test_stale_indoor_enters_failsafe_and_passes_through_outdoor() -> None:

@@ -10,6 +10,29 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
+## [3.0.0-alpha.6] — Comfort-beta safety foundation and GOS
+
+### Added
+
+- Bidirectional bounded comfort control, comfort floor/ceiling, and summer
+  passthrough with hysteresis.
+- Plausibility bounds, multi-observation recovery guard, and a safe startup output
+  baseline.
+- V3 Generic Output System with an obligatory tested safe action, timeouts, software
+  watchdog, fault latch, and optional feedback contract.
+- Configurable comfort boundaries, summer policy, critical-sensor age, and recovery
+  observation count.
+- Explicit virtual-outdoor heat curve in closed-loop simulation.
+
+### Safety
+
+- V2 config entries are no longer destructively migrated; V3 beta testing requires a
+  separate test installation until a reversible migration exists.
+- MQTT and Recorder are optional capabilities rather than installation-blocking
+  dependencies.
+- Price, weather, saving level, and learning retain zero physical-control authority.
+- CI and release packaging now require the complete pytest suite.
+
 ## [3.0.0-alpha.5] — Active OhmOnWiFi test output
 
 ### Added

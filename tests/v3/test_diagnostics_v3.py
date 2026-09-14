@@ -24,11 +24,14 @@ from custom_components.pumpsteer.v3.control.supervisor import (
     SupervisedOutput,
 )
 from custom_components.pumpsteer.v3.enums import LearningStage
+from custom_components.pumpsteer.v3.ha.generic_output import (
+    GenericOutputSnapshot,
+    GenericOutputState,
+)
 from custom_components.pumpsteer.v3.ha.learning_runtime import (
     LearningRuntimeStatus,
     LearningSnapshot,
 )
-
 
 NOW = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
 
@@ -115,6 +118,39 @@ def test_diagnostics_maps_changed_and_disabled_saving_levels() -> None:
     assert disabled["price_classification_requested"] is False
     assert disabled["cheap_percentile"] is None
     assert disabled["expensive_percentile"] is None
+
+
+def test_diagnostics_redacts_gos_configuration_and_reports_ack_truthfully() -> None:
+    entry = entry_with_latest(None)
+    entry.runtime_data.runtime.physical_control_enabled = True
+    entry.runtime_data.runtime.output = SimpleNamespace(
+        command_service="secret.service",
+        command_payload_template="token: secret",
+        snapshot=GenericOutputSnapshot(
+            state=GenericOutputState.ACTIVE_COMMAND_SENT,
+            attempted_at=NOW,
+            commanded_temperature=-4.5,
+            service_call_count=2,
+            acknowledged=None,
+        ),
+    )
+
+    result = asyncio.run(async_get_config_entry_diagnostics(None, entry))
+    output = result["physical_output"]
+    encoded = json.dumps(output)
+
+    assert output == {
+        "mode": "generic_output",
+        "state": "active_command_sent",
+        "physical_control_enabled": True,
+        "attempted_at": NOW.isoformat(),
+        "commanded_temperature": -4.5,
+        "last_error": None,
+        "service_call_count": 2,
+        "acknowledged": None,
+    }
+    assert "secret" not in encoded
+    assert "template" not in encoded
 
 
 def test_diagnostics_contains_only_defined_runtime_snapshot() -> None:

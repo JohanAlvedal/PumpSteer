@@ -6,6 +6,7 @@ from .comfort_controller import (
     ComfortControllerResult,
     ComfortControllerState,
 )
+from .engine import ControlEngineConfig
 from .preheat import (
     AutomaticPreheatPolicy,
     PreheatContext,
@@ -26,6 +27,7 @@ __all__ = [
     "ComfortControllerConfig",
     "ComfortControllerResult",
     "ComfortControllerState",
+    "ControlEngineConfig",
     "OutputConstraint",
     "PreheatContext",
     "PreheatPlan",

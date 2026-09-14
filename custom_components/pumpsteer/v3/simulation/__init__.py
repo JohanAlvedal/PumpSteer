@@ -7,6 +7,7 @@ from .thermal import (
     SensorFault,
     SimulationSample,
     ThermalSimulator,
+    VirtualOutdoorCurve,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "SensorFault",
     "SimulationSample",
     "ThermalSimulator",
+    "VirtualOutdoorCurve",
 ]

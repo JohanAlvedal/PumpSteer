@@ -7,6 +7,13 @@ nav_order: 3
 # ⚙️ Configuration Reference
 {: .no_toc }
 
+{: .warning }
+This page primarily documents V2. V3 alpha 6 exposes target temperature and saving
+level as entities, plus sensor, output, comfort-boundary, summer-mode, sensor-age, and
+recovery settings under Configure. In the first V3 comfort beta, saving level and
+observation-only learning have no physical-control authority. See
+[V3 beta rollout](V3_BETA_ROLLOUT.md).
+
 <details open markdown="block">
   <summary>Contents</summary>
   {: .text-delta }

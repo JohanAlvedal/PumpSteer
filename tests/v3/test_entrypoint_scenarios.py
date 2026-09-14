@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 import sys
+from datetime import datetime, timezone
 from types import ModuleType, SimpleNamespace
 
 from custom_components.pumpsteer import (
@@ -13,16 +13,21 @@ from custom_components.pumpsteer import (
 )
 from custom_components.pumpsteer.config_flow import PumpSteerConfigFlow
 from custom_components.pumpsteer.const import (
+    CONF_GOS_COMMAND_PAYLOAD_TEMPLATE,
+    CONF_GOS_COMMAND_SERVICE,
+    CONF_GOS_SAFE_ACTION_CONFIRMED,
+    CONF_GOS_SAFE_PAYLOAD_TEMPLATE,
+    CONF_GOS_SAFE_SERVICE,
     CONF_INDOOR_ENTITY,
     CONF_OHMON_MQTT_BASE_TOPIC,
     CONF_OHMON_WATCHDOG_CONFIRMED,
     CONF_OUTDOOR_ENTITY,
     CONF_OUTPUT_MODE,
     CONF_TARGET_TEMPERATURE,
+    OUTPUT_MODE_GENERIC,
     OUTPUT_MODE_OHMON_MQTT,
     PLATFORMS,
 )
-
 
 START = datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc)
 INDOOR = "sensor.indoor"
@@ -199,7 +204,9 @@ def test_setup_loads_platforms_when_required_sensor_is_unavailable(monkeypatch) 
     ]
     assert entry.runtime_data.runtime.latest is not None
     assert entry.runtime_data.runtime.latest.supervised.fallback_active is True
-    assert entry.runtime_data.runtime.latest.supervised.decision.state.value == "failsafe"
+    assert (
+        entry.runtime_data.runtime.latest.supervised.decision.state.value == "failsafe"
+    )
 
 
 def test_active_ohmon_entry_starts_bypassed_then_publishes_temperature_and_on(
@@ -234,6 +241,50 @@ def test_active_ohmon_entry_starts_bypassed_then_publishes_temperature_and_on(
     ]
     assert entry.runtime_data.runtime.physical_control_enabled is True
     assert entry.runtime_data.runtime.latest.supervised.apply_physical is True
+
+
+def test_active_gos_entry_requests_safe_state_before_first_command(monkeypatch) -> None:
+    monkeypatch.setitem(
+        sys.modules,
+        "custom_components.pumpsteer.v3.ha.coordinator",
+        _coordinator_module(),
+    )
+    template_module = ModuleType("homeassistant.helpers.template")
+
+    class Template:
+        def __init__(self, source: str, hass) -> None:
+            self.source = source
+
+        def async_render(self, variables, *, parse_result: bool):
+            assert parse_result is False
+            return self.source.replace("{{ fake_temp }}", str(variables["fake_temp"]))
+
+    template_module.Template = Template
+    monkeypatch.setitem(sys.modules, "homeassistant.helpers.template", template_module)
+    hass = FakeHass()
+    hass.states.values[INDOOR].state = 19.0
+    hass.states.values[OUTDOOR].state = -5.0
+    hass.services.has_service = lambda _domain, _service: True
+    entry = FakeEntry("active-gos")
+    entry.options = {
+        CONF_OUTPUT_MODE: OUTPUT_MODE_GENERIC,
+        CONF_GOS_COMMAND_SERVICE: "number.set_value",
+        CONF_GOS_COMMAND_PAYLOAD_TEMPLATE: (
+            "entity_id: input_number.virtual_outdoor\nvalue: '{{ fake_temp }}'"
+        ),
+        CONF_GOS_SAFE_SERVICE: "switch.turn_off",
+        CONF_GOS_SAFE_PAYLOAD_TEMPLATE: "entity_id: switch.virtual_output",
+        CONF_GOS_SAFE_ACTION_CONFIRMED: True,
+    }
+
+    assert asyncio.run(async_setup_entry(hass, entry)) is True
+
+    assert [(call[0], call[1]) for call in hass.service_calls] == [
+        ("switch", "turn_off"),
+        ("number", "set_value"),
+    ]
+    assert entry.runtime_data.runtime.physical_control_enabled is True
+    assert entry.runtime_data.runtime.latest.error is None
 
 
 def test_unload_uses_same_v3_platforms() -> None:

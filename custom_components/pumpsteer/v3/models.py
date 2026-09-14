@@ -107,6 +107,10 @@ class SafetyPolicy:
     maximum_heating_request: float = 15.0
     maximum_curtailment: float = 15.0
     maximum_sensor_age: timedelta = timedelta(minutes=10)
+    minimum_indoor_temperature: float = 5.0
+    maximum_indoor_temperature: float = 35.0
+    minimum_outdoor_temperature: float = -50.0
+    maximum_outdoor_temperature: float = 50.0
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -114,6 +118,10 @@ class SafetyPolicy:
             "maximum_virtual_temperature",
             "maximum_heating_request",
             "maximum_curtailment",
+            "minimum_indoor_temperature",
+            "maximum_indoor_temperature",
+            "minimum_outdoor_temperature",
+            "maximum_outdoor_temperature",
         ):
             object.__setattr__(
                 self, field_name, finite_float(getattr(self, field_name), field_name)
@@ -124,6 +132,10 @@ class SafetyPolicy:
             )
         if self.maximum_heating_request < 0 or self.maximum_curtailment < 0:
             raise ValueError("request and curtailment limits must be non-negative")
+        if self.minimum_indoor_temperature >= self.maximum_indoor_temperature:
+            raise ValueError("indoor temperature bounds are invalid")
+        if self.minimum_outdoor_temperature >= self.maximum_outdoor_temperature:
+            raise ValueError("outdoor temperature bounds are invalid")
         if not isinstance(self.maximum_sensor_age, timedelta):
             raise TypeError("maximum_sensor_age must be a timedelta")
         if self.maximum_sensor_age <= timedelta(0):

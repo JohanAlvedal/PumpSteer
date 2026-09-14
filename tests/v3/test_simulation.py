@@ -10,6 +10,7 @@ from custom_components.pumpsteer.v3.simulation import (
     Disturbance,
     SensorFault,
     ThermalSimulator,
+    VirtualOutdoorCurve,
 )
 
 
@@ -36,6 +37,21 @@ def test_heat_input_has_positive_temperature_sign() -> None:
     _run(heated, 1.0, 60, outdoor=5.0)
 
     assert heated.indoor_c > unheated.indoor_c
+
+
+def test_virtual_outdoor_curve_preserves_controller_sign_and_units() -> None:
+    curve = VirtualOutdoorCurve(
+        design_outdoor_c=-20.0,
+        heating_stop_c=15.0,
+        minimum_command=0.1,
+        maximum_command=0.9,
+    )
+
+    assert curve.command_for(15.0) == 0.1
+    assert curve.command_for(-20.0) == 0.9
+    assert curve.command_for(-10.0) > curve.command_for(0.0)
+    assert curve.command_for(100.0) == 0.1
+    assert curve.command_for(-100.0) == 0.9
 
 
 def test_envelope_loss_cools_towards_outdoor_temperature() -> None:

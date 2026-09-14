@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import math
+from datetime import datetime, timedelta, timezone
 
 from custom_components.pumpsteer.v3.control import (
     ComfortController,
@@ -26,8 +26,8 @@ from custom_components.pumpsteer.v3.simulation import (
     BuildingConfig,
     Disturbance,
     ThermalSimulator,
+    VirtualOutdoorCurve,
 )
-
 
 START = datetime(2026, 1, 15, 0, 0, tzinfo=timezone.utc)
 TARGET_C = 21.0
@@ -49,10 +49,9 @@ def _closed_loop(
 ) -> tuple[list[float], list[float]]:
     """Run comfort control against a building with a thin actuator adapter.
 
-    The domain heating request is expressed in virtual-temperature degrees.
-    Dividing by its hard safety maximum converts it into the simulator's
-    normalized actuator command without embedding heat-pump details in the
-    production controller.
+    The domain output is a virtual outdoor temperature. A small explicit heat
+    curve translates that temperature into normalized actuator demand, keeping
+    controller degrees separate from heat power.
     """
     actuator = ActuatorConfig(
         maximum_heat_kw=8.0,
@@ -66,6 +65,7 @@ def _closed_loop(
     state = ComfortControllerState()
     policy = ComfortPolicy(target_temperature=TARGET_C)
     safety = SafetyPolicy(maximum_heating_request=15.0)
+    heat_curve = VirtualOutdoorCurve()
     temperatures: list[float] = []
     requests: list[float] = []
     now = START
@@ -81,7 +81,8 @@ def _closed_loop(
             dt=dt,
         )
         state = result.next_state
-        command = result.heating_request / safety.maximum_heating_request
+        virtual_outdoor_c = outdoor_c - result.heating_request + result.curtailment
+        command = heat_curve.command_for(virtual_outdoor_c)
         sample = simulator.step(
             command,
             Disturbance(outdoor_c, internal_gain_kw=0.2),

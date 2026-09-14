@@ -81,7 +81,7 @@ def _economy_snapshot(saving_level: object) -> dict[str, Any]:
 
 
 def _output_snapshot(runtime: Any) -> dict[str, Any]:
-    """Expose physical-output state without MQTT credentials or payload history."""
+    """Expose physical-output state without addresses, templates, or payloads."""
     output = getattr(runtime, "output", None)
     snapshot = getattr(output, "snapshot", None)
     if snapshot is None:
@@ -94,17 +94,24 @@ def _output_snapshot(runtime: Any) -> dict[str, Any]:
             "publish_count": getattr(output, "publish_count", 0),
             "last_error": None,
         }
-    return {
-        "mode": "ohmon_mqtt",
+    service_call_count = getattr(snapshot, "service_call_count", None)
+    mode = "generic_output" if service_call_count is not None else "ohmon_mqtt"
+    result = {
+        "mode": mode,
         "state": _enum_value(snapshot.state),
         "physical_control_enabled": bool(
             getattr(runtime, "physical_control_enabled", False)
         ),
         "attempted_at": _optional_timestamp(snapshot.attempted_at),
         "commanded_temperature": snapshot.commanded_temperature,
-        "publish_count": snapshot.publish_count,
         "last_error": _safe_error(snapshot.last_error),
     }
+    if service_call_count is None:
+        result["publish_count"] = getattr(snapshot, "publish_count", 0)
+    else:
+        result["service_call_count"] = service_call_count
+        result["acknowledged"] = getattr(snapshot, "acknowledged", None)
+    return result
 
 
 def _observation_snapshot(observation: Any | None) -> dict[str, Any] | None:

@@ -1,5 +1,10 @@
 # 🔥 PumpSteer – Smart Heat Pump Optimization
 
+> **V3 development notice:** The `v3-development` line is currently preparing a
+> comfort-only beta. Price, weather, saving level, and learning do not yet control the
+> physical output. Do not install it over the only working V2 production setup. See
+> [V3 beta rollout](docs/V3_BETA_ROLLOUT.md) for scope, safety gates, and rollback.
+
 PumpSteer is a Home Assistant custom integration that optimizes your heat pump by dynamically adjusting the **virtual outdoor temperature**.
 
 It reduces energy costs during peak price hours while maintaining indoor comfort through intelligent PI-control.

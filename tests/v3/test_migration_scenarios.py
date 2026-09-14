@@ -33,7 +33,7 @@ def _migrate(entry):
     return result, entries.updates
 
 
-def test_version_one_migration_keeps_only_three_user_fields() -> None:
+def test_version_one_is_refused_without_mutating_legacy_configuration() -> None:
     entry = SimpleNamespace(
         entry_id="legacy-one",
         version=1,
@@ -53,18 +53,10 @@ def test_version_one_migration_keeps_only_three_user_fields() -> None:
 
     migrated, updates = _migrate(entry)
 
-    assert migrated is True
-    assert len(updates) == 1
-    changes = updates[0][1]
-    assert changes["version"] == 3
-    assert changes["minor_version"] == 1
-    assert changes["options"] == {}
-    assert changes["data"] == {
-        CONF_INDOOR_ENTITY: "sensor.indoor",
-        CONF_OUTDOOR_ENTITY: "sensor.outdoor",
-        CONF_TARGET_TEMPERATURE: 22.5,
-    }
-    assert changes["unique_id"] == "pumpsteer-v3:legacy-one"
+    assert migrated is False
+    assert updates == []
+    assert entry.version == 1
+    assert entry.options["house_inertia"] == 8
 
 
 def test_migration_is_idempotent_for_version_three() -> None:
@@ -121,7 +113,7 @@ def test_alpha_three_entry_gets_stable_identity_without_data_changes() -> None:
     assert entry.options is options
 
 
-def test_version_one_migration_is_noop_on_second_call() -> None:
+def test_version_one_refusal_is_repeatable_and_non_destructive() -> None:
     entry = SimpleNamespace(
         entry_id="legacy-two",
         version=1,
@@ -135,14 +127,14 @@ def test_version_one_migration_is_noop_on_second_call() -> None:
     entries = FakeConfigEntries()
     hass = SimpleNamespace(config_entries=entries)
 
-    assert asyncio.run(async_migrate_entry(hass, entry)) is True
-    assert entry.version == 3
-    assert asyncio.run(async_migrate_entry(hass, entry)) is True
+    assert asyncio.run(async_migrate_entry(hass, entry)) is False
+    assert asyncio.run(async_migrate_entry(hass, entry)) is False
 
-    assert len(entries.updates) == 1
+    assert entry.version == 1
+    assert entries.updates == []
 
 
-def test_invalid_legacy_target_uses_safe_default() -> None:
+def test_invalid_legacy_values_are_left_untouched_for_v2_rollback() -> None:
     entry = SimpleNamespace(
         entry_id="legacy-invalid-target",
         version=1,
@@ -157,8 +149,9 @@ def test_invalid_legacy_target_uses_safe_default() -> None:
 
     migrated, updates = _migrate(entry)
 
-    assert migrated is True
-    assert updates[0][1]["data"][CONF_TARGET_TEMPERATURE] == 21.0
+    assert migrated is False
+    assert updates == []
+    assert entry.data["target_temperature"] != entry.data["target_temperature"]
 
 
 def test_migration_refuses_entry_without_critical_sensor_identity() -> None:

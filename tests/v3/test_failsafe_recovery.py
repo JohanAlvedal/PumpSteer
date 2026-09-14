@@ -10,7 +10,6 @@ from custom_components.pumpsteer.v3 import ControlState, Unit
 from custom_components.pumpsteer.v3.control.engine import ControlEngine
 from custom_components.pumpsteer.v3.ha import PumpSteerRuntime, RawState, RuntimeConfig
 
-
 NOW = datetime(2026, 9, 12, 6, 0, tzinfo=UTC)
 INDOOR = "sensor.indoor"
 OUTDOOR = "sensor.outdoor"
@@ -25,7 +24,9 @@ class MutableStates:
     def get_state(self, entity_id: str) -> RawState | None:
         return self.values.get(entity_id)
 
-    def set_temperature(self, entity_id: str, value: object, observed_at: datetime) -> None:
+    def set_temperature(
+        self, entity_id: str, value: object, observed_at: datetime
+    ) -> None:
         self.values[entity_id] = RawState(
             value=value,
             observed_at=observed_at,
@@ -51,7 +52,18 @@ def test_runtime_recovers_from_startup_failsafe_without_restart() -> None:
     assert failed.supervised.fallback_active is True
     assert runtime.latest is failed
 
-    recovered_at = NOW + timedelta(minutes=1)
+    for minute in (1, 2):
+        recovering_at = NOW + timedelta(minutes=minute)
+        states.set_temperature(INDOOR, 20.5, recovering_at)
+        states.set_temperature(OUTDOOR, 4.0, recovering_at)
+        recovering = asyncio.run(runtime.async_update(recovering_at))
+
+        assert recovering.error is None
+        assert recovering.observation is not None
+        assert recovering.supervised.decision.state is ControlState.RECOVERY
+        assert recovering.supervised.fallback_active is True
+
+    recovered_at = NOW + timedelta(minutes=3)
     states.set_temperature(INDOOR, 20.5, recovered_at)
     states.set_temperature(OUTDOOR, 4.0, recovered_at)
     recovered = asyncio.run(runtime.async_update(recovered_at))
@@ -63,7 +75,9 @@ def test_runtime_recovers_from_startup_failsafe_without_restart() -> None:
     assert runtime.latest is recovered
 
 
-def test_v3_sensor_platform_does_not_depend_on_legacy_entry_version(monkeypatch) -> None:
+def test_v3_sensor_platform_does_not_depend_on_legacy_entry_version(
+    monkeypatch,
+) -> None:
     """The V3 branch must always register the V3 virtual sensor platform."""
     calls: list[tuple[object, object, object]] = []
 

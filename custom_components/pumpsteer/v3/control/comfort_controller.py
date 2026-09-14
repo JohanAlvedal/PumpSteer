@@ -26,6 +26,7 @@ class ComfortControllerConfig:
     integral_gain_per_hour: float = 2.1
     deadband_c: float = 0.1
     maximum_heating_request: float = 15.0
+    maximum_curtailment: float = 15.0
     maximum_integral: float = 10.0
     maximum_dt: timedelta = timedelta(minutes=5)
 
@@ -35,6 +36,7 @@ class ComfortControllerConfig:
             "integral_gain_per_hour",
             "deadband_c",
             "maximum_heating_request",
+            "maximum_curtailment",
             "maximum_integral",
         ):
             object.__setattr__(
@@ -48,6 +50,8 @@ class ComfortControllerConfig:
             raise ValueError("deadband_c must be non-negative")
         if self.maximum_heating_request < 0:
             raise ValueError("maximum_heating_request must be non-negative")
+        if self.maximum_curtailment < 0:
+            raise ValueError("maximum_curtailment must be non-negative")
         if self.maximum_integral < 0:
             raise ValueError("maximum_integral must be non-negative")
         if not isinstance(self.maximum_dt, timedelta):
@@ -74,6 +78,7 @@ class ComfortControllerResult:
     """Explainable result of one comfort-control step."""
 
     heating_request: float
+    curtailment: float
     comfort_error: float
     effective_error: float
     proportional_term: float
@@ -141,15 +146,34 @@ class ComfortController:
         effective_error = _apply_deadband(raw_error, self._config.deadband_c)
         proportional = self._config.proportional_gain * effective_error
 
-        output_limit = min(
+        heating_limit = min(
             self._config.maximum_heating_request,
             safety_policy.maximum_heating_request,
+        )
+        curtailment_limit = min(
+            self._config.maximum_curtailment,
+            safety_policy.maximum_curtailment,
         )
         previous_integral = _clamp(
             state.integral,
             -self._config.maximum_integral,
             self._config.maximum_integral,
         )
+
+        # Never carry integral memory that opposes a hard comfort boundary.
+        # This guarantees immediate heat authority at the comfort floor and
+        # immediate curtailment authority at the comfort ceiling.
+        if observation.indoor.value <= policy.minimum_temperature:
+            previous_integral = max(0.0, previous_integral)
+            minimum_output = 0.0
+        else:
+            minimum_output = -curtailment_limit
+        if observation.indoor.value >= policy.maximum_temperature:
+            previous_integral = min(0.0, previous_integral)
+            maximum_output = 0.0
+        else:
+            maximum_output = heating_limit
+
         candidate_integral = previous_integral
         integrator_frozen = bool(override_active)
 
@@ -165,15 +189,17 @@ class ComfortController:
 
             # Conditional integration accepts updates inside the actuator range,
             # or updates that drive an already saturated request back toward it.
-            pushing_above = candidate_output > output_limit and effective_error > 0.0
-            pushing_below = candidate_output < 0.0 and effective_error < 0.0
+            pushing_above = candidate_output > maximum_output and effective_error > 0.0
+            pushing_below = candidate_output < minimum_output and effective_error < 0.0
             if pushing_above or pushing_below:
                 candidate_integral = previous_integral
                 integrator_frozen = True
 
         raw_output = proportional + candidate_integral
-        heating_request = _clamp(raw_output, 0.0, output_limit)
-        output_saturated = abs(heating_request - raw_output) > 1e-12
+        bounded_output = _clamp(raw_output, minimum_output, maximum_output)
+        heating_request = max(0.0, bounded_output)
+        curtailment = max(0.0, -bounded_output)
+        output_saturated = abs(bounded_output - raw_output) > 1e-12
         next_state = ComfortControllerState(
             integral=candidate_integral,
             last_step_at=now,
@@ -181,6 +207,7 @@ class ComfortController:
 
         return ComfortControllerResult(
             heating_request=heating_request,
+            curtailment=curtailment,
             comfort_error=raw_error,
             effective_error=effective_error,
             proportional_term=proportional,

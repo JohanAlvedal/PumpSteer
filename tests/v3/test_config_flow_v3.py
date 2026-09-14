@@ -12,12 +12,24 @@ from custom_components.pumpsteer.config_flow import (
     _entry_unique_id,
 )
 from custom_components.pumpsteer.const import (
+    CONF_COMFORT_MAXIMUM_TEMPERATURE,
+    CONF_COMFORT_MINIMUM_TEMPERATURE,
+    CONF_GOS_COMMAND_PAYLOAD_TEMPLATE,
+    CONF_GOS_COMMAND_SERVICE,
+    CONF_GOS_SAFE_ACTION_CONFIRMED,
+    CONF_GOS_SAFE_PAYLOAD_TEMPLATE,
+    CONF_GOS_SAFE_SERVICE,
     CONF_INDOOR_ENTITY,
+    CONF_MAXIMUM_SENSOR_AGE_MINUTES,
     CONF_OHMON_MQTT_BASE_TOPIC,
     CONF_OHMON_WATCHDOG_CONFIRMED,
     CONF_OUTDOOR_ENTITY,
     CONF_OUTPUT_MODE,
+    CONF_RECOVERY_VALID_OBSERVATIONS,
+    CONF_SUMMER_HYSTERESIS,
+    CONF_SUMMER_THRESHOLD,
     CONF_TARGET_TEMPERATURE,
+    OUTPUT_MODE_GENERIC,
     OUTPUT_MODE_OHMON_MQTT,
     OUTPUT_MODE_SHADOW,
 )
@@ -153,6 +165,17 @@ def test_options_flow_saves_sensor_overrides_and_preserves_other_options() -> No
         CONF_OUTPUT_MODE: OUTPUT_MODE_SHADOW,
         CONF_OHMON_MQTT_BASE_TOPIC: "",
         CONF_OHMON_WATCHDOG_CONFIRMED: False,
+        CONF_GOS_COMMAND_SERVICE: "",
+        CONF_GOS_COMMAND_PAYLOAD_TEMPLATE: "",
+        CONF_GOS_SAFE_SERVICE: "",
+        CONF_GOS_SAFE_PAYLOAD_TEMPLATE: "",
+        CONF_GOS_SAFE_ACTION_CONFIRMED: False,
+        CONF_COMFORT_MINIMUM_TEMPERATURE: 19.5,
+        CONF_COMFORT_MAXIMUM_TEMPERATURE: 23.0,
+        CONF_SUMMER_THRESHOLD: 18.0,
+        CONF_SUMMER_HYSTERESIS: 1.0,
+        CONF_MAXIMUM_SENSOR_AGE_MINUTES: 10,
+        CONF_RECOVERY_VALID_OBSERVATIONS: 3,
     }
 
 
@@ -182,6 +205,119 @@ def test_options_enable_active_ohmon_only_with_concrete_topic_and_watchdog() -> 
     assert result["data"][CONF_OUTPUT_MODE] == OUTPUT_MODE_OHMON_MQTT
     assert result["data"][CONF_OHMON_MQTT_BASE_TOPIC] == ("ohmonwifiplus/123456/")
     assert result["data"][CONF_OHMON_WATCHDOG_CONFIRMED] is True
+
+
+def test_options_enable_gos_only_with_command_and_verified_safe_action() -> None:
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+        },
+        options={},
+    )
+    flow = options_flow_with_states(entry, "sensor.indoor", "sensor.outdoor")
+
+    result = asyncio.run(
+        flow.async_step_init(
+            {
+                CONF_INDOOR_ENTITY: "sensor.indoor",
+                CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+                CONF_OUTPUT_MODE: OUTPUT_MODE_GENERIC,
+                CONF_GOS_COMMAND_SERVICE: " number.set_value ",
+                CONF_GOS_COMMAND_PAYLOAD_TEMPLATE: (
+                    'entity_id: input_number.virtual_outdoor\nvalue: "{{ fake_temp }}"'
+                ),
+                CONF_GOS_SAFE_SERVICE: "switch.turn_off",
+                CONF_GOS_SAFE_PAYLOAD_TEMPLATE: "entity_id: switch.output_enable",
+                CONF_GOS_SAFE_ACTION_CONFIRMED: True,
+            }
+        )
+    )
+
+    assert result["data"][CONF_OUTPUT_MODE] == OUTPUT_MODE_GENERIC
+    assert result["data"][CONF_GOS_COMMAND_SERVICE] == "number.set_value"
+    assert result["data"][CONF_GOS_SAFE_ACTION_CONFIRMED] is True
+
+
+@pytest.mark.parametrize(
+    ("changes", "field"),
+    [
+        ({CONF_GOS_COMMAND_SERVICE: "not-a-service"}, CONF_GOS_COMMAND_SERVICE),
+        (
+            {CONF_GOS_COMMAND_PAYLOAD_TEMPLATE: "value: 1"},
+            CONF_GOS_COMMAND_PAYLOAD_TEMPLATE,
+        ),
+        ({CONF_GOS_SAFE_SERVICE: ""}, CONF_GOS_SAFE_SERVICE),
+        ({CONF_GOS_SAFE_PAYLOAD_TEMPLATE: ""}, CONF_GOS_SAFE_PAYLOAD_TEMPLATE),
+        ({CONF_GOS_SAFE_ACTION_CONFIRMED: False}, CONF_GOS_SAFE_ACTION_CONFIRMED),
+    ],
+)
+def test_options_reject_unsafe_gos_configuration(changes, field) -> None:
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+        },
+        options={},
+    )
+    flow = options_flow_with_states(entry, "sensor.indoor", "sensor.outdoor")
+    user_input = {
+        CONF_INDOOR_ENTITY: "sensor.indoor",
+        CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+        CONF_OUTPUT_MODE: OUTPUT_MODE_GENERIC,
+        CONF_GOS_COMMAND_SERVICE: "number.set_value",
+        CONF_GOS_COMMAND_PAYLOAD_TEMPLATE: "value: '{{ fake_temp }}'",
+        CONF_GOS_SAFE_SERVICE: "switch.turn_off",
+        CONF_GOS_SAFE_PAYLOAD_TEMPLATE: "entity_id: switch.output_enable",
+        CONF_GOS_SAFE_ACTION_CONFIRMED: True,
+    }
+    user_input.update(changes)
+
+    errors = flow._validate_input(user_input)
+
+    assert field in errors
+
+
+@pytest.mark.parametrize(
+    ("changes", "field"),
+    [
+        (
+            {
+                CONF_COMFORT_MINIMUM_TEMPERATURE: 24.0,
+                CONF_COMFORT_MAXIMUM_TEMPERATURE: 23.0,
+            },
+            CONF_COMFORT_MAXIMUM_TEMPERATURE,
+        ),
+        ({CONF_SUMMER_THRESHOLD: 40.0}, CONF_SUMMER_THRESHOLD),
+        ({CONF_SUMMER_HYSTERESIS: 0.0}, CONF_SUMMER_HYSTERESIS),
+        ({CONF_MAXIMUM_SENSOR_AGE_MINUTES: 1}, CONF_MAXIMUM_SENSOR_AGE_MINUTES),
+        (
+            {CONF_RECOVERY_VALID_OBSERVATIONS: 2.5},
+            CONF_RECOVERY_VALID_OBSERVATIONS,
+        ),
+    ],
+)
+def test_options_reject_out_of_range_advanced_safety_values(changes, field) -> None:
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={
+            CONF_INDOOR_ENTITY: "sensor.indoor",
+            CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+        },
+        options={},
+    )
+    flow = options_flow_with_states(entry, "sensor.indoor", "sensor.outdoor")
+    user_input = {
+        CONF_INDOOR_ENTITY: "sensor.indoor",
+        CONF_OUTDOOR_ENTITY: "sensor.outdoor",
+    }
+    user_input.update(changes)
+
+    errors = flow._validate_input(user_input)
+
+    assert field in errors
 
 
 @pytest.mark.parametrize(
@@ -344,7 +480,7 @@ def test_options_reject_pair_owned_by_another_entry() -> None:
     assert current.unique_id == "pumpsteer-v3:current"
 
 
-def test_v2_migration_keeps_sources_but_discards_tuning() -> None:
+def test_v2_migration_is_refused_and_keeps_rollback_data() -> None:
     updates = {}
 
     class Entries:
@@ -364,13 +500,8 @@ def test_v2_migration_keeps_sources_but_discards_tuning() -> None:
         options={"house_inertia": 8},
     )
 
-    assert asyncio.run(async_migrate_entry(hass, entry))
-    assert updates["version"] == 3
-    assert updates["minor_version"] == 1
-    assert updates["unique_id"] == "pumpsteer-v3:legacy-entry"
-    assert updates["data"] == {
-        CONF_INDOOR_ENTITY: "sensor.indoor",
-        CONF_OUTDOOR_ENTITY: "sensor.outdoor",
-        CONF_TARGET_TEMPERATURE: 21.0,
-    }
-    assert updates["options"] == {}
+    assert asyncio.run(async_migrate_entry(hass, entry)) is False
+    assert updates == {}
+    assert entry.version == 1
+    assert entry.data["pid_kp"] == 99
+    assert entry.options["house_inertia"] == 8

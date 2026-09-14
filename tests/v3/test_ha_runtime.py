@@ -1,7 +1,6 @@
 """Tests for the platform-neutral parts of the PumpSteer V3 HA runtime."""
 
 import asyncio
-
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -17,7 +16,6 @@ from custom_components.pumpsteer.v3.ha import (
     RawState,
     RuntimeConfig,
 )
-
 
 NOW = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
 
@@ -147,6 +145,28 @@ def test_active_adapter_receives_bypass_for_stale_critical_input() -> None:
 
     result = asyncio.run(instance.async_update(NOW))
 
+    assert result.supervised.fallback_active is True
+    assert result.supervised.apply_physical is True
+    assert output.outputs == [result.supervised]
+
+
+def test_active_adapter_receives_physical_bypass_in_summer_passthrough() -> None:
+    output = ActiveOutput()
+    instance = PumpSteerRuntime(
+        config=RuntimeConfig("sensor.indoor", "sensor.outdoor", 21.0),
+        states=FakeStates(
+            {
+                "sensor.indoor": state(21.0, "sensor.indoor"),
+                "sensor.outdoor": state(20.0, "sensor.outdoor"),
+            }
+        ),
+        engine=ControlEngine(),
+        output=output,
+    )
+
+    result = asyncio.run(instance.async_update(NOW))
+
+    assert result.supervised.decision.state is ControlState.SUMMER_PASSTHROUGH
     assert result.supervised.fallback_active is True
     assert result.supervised.apply_physical is True
     assert output.outputs == [result.supervised]

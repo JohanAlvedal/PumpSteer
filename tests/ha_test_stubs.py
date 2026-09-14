@@ -27,6 +27,11 @@ class ConfigEntry:
 
 
 class OptionsFlow:
+    @property
+    def config_entry(self):
+        """Mirror Home Assistant's injected config-entry accessor."""
+        return self._config_entry
+
     async def async_step_init(self, user_input=None):
         return {}
 

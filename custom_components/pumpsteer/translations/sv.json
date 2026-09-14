@@ -26,13 +26,24 @@
     "step": {
       "init": {
         "title": "Konfigurera PumpSteer-givare",
-        "description": "Välj temperaturgivare och fysisk utgång. Aktiv OhmOnWiFi-styrning kräver enhetens MQTT-watchdog så att reläet återgår till den riktiga utegivaren om kommunikationen försvinner.",
+        "description": "Välj temperaturgivare och fysisk utgång. Aktiva utgångar kräver en verifierad säkerhetsåtgärd. Testa Generic Output System (GOS) med en ofarlig tjänst innan värmeutrustning ansluts.",
         "data": {
           "indoor_temp_entity": "Inomhustemperaturgivare",
           "outdoor_temp_entity": "Utomhustemperaturgivare",
           "output_mode": "Fysisk utgång",
+          "comfort_minimum_temperature": "Komfortgolv",
+          "comfort_maximum_temperature": "Komforttak",
+          "summer_threshold": "Sommargräns för passthrough",
+          "summer_hysteresis": "Hysteres för sommarläge",
+          "maximum_sensor_age_minutes": "Högsta tillåtna givarålder",
+          "recovery_valid_observations": "Nya giltiga mätningar som krävs efter fel",
           "ohmon_mqtt_base_topic": "OhmOnWiFi MQTT-bastopic",
-          "ohmon_watchdog_confirmed": "Jag har aktiverat och verifierat OhmOnWiFi-watchdog"
+          "ohmon_watchdog_confirmed": "Jag har aktiverat och verifierat OhmOnWiFi-watchdog",
+          "gos_command_service": "GOS-kommandotjänst (domän.tjänst)",
+          "gos_command_payload_template": "GOS-mall för kommandodata med {{ fake_temp }}",
+          "gos_safe_service": "GOS-tjänst för säkert läge (domän.tjänst)",
+          "gos_safe_payload_template": "GOS-mall för säkert läge",
+          "gos_safe_action_confirmed": "Jag har testat och verifierat GOS säkerhetsåtgärd"
         }
       }
     },
@@ -43,14 +54,21 @@
       "already_configured": "Kombinationen av inne- och utegivare är redan konfigurerad",
       "invalid_output_mode": "Välj en fysisk utgång som stöds",
       "invalid_mqtt_topic": "Ange en konkret MQTT-bastopic som slutar med /, till exempel ohmonwifiplus/123456/",
-      "watchdog_required": "Aktivera och verifiera OhmOnWiFi-watchdog före aktiv styrning"
+      "watchdog_required": "Aktivera och verifiera OhmOnWiFi-watchdog före aktiv styrning",
+      "invalid_service": "Ange en tjänst som domän.tjänst",
+      "invalid_gos_template": "Ange en YAML-mappning som använder fake_temp",
+      "invalid_safe_template": "Ange en YAML-mappning för säkerhetsåtgärden",
+      "safe_action_required": "Testa och verifiera GOS säkerhetsåtgärd före aktiv styrning",
+      "invalid_advanced_value": "Välj ett värde inom det tillåtna säkerhetsintervallet",
+      "invalid_comfort_range": "Komforttaket måste vara högre än komfortgolvet"
     }
   },
   "selector": {
     "output_mode": {
       "options": {
         "shadow": "Ingen fysisk utgång",
-        "ohmon_mqtt": "OhmOnWiFi / Plus via MQTT (aktivt test)"
+        "ohmon_mqtt": "OhmOnWiFi / Plus via MQTT (aktivt test)",
+        "generic_output": "Generic Output System (avancerat aktivt test)"
       }
     }
   },

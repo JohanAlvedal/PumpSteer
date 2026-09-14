@@ -28,6 +28,8 @@ class RuntimeConfig:
     outdoor_entity: str
     target_temperature: float = 21.0
     saving_level: int = DEFAULT_SAVING_LEVEL
+    comfort_minimum_temperature: float = 19.5
+    comfort_maximum_temperature: float = 23.0
     update_interval: timedelta = timedelta(minutes=1)
 
     def __post_init__(self) -> None:
@@ -39,6 +41,18 @@ class RuntimeConfig:
         if not 5.0 <= target <= 35.0:
             raise ValueError("target_temperature must be between 5 and 35 °C")
         object.__setattr__(self, "target_temperature", target)
+        for name in (
+            "comfort_minimum_temperature",
+            "comfort_maximum_temperature",
+        ):
+            value = finite_float(getattr(self, name), name)
+            if not 5.0 <= value <= 35.0:
+                raise ValueError(f"{name} must be between 5 and 35 °C")
+            object.__setattr__(self, name, value)
+        if self.comfort_minimum_temperature >= self.comfort_maximum_temperature:
+            raise ValueError(
+                "comfort_minimum_temperature must be below comfort_maximum_temperature"
+            )
         object.__setattr__(
             self,
             "saving_level",
@@ -209,7 +223,7 @@ class PumpSteerRuntime:
         try:
             engine_result = self._engine.step(
                 observation=observation,
-                comfort_policy=_comfort_policy(self._config.target_temperature),
+                comfort_policy=_comfort_policy(self._config),
                 safety_policy=self._safety,
                 state=self._engine_state,
                 now_utc=now,
@@ -292,9 +306,10 @@ def _read_optional_temperature(states: StateProvider, entity_id: str) -> float |
         return None
 
 
-def _comfort_policy(target: float) -> ComfortPolicy:
+def _comfort_policy(config: RuntimeConfig) -> ComfortPolicy:
+    target = config.target_temperature
     return ComfortPolicy(
         target_temperature=target,
-        minimum_temperature=max(5.0, target - 1.5),
-        maximum_temperature=min(35.0, target + 2.0),
+        minimum_temperature=min(target, config.comfort_minimum_temperature),
+        maximum_temperature=max(target, config.comfort_maximum_temperature),
     )

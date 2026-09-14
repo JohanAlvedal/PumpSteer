@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from uuid import uuid4
 
 import voluptuous as vol
@@ -12,21 +13,39 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import selector
 
 from .const import (
+    CONF_COMFORT_MAXIMUM_TEMPERATURE,
+    CONF_COMFORT_MINIMUM_TEMPERATURE,
+    CONF_GOS_COMMAND_PAYLOAD_TEMPLATE,
+    CONF_GOS_COMMAND_SERVICE,
+    CONF_GOS_SAFE_ACTION_CONFIRMED,
+    CONF_GOS_SAFE_PAYLOAD_TEMPLATE,
+    CONF_GOS_SAFE_SERVICE,
     CONF_INDOOR_ENTITY,
+    CONF_MAXIMUM_SENSOR_AGE_MINUTES,
     CONF_OHMON_MQTT_BASE_TOPIC,
     CONF_OHMON_WATCHDOG_CONFIRMED,
     CONF_OUTDOOR_ENTITY,
     CONF_OUTPUT_MODE,
+    CONF_RECOVERY_VALID_OBSERVATIONS,
+    CONF_SUMMER_HYSTERESIS,
+    CONF_SUMMER_THRESHOLD,
     CONF_TARGET_TEMPERATURE,
+    DEFAULT_COMFORT_MAXIMUM_TEMPERATURE,
+    DEFAULT_COMFORT_MINIMUM_TEMPERATURE,
+    DEFAULT_MAXIMUM_SENSOR_AGE_MINUTES,
+    DEFAULT_RECOVERY_VALID_OBSERVATIONS,
+    DEFAULT_SUMMER_HYSTERESIS,
+    DEFAULT_SUMMER_THRESHOLD,
     DEFAULT_TARGET_TEMPERATURE,
     DOMAIN,
     MAX_TARGET_TEMPERATURE,
     MIN_TARGET_TEMPERATURE,
+    OUTPUT_MODE_GENERIC,
     OUTPUT_MODE_OHMON_MQTT,
     OUTPUT_MODE_SHADOW,
 )
 
-LEGACY_OUTDOOR_ENTITY = "real_outdoor_entity"
+_SERVICE_PATTERN = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
 
 
 def _entry_unique_id(entry_identity: str) -> str:
@@ -211,6 +230,40 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
                         CONF_OUTPUT_MODE: user_input.get(
                             CONF_OUTPUT_MODE, OUTPUT_MODE_SHADOW
                         ),
+                        CONF_COMFORT_MINIMUM_TEMPERATURE: float(
+                            user_input.get(
+                                CONF_COMFORT_MINIMUM_TEMPERATURE,
+                                DEFAULT_COMFORT_MINIMUM_TEMPERATURE,
+                            )
+                        ),
+                        CONF_COMFORT_MAXIMUM_TEMPERATURE: float(
+                            user_input.get(
+                                CONF_COMFORT_MAXIMUM_TEMPERATURE,
+                                DEFAULT_COMFORT_MAXIMUM_TEMPERATURE,
+                            )
+                        ),
+                        CONF_SUMMER_THRESHOLD: float(
+                            user_input.get(
+                                CONF_SUMMER_THRESHOLD, DEFAULT_SUMMER_THRESHOLD
+                            )
+                        ),
+                        CONF_SUMMER_HYSTERESIS: float(
+                            user_input.get(
+                                CONF_SUMMER_HYSTERESIS, DEFAULT_SUMMER_HYSTERESIS
+                            )
+                        ),
+                        CONF_MAXIMUM_SENSOR_AGE_MINUTES: int(
+                            user_input.get(
+                                CONF_MAXIMUM_SENSOR_AGE_MINUTES,
+                                DEFAULT_MAXIMUM_SENSOR_AGE_MINUTES,
+                            )
+                        ),
+                        CONF_RECOVERY_VALID_OBSERVATIONS: int(
+                            user_input.get(
+                                CONF_RECOVERY_VALID_OBSERVATIONS,
+                                DEFAULT_RECOVERY_VALID_OBSERVATIONS,
+                            )
+                        ),
                         CONF_OHMON_MQTT_BASE_TOPIC: user_input.get(
                             CONF_OHMON_MQTT_BASE_TOPIC, ""
                         ).strip(),
@@ -218,6 +271,23 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
                             user_input.get(CONF_OHMON_WATCHDOG_CONFIRMED, False)
                         )
                         if user_input.get(CONF_OUTPUT_MODE) == OUTPUT_MODE_OHMON_MQTT
+                        else False,
+                        CONF_GOS_COMMAND_SERVICE: user_input.get(
+                            CONF_GOS_COMMAND_SERVICE, ""
+                        ).strip(),
+                        CONF_GOS_COMMAND_PAYLOAD_TEMPLATE: user_input.get(
+                            CONF_GOS_COMMAND_PAYLOAD_TEMPLATE, ""
+                        ).strip(),
+                        CONF_GOS_SAFE_SERVICE: user_input.get(
+                            CONF_GOS_SAFE_SERVICE, ""
+                        ).strip(),
+                        CONF_GOS_SAFE_PAYLOAD_TEMPLATE: user_input.get(
+                            CONF_GOS_SAFE_PAYLOAD_TEMPLATE, ""
+                        ).strip(),
+                        CONF_GOS_SAFE_ACTION_CONFIRMED: bool(
+                            user_input.get(CONF_GOS_SAFE_ACTION_CONFIRMED, False)
+                        )
+                        if user_input.get(CONF_OUTPUT_MODE) == OUTPUT_MODE_GENERIC
                         else False,
                     },
                 )
@@ -244,9 +314,99 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
                                 "options": [
                                     OUTPUT_MODE_SHADOW,
                                     OUTPUT_MODE_OHMON_MQTT,
+                                    OUTPUT_MODE_GENERIC,
                                 ],
                                 "translation_key": CONF_OUTPUT_MODE,
                                 "mode": "dropdown",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        CONF_COMFORT_MINIMUM_TEMPERATURE,
+                        default=self._current_value(CONF_COMFORT_MINIMUM_TEMPERATURE)
+                        or DEFAULT_COMFORT_MINIMUM_TEMPERATURE,
+                    ): selector(
+                        {
+                            "number": {
+                                "min": MIN_TARGET_TEMPERATURE,
+                                "max": MAX_TARGET_TEMPERATURE,
+                                "step": 0.5,
+                                "unit_of_measurement": "°C",
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        CONF_COMFORT_MAXIMUM_TEMPERATURE,
+                        default=self._current_value(CONF_COMFORT_MAXIMUM_TEMPERATURE)
+                        or DEFAULT_COMFORT_MAXIMUM_TEMPERATURE,
+                    ): selector(
+                        {
+                            "number": {
+                                "min": MIN_TARGET_TEMPERATURE,
+                                "max": MAX_TARGET_TEMPERATURE,
+                                "step": 0.5,
+                                "unit_of_measurement": "°C",
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        CONF_SUMMER_THRESHOLD,
+                        default=self._current_value(CONF_SUMMER_THRESHOLD)
+                        or DEFAULT_SUMMER_THRESHOLD,
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 5,
+                                "max": 30,
+                                "step": 0.5,
+                                "unit_of_measurement": "°C",
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        CONF_SUMMER_HYSTERESIS,
+                        default=self._current_value(CONF_SUMMER_HYSTERESIS)
+                        or DEFAULT_SUMMER_HYSTERESIS,
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 0.5,
+                                "max": 5,
+                                "step": 0.5,
+                                "unit_of_measurement": "°C",
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        CONF_MAXIMUM_SENSOR_AGE_MINUTES,
+                        default=self._current_value(CONF_MAXIMUM_SENSOR_AGE_MINUTES)
+                        or DEFAULT_MAXIMUM_SENSOR_AGE_MINUTES,
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 2,
+                                "max": 30,
+                                "step": 1,
+                                "unit_of_measurement": "min",
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        CONF_RECOVERY_VALID_OBSERVATIONS,
+                        default=self._current_value(CONF_RECOVERY_VALID_OBSERVATIONS)
+                        or DEFAULT_RECOVERY_VALID_OBSERVATIONS,
+                    ): selector(
+                        {
+                            "number": {
+                                "min": 2,
+                                "max": 10,
+                                "step": 1,
+                                "mode": "box",
                             }
                         }
                     ),
@@ -258,6 +418,30 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
                         CONF_OHMON_WATCHDOG_CONFIRMED,
                         default=bool(
                             self._current_value(CONF_OHMON_WATCHDOG_CONFIRMED)
+                        ),
+                    ): selector({"boolean": {}}),
+                    vol.Optional(
+                        CONF_GOS_COMMAND_SERVICE,
+                        default=self._current_value(CONF_GOS_COMMAND_SERVICE) or "",
+                    ): selector({"text": {"type": "text"}}),
+                    vol.Optional(
+                        CONF_GOS_COMMAND_PAYLOAD_TEMPLATE,
+                        default=self._current_value(CONF_GOS_COMMAND_PAYLOAD_TEMPLATE)
+                        or "",
+                    ): selector({"text": {"multiline": True}}),
+                    vol.Optional(
+                        CONF_GOS_SAFE_SERVICE,
+                        default=self._current_value(CONF_GOS_SAFE_SERVICE) or "",
+                    ): selector({"text": {"type": "text"}}),
+                    vol.Optional(
+                        CONF_GOS_SAFE_PAYLOAD_TEMPLATE,
+                        default=self._current_value(CONF_GOS_SAFE_PAYLOAD_TEMPLATE)
+                        or "",
+                    ): selector({"text": {"multiline": True}}),
+                    vol.Optional(
+                        CONF_GOS_SAFE_ACTION_CONFIRMED,
+                        default=bool(
+                            self._current_value(CONF_GOS_SAFE_ACTION_CONFIRMED)
                         ),
                     ): selector({"boolean": {}}),
                 }
@@ -285,7 +469,11 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
             elif not self._entity_exists(entity_id):
                 errors[field] = "entity_not_found"
         output_mode = user_input.get(CONF_OUTPUT_MODE, OUTPUT_MODE_SHADOW)
-        if output_mode not in {OUTPUT_MODE_SHADOW, OUTPUT_MODE_OHMON_MQTT}:
+        if output_mode not in {
+            OUTPUT_MODE_SHADOW,
+            OUTPUT_MODE_OHMON_MQTT,
+            OUTPUT_MODE_GENERIC,
+        }:
             errors[CONF_OUTPUT_MODE] = "invalid_output_mode"
         elif output_mode == OUTPUT_MODE_OHMON_MQTT:
             base_topic = user_input.get(CONF_OHMON_MQTT_BASE_TOPIC, "")
@@ -299,6 +487,69 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_OHMON_MQTT_BASE_TOPIC] = "invalid_mqtt_topic"
             if user_input.get(CONF_OHMON_WATCHDOG_CONFIRMED) is not True:
                 errors[CONF_OHMON_WATCHDOG_CONFIRMED] = "watchdog_required"
+        elif output_mode == OUTPUT_MODE_GENERIC:
+            command_service = user_input.get(CONF_GOS_COMMAND_SERVICE, "")
+            safe_service = user_input.get(CONF_GOS_SAFE_SERVICE, "")
+            command_template = user_input.get(CONF_GOS_COMMAND_PAYLOAD_TEMPLATE, "")
+            safe_template = user_input.get(CONF_GOS_SAFE_PAYLOAD_TEMPLATE, "")
+            if not isinstance(command_service, str) or not _SERVICE_PATTERN.fullmatch(
+                command_service.strip()
+            ):
+                errors[CONF_GOS_COMMAND_SERVICE] = "invalid_service"
+            if (
+                not isinstance(command_template, str)
+                or not command_template.strip()
+                or "fake_temp" not in command_template
+            ):
+                errors[CONF_GOS_COMMAND_PAYLOAD_TEMPLATE] = "invalid_gos_template"
+            if not isinstance(safe_service, str) or not _SERVICE_PATTERN.fullmatch(
+                safe_service.strip()
+            ):
+                errors[CONF_GOS_SAFE_SERVICE] = "invalid_service"
+            if not isinstance(safe_template, str) or not safe_template.strip():
+                errors[CONF_GOS_SAFE_PAYLOAD_TEMPLATE] = "invalid_safe_template"
+            if user_input.get(CONF_GOS_SAFE_ACTION_CONFIRMED) is not True:
+                errors[CONF_GOS_SAFE_ACTION_CONFIRMED] = "safe_action_required"
+        numeric_fields = (
+            (CONF_COMFORT_MINIMUM_TEMPERATURE, 5.0, 35.0),
+            (CONF_COMFORT_MAXIMUM_TEMPERATURE, 5.0, 35.0),
+            (CONF_SUMMER_THRESHOLD, 5.0, 30.0),
+            (CONF_SUMMER_HYSTERESIS, 0.5, 5.0),
+            (CONF_MAXIMUM_SENSOR_AGE_MINUTES, 2.0, 30.0),
+            (CONF_RECOVERY_VALID_OBSERVATIONS, 2.0, 10.0),
+        )
+        values: dict[str, float] = {}
+        defaults = {
+            CONF_COMFORT_MINIMUM_TEMPERATURE: DEFAULT_COMFORT_MINIMUM_TEMPERATURE,
+            CONF_COMFORT_MAXIMUM_TEMPERATURE: DEFAULT_COMFORT_MAXIMUM_TEMPERATURE,
+            CONF_SUMMER_THRESHOLD: DEFAULT_SUMMER_THRESHOLD,
+            CONF_SUMMER_HYSTERESIS: DEFAULT_SUMMER_HYSTERESIS,
+            CONF_MAXIMUM_SENSOR_AGE_MINUTES: DEFAULT_MAXIMUM_SENSOR_AGE_MINUTES,
+            CONF_RECOVERY_VALID_OBSERVATIONS: DEFAULT_RECOVERY_VALID_OBSERVATIONS,
+        }
+        for field, lower, upper in numeric_fields:
+            try:
+                value = float(user_input.get(field, defaults[field]))
+            except (TypeError, ValueError):
+                errors[field] = "invalid_advanced_value"
+                continue
+            if not math.isfinite(value) or not lower <= value <= upper:
+                errors[field] = "invalid_advanced_value"
+                continue
+            values[field] = value
+        if (
+            CONF_COMFORT_MINIMUM_TEMPERATURE in values
+            and CONF_COMFORT_MAXIMUM_TEMPERATURE in values
+            and values[CONF_COMFORT_MINIMUM_TEMPERATURE]
+            >= values[CONF_COMFORT_MAXIMUM_TEMPERATURE]
+        ):
+            errors[CONF_COMFORT_MAXIMUM_TEMPERATURE] = "invalid_comfort_range"
+        for field in (
+            CONF_MAXIMUM_SENSOR_AGE_MINUTES,
+            CONF_RECOVERY_VALID_OBSERVATIONS,
+        ):
+            if field in values and not values[field].is_integer():
+                errors[field] = "invalid_advanced_value"
         return errors
 
     def _entity_exists(self, entity_id: str) -> bool:
@@ -311,40 +562,18 @@ class PumpSteerOptionsFlow(config_entries.OptionsFlow):
 
 
 async def async_migrate_entry(hass, entry: config_entries.ConfigEntry) -> bool:
-    """Migrate useful V2 identity without importing old tuning parameters."""
+    """Migrate V3 alpha entries without mutating a user's V2 installation."""
     if entry.version > 3:
+        return False
+    # V3 beta is intentionally side-by-side/test-install only. Converting a V2
+    # entry here would destroy options that V2 needs for rollback. A future
+    # migration must be explicit, versioned, and preserve a restorable copy.
+    if entry.version < 3:
         return False
     if entry.version == 3 and entry.minor_version >= 1:
         return True
-    if entry.version == 3:
-        hass.config_entries.async_update_entry(
-            entry,
-            unique_id=_entry_unique_id(entry.entry_id),
-            version=3,
-            minor_version=1,
-        )
-        return True
-    legacy = {**entry.data, **entry.options}
-    indoor = legacy.get(CONF_INDOOR_ENTITY)
-    outdoor = legacy.get(CONF_OUTDOOR_ENTITY) or legacy.get(LEGACY_OUTDOOR_ENTITY)
-    if not indoor or not outdoor:
-        return False
-    try:
-        target = float(legacy.get(CONF_TARGET_TEMPERATURE, DEFAULT_TARGET_TEMPERATURE))
-    except (TypeError, ValueError):
-        target = DEFAULT_TARGET_TEMPERATURE
-    if not math.isfinite(target) or not (
-        MIN_TARGET_TEMPERATURE <= target <= MAX_TARGET_TEMPERATURE
-    ):
-        target = DEFAULT_TARGET_TEMPERATURE
     hass.config_entries.async_update_entry(
         entry,
-        data={
-            CONF_INDOOR_ENTITY: indoor,
-            CONF_OUTDOOR_ENTITY: outdoor,
-            CONF_TARGET_TEMPERATURE: target,
-        },
-        options={},
         unique_id=_entry_unique_id(entry.entry_id),
         version=3,
         minor_version=1,

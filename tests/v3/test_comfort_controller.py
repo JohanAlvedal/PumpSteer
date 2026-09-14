@@ -17,7 +17,6 @@ from custom_components.pumpsteer.v3.control import (
     ComfortControllerState,
 )
 
-
 NOW = datetime(2026, 1, 15, 12, 0, tzinfo=UTC)
 
 
@@ -56,6 +55,46 @@ def test_positive_error_produces_positive_bounded_heating_request() -> None:
     assert result.comfort_error == pytest.approx(1.0)
     assert result.effective_error == pytest.approx(0.9)
     assert 0.0 < result.heating_request <= 15.0
+    assert result.curtailment == 0.0
+
+
+def test_negative_error_produces_positive_bounded_curtailment() -> None:
+    result = step(ComfortController(), indoor=22.0)
+
+    assert result.comfort_error == pytest.approx(-1.0)
+    assert result.effective_error == pytest.approx(-0.9)
+    assert result.heating_request == 0.0
+    assert 0.0 < result.curtailment <= 15.0
+
+
+def test_curtailment_respects_narrower_safety_policy_limit() -> None:
+    result = step(
+        ComfortController(ComfortControllerConfig(proportional_gain=20.0)),
+        indoor=24.0,
+        safety=SafetyPolicy(maximum_curtailment=3.0),
+    )
+
+    assert result.heating_request == 0.0
+    assert result.curtailment == 3.0
+    assert result.output_saturated
+
+
+def test_negative_integral_cannot_curtail_below_comfort_floor() -> None:
+    state = ComfortControllerState(integral=-8.0)
+    result = step(ComfortController(), indoor=19.0, state=state)
+
+    assert result.heating_request > 0.0
+    assert result.curtailment == 0.0
+    assert result.next_state.integral >= 0.0
+
+
+def test_positive_integral_cannot_heat_above_comfort_ceiling() -> None:
+    state = ComfortControllerState(integral=8.0)
+    result = step(ComfortController(), indoor=24.0, state=state)
+
+    assert result.heating_request == 0.0
+    assert result.curtailment > 0.0
+    assert result.next_state.integral <= 0.0
 
 
 @pytest.mark.parametrize("indoor", [20.9, 21.0, 21.1])
@@ -88,6 +127,21 @@ def test_conditional_integration_prevents_upper_windup() -> None:
     result = step(controller, indoor=18.0)
 
     assert result.heating_request == 2.0
+    assert result.integral_term == 0.0
+    assert result.integrator_frozen
+
+
+def test_conditional_integration_prevents_lower_windup() -> None:
+    controller = ComfortController(
+        ComfortControllerConfig(
+            proportional_gain=10.0,
+            integral_gain_per_hour=10.0,
+            maximum_curtailment=2.0,
+        )
+    )
+    result = step(controller, indoor=24.0)
+
+    assert result.curtailment == 2.0
     assert result.integral_term == 0.0
     assert result.integrator_frozen
 

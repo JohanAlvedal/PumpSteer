@@ -7,6 +7,13 @@ nav_order: 2
 # 🚀 Installation Guide
 {: .no_toc }
 
+{: .warning }
+The instructions below primarily describe PumpSteer V2. The V3 development line is a
+comfort-only pre-beta and must not replace the only working V2 production installation.
+Use a separate Home Assistant test installation and follow the
+[V3 beta rollout](V3_BETA_ROLLOUT.md). Automatic V2-to-V3 config-entry migration is
+intentionally refused so V2 settings remain available for rollback.
+
 <details open markdown="block">
   <summary>Contents</summary>
   {: .text-delta }

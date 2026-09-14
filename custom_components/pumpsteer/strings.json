@@ -26,13 +26,24 @@
     "step": {
       "init": {
         "title": "Configure PumpSteer sensors",
-        "description": "Choose temperature sensors and physical output. Active OhmOnWiFi control requires its MQTT watchdog so communication loss returns the relay to the real outdoor sensor.",
+        "description": "Choose temperature sensors and physical output. Active outputs require a verified safe action. Test Generic Output System (GOS) with a harmless service before connecting heating hardware.",
         "data": {
           "indoor_temp_entity": "Indoor temperature sensor",
           "outdoor_temp_entity": "Outdoor temperature sensor",
           "output_mode": "Physical output",
+          "comfort_minimum_temperature": "Comfort floor",
+          "comfort_maximum_temperature": "Comfort ceiling",
+          "summer_threshold": "Summer passthrough threshold",
+          "summer_hysteresis": "Summer-mode hysteresis",
+          "maximum_sensor_age_minutes": "Maximum sensor age",
+          "recovery_valid_observations": "Valid new readings required after a fault",
           "ohmon_mqtt_base_topic": "OhmOnWiFi MQTT base topic",
-          "ohmon_watchdog_confirmed": "I have enabled and verified the OhmOnWiFi watchdog"
+          "ohmon_watchdog_confirmed": "I have enabled and verified the OhmOnWiFi watchdog",
+          "gos_command_service": "GOS command service (domain.service)",
+          "gos_command_payload_template": "GOS command payload template using {{ fake_temp }}",
+          "gos_safe_service": "GOS safe-state service (domain.service)",
+          "gos_safe_payload_template": "GOS safe-state payload template",
+          "gos_safe_action_confirmed": "I have tested and verified the GOS safe action"
         }
       }
     },
@@ -43,14 +54,21 @@
       "already_configured": "This indoor and outdoor sensor pair is already configured",
       "invalid_output_mode": "Choose a supported physical output",
       "invalid_mqtt_topic": "Enter a concrete MQTT base topic ending with /, for example ohmonwifiplus/123456/",
-      "watchdog_required": "Enable and verify the OhmOnWiFi watchdog before active control"
+      "watchdog_required": "Enable and verify the OhmOnWiFi watchdog before active control",
+      "invalid_service": "Enter a service in domain.service form",
+      "invalid_gos_template": "Enter a YAML mapping template that references fake_temp",
+      "invalid_safe_template": "Enter a YAML mapping for the safe action",
+      "safe_action_required": "Test and verify the GOS safe action before active control",
+      "invalid_advanced_value": "Choose a value within the permitted safety range",
+      "invalid_comfort_range": "The comfort ceiling must be above the comfort floor"
     }
   },
   "selector": {
     "output_mode": {
       "options": {
         "shadow": "No physical output",
-        "ohmon_mqtt": "OhmOnWiFi / Plus via MQTT (active test)"
+        "ohmon_mqtt": "OhmOnWiFi / Plus via MQTT (active test)",
+        "generic_output": "Generic Output System (advanced active test)"
       }
     }
   },
