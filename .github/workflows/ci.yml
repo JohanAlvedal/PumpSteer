@@ -2,15 +2,27 @@ name: CI & Release
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
+      - v3-development
+      - 'feature/v3-*'
     paths:
       - 'custom_components/**'
-      - 'manifest.json'
+      - 'tests/**'
+      - '.github/workflows/**'
+      - 'pytest.ini'
+      - 'ruff.toml'
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - v3-development
     paths:
       - 'custom_components/**'
-      - 'manifest.json'
+      - 'tests/**'
+      - '.github/workflows/**'
+      - 'pytest.ini'
+      - 'ruff.toml'
   schedule:
     - cron: '0 6 * * 1'
   release:
