@@ -197,7 +197,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     try:
-        await coordinator.async_refresh()
         entry.async_on_unload(coordinator.async_start_source_tracking())
         entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -211,6 +210,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if learning_runtime is not None:
             learning_runtime.stop()
         raise
+
+    try:
+        await coordinator.async_refresh()
+    except Exception:
+        _LOGGER.exception(
+            "Initial PumpSteer runtime refresh failed; entities remain loaded for recovery"
+        )
+        try:
+            await runtime.async_shutdown()
+        except Exception:
+            _LOGGER.exception(
+                "Unable to request physical-output bypass after initial refresh failure"
+            )
+
     if learning_coordinator is not None:
         try:
             learning_coordinator.start()
