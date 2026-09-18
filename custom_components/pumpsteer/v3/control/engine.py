@@ -192,7 +192,11 @@ class ControlEngine:
         assert observation is not None
         recovery_required = state.recovery_required
         valid_observations = state.consecutive_valid_observations
-        if recovery_required and _has_new_critical_observation(observation, state):
+        if recovery_required:
+            # Critical inputs have already passed range, freshness, and timestamp
+            # validation for this cycle. Count consecutive valid control cycles
+            # rather than requiring a new sensor timestamp on every cycle; stable
+            # sensors must be allowed to recover without manufacturing state changes.
             valid_observations += 1
             if valid_observations >= self._config.recovery_valid_observations:
                 recovery_required = False
@@ -413,19 +417,6 @@ def _summer_passthrough_active(
             config.summer_threshold - config.summer_hysteresis
         )
     return outdoor_temperature >= config.summer_threshold
-
-
-def _has_new_critical_observation(
-    observation: Observation,
-    state: EngineState,
-) -> bool:
-    """Return whether at least one critical source advanced since the last cycle."""
-    if state.last_indoor_observed_at is None or state.last_outdoor_observed_at is None:
-        return True
-    return (
-        observation.indoor.observed_at > state.last_indoor_observed_at
-        or observation.outdoor.observed_at > state.last_outdoor_observed_at
-    )
 
 
 def _passthrough_result(
