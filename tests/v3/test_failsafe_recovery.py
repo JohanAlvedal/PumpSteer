@@ -98,3 +98,31 @@ def test_v3_sensor_platform_does_not_depend_on_legacy_entry_version(
     asyncio.run(sensor_platform.async_setup_entry(hass, entry, add_entities))
 
     assert calls == [(hass, entry, add_entities)]
+
+def test_recovery_accepts_stable_but_fresh_sensor_values() -> None:
+    """Stable sensor timestamps must not latch recovery while readings stay fresh."""
+    states = MutableStates()
+    states.set_temperature(INDOOR, "unavailable", NOW)
+    states.set_temperature(OUTDOOR, 4.0, NOW)
+    runtime = PumpSteerRuntime(
+        config=RuntimeConfig(INDOOR, OUTDOOR, 21.0),
+        states=states,
+        engine=ControlEngine(),
+    )
+
+    failed = asyncio.run(runtime.async_update(NOW))
+    assert failed.supervised.decision.state is ControlState.FAILSAFE
+
+    observed_at = NOW + timedelta(minutes=1)
+    states.set_temperature(INDOOR, 20.5, observed_at)
+    states.set_temperature(OUTDOOR, 4.0, observed_at)
+
+    first = asyncio.run(runtime.async_update(observed_at))
+    second = asyncio.run(runtime.async_update(NOW + timedelta(minutes=2)))
+    third = asyncio.run(runtime.async_update(NOW + timedelta(minutes=3)))
+
+    assert first.supervised.decision.state is ControlState.RECOVERY
+    assert second.supervised.decision.state is ControlState.RECOVERY
+    assert third.supervised.decision.state is ControlState.COMFORT
+    assert third.supervised.fallback_active is False
+
