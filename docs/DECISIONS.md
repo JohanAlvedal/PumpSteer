@@ -115,8 +115,8 @@ means the worst case is one "missed" cycle — imperceptible in practice.
 
 ### Why brake hold exists
 
-**Decision:** After an expensive period ends, the brake is held for `BRAKE_HOLD_MINUTES`
-(default 30 min) before ramping out.
+**Decision:** A non-expensive gap is bridged only when the next expensive period begins within
+`BRAKE_HOLD_MINUTES` (default 30 min). Otherwise the brake starts ramping out immediately.
 
 **Problem this solves:**
 Price data at 15-minute resolution can produce alternating expensive/cheap/expensive
@@ -124,7 +124,13 @@ slots within a longer expensive block. Without hold, the brake would ramp out du
 the cheap dip and then immediately ramp in again — causing oscillation and extra wear.
 
 30 minutes covers two 15-minute cheap slots — enough to bridge typical intra-block
-dips without holding the brake unreasonably long after a genuine price drop.
+dips without allowing a distant expensive period, for example several hours away, to
+keep the system unnecessarily braked.
+
+**Factor behavior during a bridge:**
+The current brake factor is held constant. A bridge is not treated as a new brake
+request, because doing so would continue ramping the brake upward during a cheap/normal
+slot instead of merely preserving the existing brake state.
 
 **When hold is bypassed:**
 If `indoor < comfort_floor`, hold is set to 0 and the brake releases immediately
