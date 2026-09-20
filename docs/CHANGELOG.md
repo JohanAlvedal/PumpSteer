@@ -10,6 +10,44 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
+## [Unreleased] — Thermal control review
+
+### Fixed
+- Pre-brake now respects the same comfort floor as active price braking.
+- PumpSteer no longer starts pre-brake when indoor temperature is already below the configured comfort floor.
+- An existing pre-brake ramp is allowed to release when the comfort floor is crossed.
+- Short-dip bridging cannot override the comfort floor.
+- Added regression tests for pre-brake comfort protection.
+- `bridge_short_dip` now bridges only when the next expensive period begins within the configured `brake_hold_minutes` window.
+- Weather forecast no longer decides whether a short price dip is bridged; bridging is a pure price-gap decision.
+- The brake factor is held constant during a bridged dip instead of continuing to ramp upward.
+- Longer non-expensive gaps now start ramping the brake out immediately.
+- Added regression tests for short, long, and custom bridge windows.
+- Added saving-level-based preheat headroom: 0.3 / 0.5 / 0.7 / 1.0 / 1.5 °C for levels 1-5.
+- Preheat boost now tapers linearly above target and reaches zero at `target + headroom` instead of allowing uncontrolled thermal overcharge.
+- Added `preheat_headroom_c`, `preheat_ceiling_c`, and `preheat_headroom_factor` diagnostics.
+- Added regression tests for full, tapered, and blocked preheat headroom states.
+
+### Notes
+- This review is being implemented incrementally on the thermal-control development branch.
+- Steps 1-3 leave PI tuning, price classification, and ThermalModel behavior unchanged. Step 3 intentionally bounds and tapers the existing preheat strategy.
+
+---
+
+## [2.1.4] — Ohmigo watchdog keepalive
+
+### Fixed
+- Ohmigo now receives a keepalive resend when the configured push interval is due even if the requested setpoint remains within the 0.2 °C hysteresis.
+- Prevents the Ohmigo watchdog from entering Bypass while PumpSteer's normal output path is healthy and Ohmigo Push is enabled.
+- Keepalive resends are DEBUG-only and do not create extra Logbook entries.
+- Fixed Home Assistant translation parsing errors caused by literal Jinja braces in Generic Output help text.
+
+### Maintenance
+- Synchronized manifest, internal version constant, and version regression test to 2.1.4.
+- Updated English and Swedish Ohmigo help text for keepalive behavior.
+
+---
+
 ## [2.1.1] — Release hardening & beta output support
 
 ### Fixed

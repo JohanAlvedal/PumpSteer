@@ -115,8 +115,8 @@ means the worst case is one "missed" cycle — imperceptible in practice.
 
 ### Why brake hold exists
 
-**Decision:** After an expensive period ends, the brake is held for `BRAKE_HOLD_MINUTES`
-(default 30 min) before ramping out.
+**Decision:** A non-expensive gap is bridged only when the next expensive period begins within
+`BRAKE_HOLD_MINUTES` (default 30 min). Otherwise the brake starts ramping out immediately.
 
 **Problem this solves:**
 Price data at 15-minute resolution can produce alternating expensive/cheap/expensive
@@ -124,7 +124,13 @@ slots within a longer expensive block. Without hold, the brake would ramp out du
 the cheap dip and then immediately ramp in again — causing oscillation and extra wear.
 
 30 minutes covers two 15-minute cheap slots — enough to bridge typical intra-block
-dips without holding the brake unreasonably long after a genuine price drop.
+dips without allowing a distant expensive period, for example several hours away, to
+keep the system unnecessarily braked.
+
+**Factor behavior during a bridge:**
+The current brake factor is held constant. A bridge is not treated as a new brake
+request, because doing so would continue ramping the brake upward during a cheap/normal
+slot instead of merely preserving the existing brake state.
 
 **When hold is bypassed:**
 If `indoor < comfort_floor`, hold is set to 0 and the brake releases immediately
@@ -142,7 +148,8 @@ strings (`pre_braking` vs `preheating`).
 **Pre-brake (5a):**
 - Pure price signal: imminent expensive period within `ramp_in` minutes
 - No forecast dependency
-- Goal: brake at full factor exactly when the expensive slot starts
+- Still subject to the same comfort floor as active braking
+- Goal: brake at full factor exactly when the expensive slot starts, without sacrificing the configured comfort floor
 
 **Preheat-boost (5b):**
 - Forecast signal: imminent expensive period AND cold weather coming
@@ -157,6 +164,36 @@ machine explicit and testable.
 **Why 5a must not be forecast-gated:**
 Forecast data can be unavailable (misconfigured sensor, API outage). Gating 5a on
 forecast would cause the brake to miss its window whenever forecast is unavailable.
+
+**Why the comfort floor still applies to 5a:**
+Pre-brake is only an early phase of the same heat-reduction strategy used during an
+expensive slot. Starting that reduction when the house is already below its configured
+comfort floor would make the price signal override comfort. Therefore the comfort floor
+blocks a new pre-brake and causes an existing pre-brake ramp to release.
+
+---
+
+### Why preheat headroom follows saving level and tapers gradually
+
+**Decision:** Preheat may charge the house slightly above the normal target, but the
+maximum allowed headroom is tied to saving level: 0.0, 0.3, 0.5, 0.7, 1.0 and 1.5 °C
+for levels 0 through 5.
+
+**Reasoning:**
+Preheating is useful only if the house can store heat before a more expensive period.
+Stopping all extra heat exactly at target wastes some of that thermal storage
+opportunity. Allowing unlimited over-temperature would do the opposite: it could spend
+cheap electricity on heat that is not needed and reduce comfort.
+
+The saving level already expresses how strongly the user wants PumpSteer to trade
+temperature variation for cost optimization, so the same intent should bound both the
+lower comfort floor and the upper preheat allowance.
+
+**Why taper instead of a hard switch:**
+Below target, the full forecast-derived preheat boost is allowed. Between target and
+`target + headroom`, the extra boost is reduced linearly. At the ceiling, extra boost
+is zero. This avoids a sharp on/off transition around the upper temperature limit while
+leaving the ordinary PI loop in control of baseline comfort.
 
 ---
 

@@ -82,8 +82,9 @@ does not rise.
 
 **Possible causes:**
 
-1. **Comfort floor is preventing braking**
+1. **Comfort floor is preventing braking or pre-braking**
    The indoor temperature is below the comfort floor (`target − allowed_drop`).
+   This blocks a new pre-brake and releases an existing brake/pre-brake ramp.
    Check `comfort_floor_c` in `sensor.pumpsteer` attributes.
    Lower aggressiveness or raise target temperature.
 
@@ -109,18 +110,20 @@ does not rise.
 
 **Possible causes:**
 
-1. **Brake hold is active**
-   After an expensive slot, the brake holds for `BRAKE_HOLD_MINUTES` (default 30 min)
-   before ramping out. This is intentional — it prevents oscillation during short
-   cheap dips within a longer expensive block.
+1. **Short-dip bridge is active**
+   PumpSteer holds the current brake factor only when the next expensive period starts
+   within `BRAKE_HOLD_MINUTES` (default 30 min). If the next expensive period is farther
+   away, the brake should ramp out immediately.
 
 2. **Next slot is also expensive**
    Check the `price_category` of upcoming slots. If the next slot is also expensive,
    the brake remains active.
 
 3. **`bridge_short_dip` is active**
-   If an expensive period is coming soon after a short cheap window, PumpSteer bridges
-   the dip by holding the brake. Check the `bridge_short_dip` attribute.
+   If an expensive period is coming within the configured bridge window, PumpSteer
+   preserves the current brake factor across the short dip. The factor should stay flat,
+   not continue ramping upward. Check `bridge_short_dip`, `minutes_until_expensive`, and
+   `bridge_limit_minutes` in the sensor attributes.
 
 ---
 
@@ -149,20 +152,25 @@ from today's data only. This is correct behavior.
 
 **Diagnosis steps:**
 
-1. Check that indoor temperature is **below** target.
-   Preheat is suppressed when `indoor_temp >= target_temperature`.
+1. Check the thermal headroom.
+   Preheat can continue slightly above target, but the boost tapers to zero at
+   `target + preheat_headroom_c`. Check `preheat_headroom_c`,
+   `preheat_ceiling_c`, and `preheat_headroom_factor` on `sensor.pumpsteer`.
+   At a headroom factor of 0.0, extra preheat is intentionally blocked.
 
-2. Check that the cold-forecast heuristic is satisfied.
-   The control loop uses `_forecast_is_cold()` — a simple check based on forecast
-   temperature. Check your weather entity is configured and reporting valid forecasts.
+2. Check `sensor.pumpsteer_thermal_outlook`.
+   When ThermalOutlook is available, `preheat_worthwhile` must be true and
+   `preheat_strength` scales how much boost is used. If ThermalOutlook cannot be
+   built, PumpSteer falls back to the simpler `_forecast_is_cold()` check.
 
-3. Check that `raw_tomorrow` is populated on your price entity.
-   Lookahead requires tomorrow's prices to be available.
+3. Check that valid future price data exists.
+   Preheat only runs when an expensive period is inside the configured lookahead.
+   Tomorrow data is needed when that period crosses into the next day.
 
-{: .note }
-`sensor.pumpsteer_thermal_outlook` attributes like `preheat_worthwhile` are
-**diagnostic only** — they do not directly control preheat in the current version.
-Use them as context clues, not as a definitive trigger indicator.
+4. Check that `switch.pumpsteer_preheat_boost` is on.
+
+The maximum preheat headroom is 0.3 / 0.5 / 0.7 / 1.0 / 1.5 °C for saving levels
+1 through 5 respectively.
 
 ---
 
@@ -201,10 +209,10 @@ logs. This can happen if the entity failed to save state before the restart.
 
 1. `switch.pumpsteer_ohmigo_enabled` is `on`
 2. The Ohmigo entity ID in the options flow matches the actual entity
-3. The new value differs from the current Ohmigo value by more than 0.2 °C (hysteresis)
-4. At least `ohmigo_interval_minutes` have passed since the last push
+3. At least `ohmigo_interval_minutes` have passed since the last Ohmigo command
+4. Changes smaller than 0.2 °C are treated as an unchanged setpoint, but the current setpoint is still resent when the interval is due to keep the Ohmigo watchdog alive
 
-Check HA logs for `Ohmigo push →` messages to confirm pushes are occurring.
+Check HA debug logs for `Ohmigo push` or `Ohmigo keepalive resend` messages to confirm commands are occurring.
 
 ---
 
@@ -227,6 +235,33 @@ In **Developer Tools → Template**, you can inspect PumpSteer state directly:
 {{ state_attr('sensor.pumpsteer_thermal_outlook', 'warming_trend') }}
 {{ state_attr('sensor.pumpsteer_thermal_outlook', 'night_min_temp') }}
 ```
+
+---
+
+## PumpSteer diagnostic log files
+
+PumpSteer writes a structured diagnostic log to:
+
+```
+/config/pump.log
+```
+
+The log is **diagnostic only**. PumpSteer does not read log entries back into the
+controller and does not use `pump.log` for PI control, price braking, preheat decisions,
+or ThermalModel calculations. Deleting old diagnostic logs therefore does not change
+control behavior.
+
+Current versions do not use a `/config/pumplog/` directory. If such a directory exists,
+it is legacy data from an older setup and can be removed.
+
+Log rotation is simple: when PumpSteer initializes, a `pump.log` larger than 1 MB is
+renamed to `pump.log.1`, replacing any older `pump.log.1` file.
+
+{: .note }
+Old rotated logs and legacy `pumplog` files can be deleted at any time. Avoid deleting
+the active `/config/pump.log` while Home Assistant is running, because PumpSteer may
+still have the file open. If the active file is removed, perform a full Home Assistant
+restart to ensure a new `pump.log` is created and logging resumes normally.
 
 ---
 

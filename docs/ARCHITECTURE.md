@@ -74,7 +74,7 @@ Rules:
 - Always smooth — ramped in and out, never a hard step
 - `dt` per ramp step is capped at 60 seconds (prevents jumps after HA restarts)
 - Released immediately if indoor temperature falls below the comfort floor
-- Held briefly after expensive period ends (`BRAKE_HOLD_MINUTES = 30 min`)
+- A short non-expensive gap is bridged only when the next expensive period starts within `BRAKE_HOLD_MINUTES` (default 30 min)
 - PI integral is **frozen** while brake is active
 
 ### 4. No Double Influence
@@ -102,8 +102,8 @@ The control loop evaluates blocks in strict priority order and returns on the fi
 2. Safe mode      → required sensor missing    → passthrough real temp
 3. Aggressiveness 0 → pure PI, all price logic disabled
 4. Braking        → current price is expensive AND comfort allows
-5a. Pre-brake     → expensive imminent, within ramp_in window
-5b. Preheat-boost → expensive imminent AND forecast is cold
+5a. Pre-brake     → expensive imminent, within ramp_in window AND comfort allows
+5b. Preheat-boost → expensive imminent, forecast supports preheat, thermal headroom remains
 6. Normal PI      → default, with optional ramp-out from previous brake
 ```
 
@@ -118,8 +118,8 @@ The control loop evaluates blocks in strict priority order and returns on the fi
 | `normal` | default | Yes | No (or ramp-out) | Accumulates |
 | `holiday` | holiday switch on | Yes (lower target) | No (or ramp-out) | Accumulates |
 | `braking` | price expensive, comfort OK | Frozen¹ | Yes | Frozen |
-| `pre_braking` | expensive imminent, within ramp_in | Frozen¹ | Yes (ramping in) | Frozen |
-| `preheating` | expensive imminent + cold forecast | Yes + boost | No | Accumulates |
+| `pre_braking` | expensive imminent, within ramp_in, comfort OK | Frozen¹ | Yes (ramping in) | Frozen |
+| `preheating` | expensive imminent + forecast worthwhile + headroom remaining | Yes + tapered boost | No | Accumulates |
 
 ¹ PI is computed with a frozen integral. At `factor = 1.0` the PI output has no effect
 on `fake_temp`. It influences output only during ramp-in/ramp-out (`0 < factor < 1`)
@@ -168,6 +168,11 @@ brake_temp = outdoor + BRAKE_DELTA_C
 At `factor = 0.0`: pure PI output (no brake).
 At `factor = 1.0`: full brake (PI frozen, brake temp dominates).
 
+During a valid `bridge_short_dip`, the existing brake factor is held flat. The bridge
+does not count as a new brake request and therefore does not continue ramping the factor
+upward. If the next expensive period is farther away than `BRAKE_HOLD_MINUTES`, the
+brake ramps out normally.
+
 Ramp timing from house inertia slider:
 
 ```
@@ -183,25 +188,35 @@ These two blocks are distinct and are often confused:
 
 ### Pre-brake (block 5a) — pure price signal
 
-- Triggers when expensive period is within `ramp_in` minutes
+- Triggers when expensive period is within `ramp_in` minutes **and indoor temperature is above the comfort floor**
 - Starts ramp so brake reaches full factor exactly when the slot starts
+- If the comfort floor is crossed, pre-brake is not started and an existing pre-brake ramp is released
 - **No forecast dependency** — brakes regardless of weather
 - Mode: `pre_braking`
 
 ### Preheat-boost (block 5b) — forecast signal
 
-- Triggers when expensive period is coming **AND** a simple cold-forecast heuristic (`_forecast_is_cold()`) returns true
-- Adds `PREHEAT_BOOST_C = 4 °C` boost to PI demand
-- Only active when cold — pointless in warm weather
-- Suppressed when indoor temperature is already at or above target
+- Triggers when an expensive period is coming and `ThermalOutlook.preheat_worthwhile` is true
+- Falls back to the simpler `_forecast_is_cold()` heuristic only when ThermalOutlook is unavailable
+- Scales the base `PREHEAT_BOOST_C = 4 °C` by `preheat_strength`, the preheat ramp, and remaining thermal headroom
+- Allows limited thermal charging above target, but tapers the extra boost linearly to zero at the configured headroom ceiling
 - Requires `switch.pumpsteer_preheat_boost` to be on
 - Mode: `preheating`
 
-{: .note }
-`sensor.pumpsteer_thermal_outlook` provides richer forecast analysis but does **not**
-yet control block 5b. Preheat decisions in 2.1.x are still made by the simple
-`_forecast_is_cold()` heuristic. Connecting `ThermalOutlook.preheat_worthwhile` to
-block 5b is the next planned step.
+Preheat headroom follows saving level:
+
+| Saving level | Maximum headroom above target |
+|---|---:|
+| 0 | 0.0 °C |
+| 1 | 0.3 °C |
+| 2 | 0.5 °C |
+| 3 | 0.7 °C |
+| 4 | 1.0 °C |
+| 5 | 1.5 °C |
+
+Below target, the headroom factor is 1.0. Between target and the ceiling it decreases
+linearly. At `target + headroom`, extra preheat boost is zero and PumpSteer returns to
+normal PI behavior.
 
 {: .important }
 Block 5a must never be forecast-gated. If forecast data is unavailable, the brake must
@@ -212,8 +227,8 @@ for price-based braking.
 
 ## Comfort Floor
 
-The brake releases immediately when indoor temperature falls below the comfort floor,
-regardless of price or hold time:
+The brake and pre-brake release immediately when indoor temperature falls below the comfort floor,
+regardless of price, lookahead, or hold time:
 
 ```
 comfort_floor = target − COMFORT_FLOOR_BY_AGGRESSIVENESS[aggressiveness]
@@ -229,7 +244,8 @@ comfort_floor = target − COMFORT_FLOOR_BY_AGGRESSIVENESS[aggressiveness]
 | 5 | 3.0 °C | 18.0 °C |
 
 When the comfort floor triggers, `brake_hold` is set to 0 and the brake releases
-immediately. No hold time is applied.
+immediately. Pre-brake is also blocked, and any active pre-brake ramp is allowed to
+ramp out. No price lookahead or short-dip bridge may override the comfort floor.
 
 ---
 
@@ -259,13 +275,13 @@ When any required sensor is missing or invalid:
 
 ## Thermal Outlook (2.1.0+)
 
-{: .warning }
-`sensor.pumpsteer_thermal_outlook` is **diagnostic only** in 2.1.x. It does not
-influence any control decisions. Preheat is still controlled by the simple
-`_forecast_is_cold()` heuristic — not by this sensor.
-
 `sensor.pumpsteer_thermal_outlook` exposes the result of `analyze_thermal_outlook()`,
-which analyzes the 24-hour weather forecast to determine:
+which analyzes the 24-hour weather forecast. Its `preheat_worthwhile` and
+`preheat_strength` values are also used by block 5b when ThermalOutlook is available.
+The simpler `_forecast_is_cold()` check remains only as a fallback when the richer
+outlook cannot be built.
+
+ThermalOutlook determines:
 
 | Attribute | Description |
 |---|---|
@@ -277,8 +293,8 @@ which analyzes the 24-hour weather forecast to determine:
 | `night_min_temp` | Lowest forecast temp in 22:00–06:00 window |
 | `day_max_temp` | Highest forecast temp in 06:00–22:00 window |
 
-Connecting `ThermalOutlook.preheat_worthwhile` to block 5b is the next planned step.
-See the [Roadmap](ROADMAP) for details.
+The thermal model remains separate: ThermalOutlook influences preheat, while `ThermalModel`
+is still observational/future-facing and does not yet decide brake depth or preheat headroom.
 
 ---
 

@@ -24,22 +24,18 @@ See the [Changelog](CHANGELOG) for details on what has been delivered.
 
 ## 🔴 Active / Near-term
 
-### Connect ThermalOutlook to preheat-boost (block 5b)
+### Thermal control review
 
-Replace the current `_forecast_is_cold()` heuristic in block 5b with
-`ThermalOutlook.preheat_worthwhile` from the thermal outlook sensor.
+Current incremental review status:
 
-This gives preheat-boost access to the richer forecast analysis already computed by
-`sensor.pumpsteer_thermal_outlook` — including warming trends, precool risk, and
-night/day temperature splits — rather than the simpler cold-hours count.
-
-Implementation order: passive collection ✅ → connect ThermalOutlook → combine with ThermalModel once k is calibrated.
-
-### Activate preheat_strength scaling
-
-Use `ThermalOutlook.preheat_strength` (0.0–1.0) to scale the preheat boost
-proportionally rather than always applying the full `PREHEAT_BOOST_C = 4 °C`.
-A cold forecast warrants a larger boost; a mildly cold forecast warrants less.
+- ✅ Pre-brake respects the comfort floor
+- ✅ Short-dip bridging is bounded by `brake_hold_minutes` and holds factor flat
+- ✅ ThermalOutlook gates/scales preheat when available, with cold-forecast fallback
+- ✅ Preheat headroom is bounded by saving level and tapered near the ceiling
+- ⏳ Review preheat → pre-brake transition using available thermal reserve
+- ⏳ Keep PI comfort control active if electricity price data is unavailable
+- ⏳ Make preheat ramp timing use measured elapsed time
+- ⏳ Evaluate continuous brake strength / ThermalModel assistance after production data
 
 ### Verify brake ramp end-to-end in production
 

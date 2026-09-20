@@ -79,6 +79,18 @@ RAMP_OUT_FACTOR: Final[float] = 0.5
 # Preheating: extra boost applied during the preheat window (°C)
 PREHEAT_BOOST_C: Final[float] = 4.0
 
+# Maximum allowed indoor temperature headroom above target during preheat.
+# The boost is tapered linearly from full at target to zero at target + headroom.
+# Index follows aggressiveness / saving level 0-5.
+PREHEAT_HEADROOM_BY_AGGRESSIVENESS: Final[List[float]] = [
+    0.0,  # 0 — price optimization disabled
+    0.3,  # 1 — very gentle thermal charging
+    0.5,  # 2 — mild thermal charging
+    0.7,  # 3 — balanced thermal charging
+    1.0,  # 4 — aggressive thermal charging
+    1.5,  # 5 — maximum allowed thermal charging
+]
+
 # Peak filter: ignore expensive spikes shorter than this
 PEAK_FILTER_MIN_DURATION_MINUTES: Final[int] = 30
 
@@ -133,6 +145,10 @@ def validate_core_settings() -> None:
         errors.append("MIN_FAKE_TEMP must be less than MAX_FAKE_TEMP")
     if len(COMFORT_FLOOR_BY_AGGRESSIVENESS) != 6:
         errors.append("COMFORT_FLOOR_BY_AGGRESSIVENESS must have 6 entries (0-5)")
+    if len(PREHEAT_HEADROOM_BY_AGGRESSIVENESS) != 6:
+        errors.append("PREHEAT_HEADROOM_BY_AGGRESSIVENESS must have 6 entries (0-5)")
+    if any(value < 0 for value in PREHEAT_HEADROOM_BY_AGGRESSIVENESS):
+        errors.append("PREHEAT_HEADROOM_BY_AGGRESSIVENESS values must be >= 0")
     if not (0 < PRICE_PERCENTILE_CHEAP < PRICE_PERCENTILE_EXPENSIVE < 100):
         errors.append("Price percentiles must be 0 < P_cheap < P_expensive < 100")
     if RAMP_MIN_MINUTES >= RAMP_MAX_MINUTES:
