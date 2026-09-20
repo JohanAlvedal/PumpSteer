@@ -110,18 +110,20 @@ does not rise.
 
 **Possible causes:**
 
-1. **Brake hold is active**
-   After an expensive slot, the brake holds for `BRAKE_HOLD_MINUTES` (default 30 min)
-   before ramping out. This is intentional — it prevents oscillation during short
-   cheap dips within a longer expensive block.
+1. **Short-dip bridge is active**
+   PumpSteer holds the current brake factor only when the next expensive period starts
+   within `BRAKE_HOLD_MINUTES` (default 30 min). If the next expensive period is farther
+   away, the brake should ramp out immediately.
 
 2. **Next slot is also expensive**
    Check the `price_category` of upcoming slots. If the next slot is also expensive,
    the brake remains active.
 
 3. **`bridge_short_dip` is active**
-   If an expensive period is coming soon after a short cheap window, PumpSteer bridges
-   the dip by holding the brake. Check the `bridge_short_dip` attribute.
+   If an expensive period is coming within the configured bridge window, PumpSteer
+   preserves the current brake factor across the short dip. The factor should stay flat,
+   not continue ramping upward. Check `bridge_short_dip`, `minutes_until_expensive`, and
+   `bridge_limit_minutes` in the sensor attributes.
 
 ---
 
