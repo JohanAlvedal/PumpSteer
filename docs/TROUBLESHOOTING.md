@@ -152,20 +152,25 @@ from today's data only. This is correct behavior.
 
 **Diagnosis steps:**
 
-1. Check that indoor temperature is **below** target.
-   Preheat is suppressed when `indoor_temp >= target_temperature`.
+1. Check the thermal headroom.
+   Preheat can continue slightly above target, but the boost tapers to zero at
+   `target + preheat_headroom_c`. Check `preheat_headroom_c`,
+   `preheat_ceiling_c`, and `preheat_headroom_factor` on `sensor.pumpsteer`.
+   At a headroom factor of 0.0, extra preheat is intentionally blocked.
 
-2. Check that the cold-forecast heuristic is satisfied.
-   The control loop uses `_forecast_is_cold()` — a simple check based on forecast
-   temperature. Check your weather entity is configured and reporting valid forecasts.
+2. Check `sensor.pumpsteer_thermal_outlook`.
+   When ThermalOutlook is available, `preheat_worthwhile` must be true and
+   `preheat_strength` scales how much boost is used. If ThermalOutlook cannot be
+   built, PumpSteer falls back to the simpler `_forecast_is_cold()` check.
 
-3. Check that `raw_tomorrow` is populated on your price entity.
-   Lookahead requires tomorrow's prices to be available.
+3. Check that valid future price data exists.
+   Preheat only runs when an expensive period is inside the configured lookahead.
+   Tomorrow data is needed when that period crosses into the next day.
 
-{: .note }
-`sensor.pumpsteer_thermal_outlook` attributes like `preheat_worthwhile` are
-**diagnostic only** — they do not directly control preheat in the current version.
-Use them as context clues, not as a definitive trigger indicator.
+4. Check that `switch.pumpsteer_preheat_boost` is on.
+
+The maximum preheat headroom is 0.3 / 0.5 / 0.7 / 1.0 / 1.5 °C for saving levels
+1 through 5 respectively.
 
 ---
 
