@@ -142,7 +142,8 @@ strings (`pre_braking` vs `preheating`).
 **Pre-brake (5a):**
 - Pure price signal: imminent expensive period within `ramp_in` minutes
 - No forecast dependency
-- Goal: brake at full factor exactly when the expensive slot starts
+- Still subject to the same comfort floor as active braking
+- Goal: brake at full factor exactly when the expensive slot starts, without sacrificing the configured comfort floor
 
 **Preheat-boost (5b):**
 - Forecast signal: imminent expensive period AND cold weather coming
@@ -157,6 +158,12 @@ machine explicit and testable.
 **Why 5a must not be forecast-gated:**
 Forecast data can be unavailable (misconfigured sensor, API outage). Gating 5a on
 forecast would cause the brake to miss its window whenever forecast is unavailable.
+
+**Why the comfort floor still applies to 5a:**
+Pre-brake is only an early phase of the same heat-reduction strategy used during an
+expensive slot. Starting that reduction when the house is already below its configured
+comfort floor would make the price signal override comfort. Therefore the comfort floor
+blocks a new pre-brake and causes an existing pre-brake ramp to release.
 
 ---
 
