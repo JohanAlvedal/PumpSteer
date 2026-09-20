@@ -1223,12 +1223,7 @@ class PumpSteerSensor(RestoreEntity):
                     if self._last_outlook is not None
                     else 1.0
                 )
-                boost = (
-                    PREHEAT_BOOST_C
-                    * preheat_factor
-                    * strength
-                    * headroom_factor
-                )
+                boost = PREHEAT_BOOST_C * preheat_factor * strength * headroom_factor
                 boosted_demand = base_demand + boost
                 fake_temp = max(
                     MIN_FAKE_TEMP,
