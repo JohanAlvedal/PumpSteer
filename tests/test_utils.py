@@ -11,7 +11,7 @@ from custom_components.pumpsteer.utils import (
 
 def test_get_version_reads_manifest():
     # FIX: updated to match the current version in manifest.json
-    assert get_version() == "2.1.2"
+    assert get_version() == "2.1.3"
 
 
 def test_get_version_missing_manifest(monkeypatch):
