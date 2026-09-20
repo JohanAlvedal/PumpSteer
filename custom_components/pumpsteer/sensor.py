@@ -1095,19 +1095,35 @@ class PumpSteerSensor(RestoreEntity):
         #     Only makes sense when it is actually cold outside — boosting in
         #     warm weather wastes energy without benefit.
 
-        if upcoming:
-            minutes_until_expensive = self._minutes_until_expensive(
+        brake_hold = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
+        minutes_until_expensive = (
+            self._minutes_until_expensive(
                 categories,
                 current_slot,
                 interval_minutes,
                 now,
             )
+            if upcoming
+            else None
+        )
 
+        # Bridge only a genuinely short price dip between brake periods.
+        # The bridge is price-only and must never override the comfort floor.
+        bridge_short_dip = (
+            upcoming
+            and minutes_until_expensive is not None
+            and minutes_until_expensive <= brake_hold
+            and self._brake_ramp > 0.0
+            and not comfort_floor_reached
+        )
+
+        if upcoming:
             # 5a. Pre-brake: engage ramp when expensive is within ramp_in window.
             if (
                 minutes_until_expensive is not None
                 and minutes_until_expensive <= ramp_in
                 and not comfort_floor_reached
+                and not bridge_short_dip
             ):
                 factor = self._update_brake_ramp(True, now, ramp_in, ramp_out)
                 pi_demand = self._pi_output(
@@ -1158,8 +1174,10 @@ class PumpSteerSensor(RestoreEntity):
                     hours=PRICE_LOOKAHEAD_HOURS,
                 )
             )
-            if (outlook_worthwhile or forecast_cold_fallback) and self._preheat_enabled(
-                cfg
+            if (
+                not bridge_short_dip
+                and (outlook_worthwhile or forecast_cold_fallback)
+                and self._preheat_enabled(cfg)
             ):
                 preheat_factor = self._update_preheat_ramp(
                     True,
@@ -1208,27 +1226,18 @@ class PumpSteerSensor(RestoreEntity):
                 )
                 return
 
-        # Compute forecast_cold for bridge_short_dip if not already done above.
-        # (If upcoming=False the block above was skipped entirely.)
-        forecast_cold = self._forecast_is_cold(
-            summer_threshold,
-            forecast_temps,
-            hours=PRICE_LOOKAHEAD_HOURS,
-        )
-        bridge_short_dip = (
-            upcoming
-            and not forecast_cold
-            and self._brake_ramp > 0.0
-            and not comfort_floor_reached
-        )
         if bridge_short_dip:
-            log_event("BRIDGE_SHORT_DIP", brake_factor=round(self._brake_ramp, 3))
+            log_event(
+                "BRIDGE_SHORT_DIP",
+                brake_factor=round(self._brake_ramp, 3),
+                minutes_until_expensive=round(minutes_until_expensive, 1),
+                bridge_limit_minutes=round(brake_hold, 1),
+            )
 
         # 6. Normal PI control.
-        # If the brake is still ramping out (for example after an expensive period
-        # or during a bridged short dip), blend fake_temp between pi_fake and
-        # brake_temp so the ramp-out is visible in the actual output.
-        brake_hold = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
+        # A genuine short dip holds the current brake factor unchanged. Longer
+        # gaps ramp out immediately so a distant expensive period cannot keep
+        # the heat pump unnecessarily braked for hours.
 
         self._update_preheat_ramp(
             False,
@@ -1241,13 +1250,19 @@ class PumpSteerSensor(RestoreEntity):
 
         brake_should_hold = bridge_short_dip
 
-        factor = self._update_brake_ramp(
-            brake_should_hold,
-            now,
-            ramp_in,
-            ramp_out,
-            hold_minutes=brake_hold if brake_should_hold else 0.0,
-        )
+        if brake_should_hold:
+            # Keep the current factor flat during the short dip. Treating this
+            # as a new brake request would incorrectly continue ramping upward.
+            self._brake_last_t = now
+            factor = self._brake_ramp
+        else:
+            factor = self._update_brake_ramp(
+                False,
+                now,
+                ramp_in,
+                ramp_out,
+                hold_minutes=0.0,
+            )
 
         # Fit the thermal model once after a completed brake phase has fully ramped out.
         if self._was_braking_last_cycle and factor <= 0.0:
@@ -1281,6 +1296,12 @@ class PumpSteerSensor(RestoreEntity):
                 "ramp_out_minutes": round(ramp_out, 1),
                 "bridge_short_dip": bridge_short_dip,
                 "brake_should_hold": brake_should_hold,
+                "minutes_until_expensive": (
+                    round(minutes_until_expensive, 0)
+                    if minutes_until_expensive is not None
+                    else None
+                ),
+                "bridge_limit_minutes": round(brake_hold, 1),
             },
             now,
         )
