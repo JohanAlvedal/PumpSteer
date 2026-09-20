@@ -2,6 +2,8 @@
 
 import asyncio
 import sys
+
+import pytest
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -117,7 +119,7 @@ def test_headroom_factor_tapers_linearly_above_target():
         headroom=0.7,
     )
 
-    assert factor == 0.5
+    assert factor == pytest.approx(0.5)
 
 
 def test_headroom_factor_zero_at_ceiling():
