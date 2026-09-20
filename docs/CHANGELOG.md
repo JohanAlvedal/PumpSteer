@@ -18,6 +18,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - An existing pre-brake ramp is allowed to release when the comfort floor is crossed.
 - Short-dip bridging cannot override the comfort floor.
 - Added regression tests for pre-brake comfort protection.
+- `bridge_short_dip` now bridges only when the next expensive period begins within the configured `brake_hold_minutes` window.
+- Weather forecast no longer decides whether a short price dip is bridged; bridging is a pure price-gap decision.
+- The brake factor is held constant during a bridged dip instead of continuing to ramp upward.
+- Longer non-expensive gaps now start ramping the brake out immediately.
+- Added regression tests for short, long, and custom bridge windows.
 
 ### Notes
 - This review is being implemented incrementally on the thermal-control development branch.
