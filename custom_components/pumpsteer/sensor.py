@@ -45,6 +45,7 @@ from .settings import (
     PRECOOL_LOOKAHEAD,
     PRECOOL_MARGIN,
     PREHEAT_BOOST_C,
+    PREHEAT_HEADROOM_BY_AGGRESSIVENESS,
     PREHEAT_ON_MISSING_FORECAST,
     PRICE_LOOKAHEAD_HOURS,
     RAMP_OUT_FACTOR,
@@ -484,6 +485,28 @@ class PumpSteerSensor(RestoreEntity):
     def _comfort_floor(self, target: float, aggressiveness: int) -> float:
         drop = COMFORT_FLOOR_BY_AGGRESSIVENESS[aggressiveness]
         return target - drop
+
+    def _preheat_headroom(self, aggressiveness: int) -> float:
+        """Return maximum indoor temperature headroom allowed for preheat."""
+        return PREHEAT_HEADROOM_BY_AGGRESSIVENESS[aggressiveness]
+
+    @staticmethod
+    def _preheat_headroom_factor(
+        indoor: float,
+        target: float,
+        headroom: float,
+    ) -> float:
+        """Return 0-1 preheat allowance based on remaining thermal headroom."""
+        if headroom <= 0.0:
+            return 0.0
+        if indoor <= target:
+            return 1.0
+
+        ceiling = target + headroom
+        if indoor >= ceiling:
+            return 0.0
+
+        return max(0.0, min(1.0, (ceiling - indoor) / headroom))
 
     def _brake_temp(self, outdoor: float, delta_c: Optional[float] = None) -> float:
         delta = delta_c if delta_c is not None else BRAKE_DELTA_C
@@ -1174,10 +1197,19 @@ class PumpSteerSensor(RestoreEntity):
                     hours=PRICE_LOOKAHEAD_HOURS,
                 )
             )
+            preheat_headroom = self._preheat_headroom(aggressiveness)
+            preheat_ceiling = target + preheat_headroom
+            headroom_factor = self._preheat_headroom_factor(
+                indoor,
+                target,
+                preheat_headroom,
+            )
+
             if (
                 not bridge_short_dip
                 and (outlook_worthwhile or forecast_cold_fallback)
                 and self._preheat_enabled(cfg)
+                and headroom_factor > 0.0
             ):
                 preheat_factor = self._update_preheat_ramp(
                     True,
@@ -1191,7 +1223,12 @@ class PumpSteerSensor(RestoreEntity):
                     if self._last_outlook is not None
                     else 1.0
                 )
-                boost = PREHEAT_BOOST_C * preheat_factor * strength
+                boost = (
+                    PREHEAT_BOOST_C
+                    * preheat_factor
+                    * strength
+                    * headroom_factor
+                )
                 boosted_demand = base_demand + boost
                 fake_temp = max(
                     MIN_FAKE_TEMP,
@@ -1214,6 +1251,9 @@ class PumpSteerSensor(RestoreEntity):
                         "preheat_boost_c": round(boost, 2),
                         "preheat_factor": round(preheat_factor, 3),
                         "preheat_strength": round(strength, 2),
+                        "preheat_headroom_c": round(preheat_headroom, 2),
+                        "preheat_ceiling_c": round(preheat_ceiling, 2),
+                        "preheat_headroom_factor": round(headroom_factor, 3),
                         "brake_factor": 0.0,
                         "minutes_until_expensive": (
                             round(minutes_until_expensive, 0)
@@ -1243,6 +1283,14 @@ class PumpSteerSensor(RestoreEntity):
             False,
             ramp_in=max(ramp_in, 10.0),
             ramp_out=max(ramp_out, 10.0),
+        )
+
+        preheat_headroom = self._preheat_headroom(aggressiveness)
+        preheat_ceiling = target + preheat_headroom
+        headroom_factor = self._preheat_headroom_factor(
+            indoor,
+            target,
+            preheat_headroom,
         )
 
         pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
@@ -1302,6 +1350,9 @@ class PumpSteerSensor(RestoreEntity):
                     else None
                 ),
                 "bridge_limit_minutes": round(brake_hold, 1),
+                "preheat_headroom_c": round(preheat_headroom, 2),
+                "preheat_ceiling_c": round(preheat_ceiling, 2),
+                "preheat_headroom_factor": round(headroom_factor, 3),
             },
             now,
         )
