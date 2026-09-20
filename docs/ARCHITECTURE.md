@@ -74,7 +74,7 @@ Rules:
 - Always smooth — ramped in and out, never a hard step
 - `dt` per ramp step is capped at 60 seconds (prevents jumps after HA restarts)
 - Released immediately if indoor temperature falls below the comfort floor
-- Held briefly after expensive period ends (`BRAKE_HOLD_MINUTES = 30 min`)
+- A short non-expensive gap is bridged only when the next expensive period starts within `BRAKE_HOLD_MINUTES` (default 30 min)
 - PI integral is **frozen** while brake is active
 
 ### 4. No Double Influence
@@ -167,6 +167,11 @@ brake_temp = outdoor + BRAKE_DELTA_C
 
 At `factor = 0.0`: pure PI output (no brake).
 At `factor = 1.0`: full brake (PI frozen, brake temp dominates).
+
+During a valid `bridge_short_dip`, the existing brake factor is held flat. The bridge
+does not count as a new brake request and therefore does not continue ramping the factor
+upward. If the next expensive period is farther away than `BRAKE_HOLD_MINUTES`, the
+brake ramps out normally.
 
 Ramp timing from house inertia slider:
 
