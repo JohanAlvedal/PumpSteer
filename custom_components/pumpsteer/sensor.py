@@ -881,6 +881,7 @@ class PumpSteerSensor(RestoreEntity):
         ramp_out = max(RAMP_MIN_MINUTES, ramp_in * RAMP_OUT_FACTOR)
 
         comfort_floor = self._comfort_floor(target, aggressiveness)
+        comfort_floor_reached = indoor < comfort_floor
         forecast_temps = await self._forecast_temps()
 
         # Compute ThermalOutlook for preheat gating (block 5b).
@@ -1001,7 +1002,7 @@ class PumpSteerSensor(RestoreEntity):
             brake_delta = float(cfg.get("brake_delta_c", BRAKE_DELTA_C))
             brake_hold = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
 
-            if indoor < comfort_floor:
+            if comfort_floor_reached:
                 _LOGGER.info(
                     "Comfort floor reached (%.1f < %.1f), releasing brake",
                     indoor,
@@ -1106,6 +1107,7 @@ class PumpSteerSensor(RestoreEntity):
             if (
                 minutes_until_expensive is not None
                 and minutes_until_expensive <= ramp_in
+                and not comfort_floor_reached
             ):
                 factor = self._update_brake_ramp(True, now, ramp_in, ramp_out)
                 pi_demand = self._pi_output(
@@ -1213,7 +1215,12 @@ class PumpSteerSensor(RestoreEntity):
             forecast_temps,
             hours=PRICE_LOOKAHEAD_HOURS,
         )
-        bridge_short_dip = upcoming and not forecast_cold and self._brake_ramp > 0.0
+        bridge_short_dip = (
+            upcoming
+            and not forecast_cold
+            and self._brake_ramp > 0.0
+            and not comfort_floor_reached
+        )
         if bridge_short_dip:
             log_event("BRIDGE_SHORT_DIP", brake_factor=round(self._brake_ramp, 3))
 
