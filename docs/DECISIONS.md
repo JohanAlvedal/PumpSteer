@@ -173,6 +173,30 @@ blocks a new pre-brake and causes an existing pre-brake ramp to release.
 
 ---
 
+### Why preheat headroom follows saving level and tapers gradually
+
+**Decision:** Preheat may charge the house slightly above the normal target, but the
+maximum allowed headroom is tied to saving level: 0.0, 0.3, 0.5, 0.7, 1.0 and 1.5 °C
+for levels 0 through 5.
+
+**Reasoning:**
+Preheating is useful only if the house can store heat before a more expensive period.
+Stopping all extra heat exactly at target wastes some of that thermal storage
+opportunity. Allowing unlimited over-temperature would do the opposite: it could spend
+cheap electricity on heat that is not needed and reduce comfort.
+
+The saving level already expresses how strongly the user wants PumpSteer to trade
+temperature variation for cost optimization, so the same intent should bound both the
+lower comfort floor and the upper preheat allowance.
+
+**Why taper instead of a hard switch:**
+Below target, the full forecast-derived preheat boost is allowed. Between target and
+`target + headroom`, the extra boost is reduced linearly. At the ceiling, extra boost
+is zero. This avoids a sharp on/off transition around the upper temperature limit while
+leaving the ordinary PI loop in control of baseline comfort.
+
+---
+
 ### Why house thermal mass controls pre-brake lead time, not whether braking occurs
 
 **Decision:** The house inertia slider affects ramp timing, not braking eligibility.
