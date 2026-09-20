@@ -82,8 +82,9 @@ does not rise.
 
 **Possible causes:**
 
-1. **Comfort floor is preventing braking**
+1. **Comfort floor is preventing braking or pre-braking**
    The indoor temperature is below the comfort floor (`target − allowed_drop`).
+   This blocks a new pre-brake and releases an existing brake/pre-brake ramp.
    Check `comfort_floor_c` in `sensor.pumpsteer` attributes.
    Lower aggressiveness or raise target temperature.
 
@@ -201,10 +202,10 @@ logs. This can happen if the entity failed to save state before the restart.
 
 1. `switch.pumpsteer_ohmigo_enabled` is `on`
 2. The Ohmigo entity ID in the options flow matches the actual entity
-3. The new value differs from the current Ohmigo value by more than 0.2 °C (hysteresis)
-4. At least `ohmigo_interval_minutes` have passed since the last push
+3. At least `ohmigo_interval_minutes` have passed since the last Ohmigo command
+4. Changes smaller than 0.2 °C are treated as an unchanged setpoint, but the current setpoint is still resent when the interval is due to keep the Ohmigo watchdog alive
 
-Check HA logs for `Ohmigo push →` messages to confirm pushes are occurring.
+Check HA debug logs for `Ohmigo push` or `Ohmigo keepalive resend` messages to confirm commands are occurring.
 
 ---
 
