@@ -69,9 +69,7 @@ def _expected_call():
     )
 
 
-def test_changed_setpoint_and_due_keepalive_without_logbook_spam(
-    setup_push, caplog
-):
+def test_changed_setpoint_and_due_keepalive_without_logbook_spam(setup_push, caplog):
     clock, logbook_calls, entry = setup_push
     hass = _FakeHass("20.0")
 
