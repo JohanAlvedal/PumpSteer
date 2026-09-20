@@ -47,9 +47,9 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 |---|---|
 | **PI control** | Maintains indoor temperature at your target regardless of weather |
 | **Price braking** | Reduces heating during expensive electricity slots (P80 threshold) |
-| **Pre-brake** | Starts brake ramp before the expensive slot begins |
+| **Pre-brake** | Starts brake ramp before the expensive slot begins, while comfort allows |
 | **Preheat boost** | Heats extra before expensive periods when forecast is cold |
-| **Comfort floor** | Brake releases automatically if indoor temp drops too far |
+| **Comfort floor** | Brake and pre-brake release automatically if indoor temp drops too far |
 | **Summer mode** | Passes through real outdoor temp when it is warm enough |
 | **Ohmigo support** | Pushes fake temp directly to Ohmigo WiFi controller |
 | **Holiday mode** | Lowers target to 16 °C during absence |
@@ -68,7 +68,7 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 |---|---|
 | `normal` | Default PI control |
 | `braking` | Current price slot is expensive |
-| `pre_braking` | Expensive slot is imminent (within ramp window) |
+| `pre_braking` | Expensive slot is imminent, within ramp window, and comfort allows |
 | `preheating` | Expensive slot is imminent AND forecast is cold |
 | `summer_mode` | Outdoor temp ≥ summer threshold |
 | `safe_mode` | Required sensor data is missing |
