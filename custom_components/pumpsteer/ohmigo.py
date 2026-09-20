@@ -166,16 +166,12 @@ async def async_push_ohmigo(
     new_val = round(fake_temp * 2) / 2
 
     cur_state = hass.states.get(ohmigo_entity)
+    within_hysteresis = False
     if cur_state is not None:
         try:
             cur_val = float(cur_state.state)
             if abs(new_val - cur_val) < OHMIGO_HYSTERESIS_C:
-                _LOGGER.debug(
-                    "Ohmigo push skipped — within hysteresis (%.1f → %.1f)",
-                    cur_val,
-                    new_val,
-                )
-                return last_push_time
+                within_hysteresis = True
         except (ValueError, TypeError):
             pass
 
@@ -186,6 +182,11 @@ async def async_push_ohmigo(
             {"entity_id": ohmigo_entity, "value": new_val},
             blocking=False,
         )
+        if within_hysteresis:
+            _LOGGER.debug(
+                "Ohmigo keepalive resend: %s → %.1f °C", ohmigo_entity, new_val
+            )
+            return now
         _LOGGER.debug("Ohmigo push: %s → %.1f °C", ohmigo_entity, new_val)
 
         try:

@@ -3,7 +3,7 @@ from typing import Final, List
 
 _LOGGER = logging.getLogger(__name__)
 
-PUMPSTEER_VERSION: Final[str] = "2.1.0"
+PUMPSTEER_VERSION: Final[str] = "2.1.4"
 
 # === FAKE TEMPERATURE LIMITS ===
 MIN_FAKE_TEMP: Final[float] = -20.0
@@ -114,7 +114,7 @@ HOLIDAY_TEMP: Final[float] = 17.0
 # Users can override this per-installation in options (ohmigo_interval_minutes).
 OHMIGO_DEFAULT_INTERVAL_MINUTES: Final[float] = 5.0
 
-# Hysteresis: skip push when the new value is within this many °C of the current value.
+# Hysteresis: treat values within this range as unchanged; due keepalive pushes are still sent.
 OHMIGO_HYSTERESIS_C: Final[float] = 0.2
 
 # === SANITY BOUNDS ===
