@@ -10,6 +10,35 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
+## [Unreleased] — Thermal control review
+
+### Fixed
+- Pre-brake now respects the same comfort floor as active price braking.
+- PumpSteer no longer starts pre-brake when indoor temperature is already below the configured comfort floor.
+- An existing pre-brake ramp is allowed to release when the comfort floor is crossed.
+- Short-dip bridging cannot override the comfort floor.
+- Added regression tests for pre-brake comfort protection.
+
+### Notes
+- This review is being implemented incrementally on the thermal-control development branch.
+- No PI tuning, price classification, preheat strategy, or thermal-model behavior was changed in step 1.
+
+---
+
+## [2.1.4] — Ohmigo watchdog keepalive
+
+### Fixed
+- Ohmigo now receives a keepalive resend when the configured push interval is due even if the requested setpoint remains within the 0.2 °C hysteresis.
+- Prevents the Ohmigo watchdog from entering Bypass while PumpSteer's normal output path is healthy and Ohmigo Push is enabled.
+- Keepalive resends are DEBUG-only and do not create extra Logbook entries.
+- Fixed Home Assistant translation parsing errors caused by literal Jinja braces in Generic Output help text.
+
+### Maintenance
+- Synchronized manifest, internal version constant, and version regression test to 2.1.4.
+- Updated English and Swedish Ohmigo help text for keepalive behavior.
+
+---
+
 ## [2.1.1] — Release hardening & beta output support
 
 ### Fixed
