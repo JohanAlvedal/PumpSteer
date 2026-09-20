@@ -55,7 +55,7 @@
           "experimental_ml_enabled": "Uses historical data to learn your house's thermal inertia automatically.",
           "pid_kd": "How much PumpSteer reacts to fast temperature changes. Keep at 0.0 unless you tune it intentionally.",
           "modbus_service": "Home Assistant service to call, for example modbus.write_register, mqtt.publish or input_number.set_value.",
-          "modbus_payload_template": "YAML payload template for the service call. The template can use {{ fake_temp }}.",
+          "modbus_payload_template": "YAML payload template for the service call. The template can use the fake_temp variable.",
           "modbus_interval_minutes": "Minimum time between Generic Output System service calls."
         }
       }
