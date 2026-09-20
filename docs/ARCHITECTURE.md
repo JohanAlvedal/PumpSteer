@@ -102,7 +102,7 @@ The control loop evaluates blocks in strict priority order and returns on the fi
 2. Safe mode      → required sensor missing    → passthrough real temp
 3. Aggressiveness 0 → pure PI, all price logic disabled
 4. Braking        → current price is expensive AND comfort allows
-5a. Pre-brake     → expensive imminent, within ramp_in window
+5a. Pre-brake     → expensive imminent, within ramp_in window AND comfort allows
 5b. Preheat-boost → expensive imminent AND forecast is cold
 6. Normal PI      → default, with optional ramp-out from previous brake
 ```
@@ -118,7 +118,7 @@ The control loop evaluates blocks in strict priority order and returns on the fi
 | `normal` | default | Yes | No (or ramp-out) | Accumulates |
 | `holiday` | holiday switch on | Yes (lower target) | No (or ramp-out) | Accumulates |
 | `braking` | price expensive, comfort OK | Frozen¹ | Yes | Frozen |
-| `pre_braking` | expensive imminent, within ramp_in | Frozen¹ | Yes (ramping in) | Frozen |
+| `pre_braking` | expensive imminent, within ramp_in, comfort OK | Frozen¹ | Yes (ramping in) | Frozen |
 | `preheating` | expensive imminent + cold forecast | Yes + boost | No | Accumulates |
 
 ¹ PI is computed with a frozen integral. At `factor = 1.0` the PI output has no effect
@@ -183,8 +183,9 @@ These two blocks are distinct and are often confused:
 
 ### Pre-brake (block 5a) — pure price signal
 
-- Triggers when expensive period is within `ramp_in` minutes
+- Triggers when expensive period is within `ramp_in` minutes **and indoor temperature is above the comfort floor**
 - Starts ramp so brake reaches full factor exactly when the slot starts
+- If the comfort floor is crossed, pre-brake is not started and an existing pre-brake ramp is released
 - **No forecast dependency** — brakes regardless of weather
 - Mode: `pre_braking`
 
@@ -212,8 +213,8 @@ for price-based braking.
 
 ## Comfort Floor
 
-The brake releases immediately when indoor temperature falls below the comfort floor,
-regardless of price or hold time:
+The brake and pre-brake release immediately when indoor temperature falls below the comfort floor,
+regardless of price, lookahead, or hold time:
 
 ```
 comfort_floor = target − COMFORT_FLOOR_BY_AGGRESSIVENESS[aggressiveness]
@@ -229,7 +230,8 @@ comfort_floor = target − COMFORT_FLOOR_BY_AGGRESSIVENESS[aggressiveness]
 | 5 | 3.0 °C | 18.0 °C |
 
 When the comfort floor triggers, `brake_hold` is set to 0 and the brake releases
-immediately. No hold time is applied.
+immediately. Pre-brake is also blocked, and any active pre-brake ramp is allowed to
+ramp out. No price lookahead or short-dip bridge may override the comfort floor.
 
 ---
 
