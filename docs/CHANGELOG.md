@@ -23,10 +23,14 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - The brake factor is held constant during a bridged dip instead of continuing to ramp upward.
 - Longer non-expensive gaps now start ramping the brake out immediately.
 - Added regression tests for short, long, and custom bridge windows.
+- Added saving-level-based preheat headroom: 0.3 / 0.5 / 0.7 / 1.0 / 1.5 °C for levels 1-5.
+- Preheat boost now tapers linearly above target and reaches zero at `target + headroom` instead of allowing uncontrolled thermal overcharge.
+- Added `preheat_headroom_c`, `preheat_ceiling_c`, and `preheat_headroom_factor` diagnostics.
+- Added regression tests for full, tapered, and blocked preheat headroom states.
 
 ### Notes
 - This review is being implemented incrementally on the thermal-control development branch.
-- No PI tuning, price classification, preheat strategy, or thermal-model behavior was changed in step 1.
+- Steps 1-3 leave PI tuning, price classification, and ThermalModel behavior unchanged. Step 3 intentionally bounds and tapers the existing preheat strategy.
 
 ---
 
