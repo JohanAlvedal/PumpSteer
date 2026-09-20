@@ -238,6 +238,33 @@ In **Developer Tools → Template**, you can inspect PumpSteer state directly:
 
 ---
 
+## PumpSteer diagnostic log files
+
+PumpSteer writes a structured diagnostic log to:
+
+```
+/config/pump.log
+```
+
+The log is **diagnostic only**. PumpSteer does not read log entries back into the
+controller and does not use `pump.log` for PI control, price braking, preheat decisions,
+or ThermalModel calculations. Deleting old diagnostic logs therefore does not change
+control behavior.
+
+Current versions do not use a `/config/pumplog/` directory. If such a directory exists,
+it is legacy data from an older setup and can be removed.
+
+Log rotation is simple: when PumpSteer initializes, a `pump.log` larger than 1 MB is
+renamed to `pump.log.1`, replacing any older `pump.log.1` file.
+
+{: .note }
+Old rotated logs and legacy `pumplog` files can be deleted at any time. Avoid deleting
+the active `/config/pump.log` while Home Assistant is running, because PumpSteer may
+still have the file open. If the active file is removed, perform a full Home Assistant
+restart to ensure a new `pump.log` is created and logging resumes normally.
+
+---
+
 ## Enabling debug logging
 
 Add this to your `configuration.yaml` to get detailed PumpSteer logs:
