@@ -187,7 +187,16 @@ def compute_price_slot_index(
     if total_slots <= 0:
         return 0
     interval = max(1, price_interval_minutes)
-    minutes = current_time.hour * 60 + current_time.minute
+
+    if current_time.tzinfo is not None and current_time.utcoffset() is not None:
+        midnight = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        minutes = max(
+            0,
+            int((current_time.timestamp() - midnight.timestamp()) // 60),
+        )
+    else:
+        minutes = current_time.hour * 60 + current_time.minute
+
     slot = minutes // interval
     return max(0, min(total_slots - 1, slot))
 
