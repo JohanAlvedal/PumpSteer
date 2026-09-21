@@ -1,5 +1,6 @@
 import builtins
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from custom_components.pumpsteer.utils import (
     compute_price_slot_index,
@@ -31,6 +32,24 @@ def test_compute_price_slot_index_clamps_to_range():
     current_time = datetime(2023, 1, 1, 23, 59)
     index = compute_price_slot_index(current_time, 60, 24)
     assert index == 23
+
+
+def test_compute_price_slot_index_handles_spring_dst_transition():
+    stockholm = ZoneInfo("Europe/Stockholm")
+    current_time = datetime(2026, 3, 29, 3, 0, tzinfo=stockholm)
+
+    index = compute_price_slot_index(current_time, 15, 92)
+
+    assert index == 8
+
+
+def test_compute_price_slot_index_handles_repeated_autumn_hour():
+    stockholm = ZoneInfo("Europe/Stockholm")
+    first_0200 = datetime(2026, 10, 25, 2, 0, tzinfo=stockholm, fold=0)
+    second_0200 = datetime(2026, 10, 25, 2, 0, tzinfo=stockholm, fold=1)
+
+    assert compute_price_slot_index(first_0200, 15, 100) == 8
+    assert compute_price_slot_index(second_0200, 15, 100) == 12
 
 
 def test_get_price_window_for_hours_returns_expected_slice():
