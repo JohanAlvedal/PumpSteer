@@ -1588,6 +1588,16 @@ class PumpSteerSensor(RestoreEntity):
         extra: Dict[str, Any],
         now: datetime,
     ) -> None:
+        # Close an active bridge when another control branch takes over before
+        # the normal-control bridge block is reached.
+        if self._bridge_short_dip_active and mode != MODE_BRAKE_HOLD:
+            log_event(
+                "BRIDGE_SHORT_DIP_END",
+                brake_factor=round(self._brake_ramp, 3),
+                new_mode=mode,
+            )
+            self._bridge_short_dip_active = False
+
         if self._safe_mode_warned and mode != MODE_SAFE:
             _LOGGER.info(
                 "PumpSteer exited SAFE MODE and returned to normal control (mode=%s)",
