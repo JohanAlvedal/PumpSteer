@@ -73,6 +73,7 @@ MODE_PRECOOL = "precool"
 MODE_PREHEAT = "preheating"
 MODE_PREBRAKE = "pre_braking"
 MODE_BRAKING = "braking"
+MODE_BRAKE_HOLD = "brake_hold"
 MODE_PI = "normal"
 MODE_HOLIDAY = "holiday"
 MODE_ERROR = "error"
@@ -146,6 +147,7 @@ class PumpSteerSensor(RestoreEntity):
         # The PI reset should happen once on entry, not on every cycle.
         self._prev_aggressiveness: Optional[int] = None
         self._prev_mode: Optional[str] = None
+        self._bridge_short_dip_active: bool = False
 
         # Store the remove callback returned by add_update_listener so it can
         # be cleaned up on unload.
@@ -1261,13 +1263,19 @@ class PumpSteerSensor(RestoreEntity):
                 )
                 return
 
-        if bridge_short_dip:
+        if bridge_short_dip and not self._bridge_short_dip_active:
             log_event(
-                "BRIDGE_SHORT_DIP",
+                "BRIDGE_SHORT_DIP_START",
                 brake_factor=round(self._brake_ramp, 3),
                 minutes_until_expensive=round(minutes_until_expensive, 1),
                 bridge_limit_minutes=round(brake_hold, 1),
             )
+        elif not bridge_short_dip and self._bridge_short_dip_active:
+            log_event(
+                "BRIDGE_SHORT_DIP_END",
+                brake_factor=round(self._brake_ramp, 3),
+            )
+        self._bridge_short_dip_active = bridge_short_dip
 
         # 6. Normal PI control.
         # A genuine short dip holds the current brake factor unchanged. Longer
@@ -1320,7 +1328,13 @@ class PumpSteerSensor(RestoreEntity):
         else:
             fake_temp = pi_fake
 
-        mode = MODE_HOLIDAY if holiday else MODE_PI
+        mode = (
+            MODE_HOLIDAY
+            if holiday
+            else MODE_BRAKE_HOLD
+            if brake_should_hold
+            else MODE_PI
+        )
         await self._set_state(
             fake_temp,
             mode,
@@ -1574,6 +1588,16 @@ class PumpSteerSensor(RestoreEntity):
         extra: Dict[str, Any],
         now: datetime,
     ) -> None:
+        # Close an active bridge when another control branch takes over before
+        # the normal-control bridge block is reached.
+        if self._bridge_short_dip_active and mode != MODE_BRAKE_HOLD:
+            log_event(
+                "BRIDGE_SHORT_DIP_END",
+                brake_factor=round(self._brake_ramp, 3),
+                new_mode=mode,
+            )
+            self._bridge_short_dip_active = False
+
         if self._safe_mode_warned and mode != MODE_SAFE:
             _LOGGER.info(
                 "PumpSteer exited SAFE MODE and returned to normal control (mode=%s)",
