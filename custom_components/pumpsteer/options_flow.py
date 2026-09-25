@@ -5,6 +5,8 @@ from homeassistant import config_entries
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.selector import selector
 
+from .const import OHMIGO_RELAY_ENTITY
+
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "pumpsteer"
@@ -90,6 +92,14 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         }
                     ),
                     vol.Optional(
+                        OHMIGO_RELAY_ENTITY,
+                        description={
+                            "suggested_value": current_data.get(
+                                OHMIGO_RELAY_ENTITY, ""
+                            )
+                        },
+                    ): selector({"entity": {"domain": "switch"}}),
+                    vol.Optional(
                         "ohmigo_interval_minutes",
                         default=current_data.get("ohmigo_interval_minutes", 5),
                     ): selector(
@@ -163,6 +173,12 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
         ohmigo = user_input.get("ohmigo_entity", "")
         if ohmigo and not self._entity_exists(ohmigo):
             errors["ohmigo_entity"] = "entity_not_found"
+
+        # Relay Guard is optional. A configured relay must exist, but it may be
+        # temporarily unavailable when options are saved.
+        relay = user_input.get(OHMIGO_RELAY_ENTITY, "")
+        if relay and not self._entity_exists(relay):
+            errors[OHMIGO_RELAY_ENTITY] = "entity_not_found"
 
         return errors
 
