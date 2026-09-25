@@ -36,10 +36,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     runtime["notification_unsub"] = async_setup_notifications(hass, entry)
     runtime["relay_entity"] = configured_relay_entity(entry)
     runtime["relay_guard"] = create_relay_guard(hass, entry)
-    runtime["options_unsub"] = entry.add_update_listener(_async_options_updated)
 
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        runtime["options_unsub"] = entry.add_update_listener(_async_options_updated)
         relay_guard = runtime["relay_guard"]
         if relay_guard is not None:
             relay_guard.async_start()
