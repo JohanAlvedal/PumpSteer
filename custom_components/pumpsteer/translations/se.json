@@ -37,7 +37,8 @@
           "ohmigo_interval_minutes": "Ohmigo push-intervall",
           "modbus_service": "Generisk utgångstjänst",
           "modbus_payload_template": "Mall för generisk utgångspayload",
-          "modbus_interval_minutes": "Intervall för generisk utgång"
+          "modbus_interval_minutes": "Intervall för generisk utgång",
+          "ohmigo_relay_entity": "Ohmigo Active/Bypass-relä (valfritt)"
         },
         "data_description": {
           "pid_kp": "Hur kraftigt PumpSteer reagerar på aktuell temperaturdifferens. Typiskt intervall: 2,0 till 5,0.",
@@ -51,7 +52,8 @@
           "ohmigo_interval_minutes": "Minsta tid mellan push-uppdateringar till Ohmigo. Standard 5 minuter. Förändringar under 0,2 °C behandlas som oförändrade, men aktuellt börvärde skickas på nytt när intervallet löpt ut för att hålla Ohmigos watchdog aktiv.",
           "modbus_service": "Home Assistant-tjänsten som ska anropas, till exempel modbus.write_register, mqtt.publish eller input_number.set_value.",
           "modbus_payload_template": "YAML-mall för tjänsteanropets payload. Mallen kan använda variabeln fake_temp.",
-          "modbus_interval_minutes": "Minsta tid mellan anrop från Generic Output System."
+          "modbus_interval_minutes": "Minsta tid mellan anrop från Generic Output System.",
+          "ohmigo_relay_entity": "Valfri switch-entitet för Ohmigos Active/Bypass-relä. När den är konfigurerad skapar PumpSteer en separat Relay Guard-brytare. Skyddet återställer bara ett uttryckligt OFF-läge när Ohmigo Push är på; unknown eller unavailable skickar aldrig något reläkommando."
         }
       }
     },

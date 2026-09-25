@@ -42,7 +42,8 @@
           "price_tomorrow_entity": "Tomorrow electricity price sensor",
           "modbus_service": "Generic output service",
           "modbus_payload_template": "Generic output payload template",
-          "modbus_interval_minutes": "Generic output push interval"
+          "modbus_interval_minutes": "Generic output push interval",
+          "ohmigo_relay_entity": "Ohmigo Active/Bypass relay (optional)"
         },
         "data_description": {
           "pid_kp": "How strongly PumpSteer reacts to current temperature error. Typical range: 2.0 to 5.0.",
@@ -56,7 +57,8 @@
           "pid_kd": "How much PumpSteer reacts to fast temperature changes. Keep at 0.0 unless you tune it intentionally.",
           "modbus_service": "Home Assistant service to call, for example modbus.write_register, mqtt.publish or input_number.set_value.",
           "modbus_payload_template": "YAML payload template for the service call. The template can use the fake_temp variable.",
-          "modbus_interval_minutes": "Minimum time between Generic Output System service calls."
+          "modbus_interval_minutes": "Minimum time between Generic Output System service calls.",
+          "ohmigo_relay_entity": "Optional switch entity for the Ohmigo Active/Bypass relay. When configured, PumpSteer exposes a separate Relay Guard switch that can recover an unexpected OFF state while Ohmigo Push is ON."
         }
       }
     },

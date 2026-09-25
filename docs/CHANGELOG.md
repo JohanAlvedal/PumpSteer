@@ -12,6 +12,10 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ---
 ## [Unreleased] — Thermal control review
 
+### Added
+- Optional **Ohmigo Relay Guard** for installations with a physical Active/Bypass relay.
+- Relay recovery is opt-in, fail-closed for unknown/unavailable states, inhibited when Ohmigo Push is off, and verified from the actual relay state with bounded retries.
+
 ### Fixed
 - Pre-brake now respects the same comfort floor as active price braking.
 - PumpSteer no longer starts pre-brake when indoor temperature is already below the configured comfort floor.

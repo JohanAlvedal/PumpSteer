@@ -49,6 +49,7 @@ Go to **Settings → Devices & Services → PumpSteer → Configure** to access 
 |---|---|---|
 | **Notification service** | Push service for price alerts, e.g. `notify.mobile_app_my_phone`. Leave empty to use HA persistent notifications. | — |
 | **Ohmigo entity** | Number entity to push the fake outdoor temperature to. Leave empty to disable. | — |
+| **Ohmigo Active/Bypass relay** | Optional `switch` entity for the physical Ohmigo Active/Bypass relay. Configuring it exposes the separate **Ohmigo Relay Guard** switch. | — |
 | **Ohmigo push interval** | Minimum minutes between Ohmigo pushes. | 5 min |
 
 {: .note }
@@ -215,6 +216,45 @@ Ohmigo number entity. Toggle this without having to reconfigure the options flow
 Pushes are skipped when:
 - The new value is within 0.2 °C of the current Ohmigo value (hysteresis)
 - Less than `ohmigo_interval_minutes` have passed since the last push
+
+---
+
+### 🛡️ Ohmigo Relay Guard
+
+**Entity:** `switch.pumpsteer_ohmigo_relay_guard`  
+**Created only when:** an **Ohmigo Active/Bypass relay** entity is configured  
+**Default on first creation:** Off
+
+The Relay Guard is an optional safety layer for Ohmigo installations where a physical
+Active/Bypass relay determines whether PumpSteer's simulated outdoor-temperature signal
+is connected to the heat pump.
+
+It is deliberately separate from the PI, price, thermal and setpoint-push logic.
+
+Recovery is allowed only when all three conditions are true:
+
+1. Relay Guard is armed
+2. **Ohmigo Push** is explicitly On
+3. The configured relay explicitly reports `off`
+
+If the relay is `unknown`, `unavailable`, or missing, PumpSteer sends **no relay
+command**. Ohmigo Push Off inhibits recovery but does not change the relay itself.
+
+When eligible, Relay Guard waits briefly for the device/MQTT state to stabilize, then
+tries `switch.turn_on` up to three times. Each attempt is followed by state
+verification; a successful service call alone is not considered recovery. The relay
+must actually report `on`.
+
+The guard checks after relay/Push state changes, at Home Assistant startup, and with a
+low-frequency five-minute safety check. Recovery attempts do not overlap.
+
+`safe_mode` does not disable Relay Guard by itself. If Ohmigo Push remains On,
+PumpSteer may still be forwarding the real outdoor temperature through Ohmigo, so the
+Active signal path is still required.
+
+The guard switch restores its explicit On/Off state across Home Assistant restarts.
+Its state attributes expose the configured relay, current guard status, relay/Push
+states, recovery attempts, and timestamps for the last recovery/failure.
 
 ---
 

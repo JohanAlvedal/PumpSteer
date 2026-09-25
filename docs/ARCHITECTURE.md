@@ -93,6 +93,34 @@ Each signal influences the system once only:
 
 ---
 
+## Ohmigo Relay Guard — Output-path Safety
+
+The optional **Ohmigo Relay Guard** is intentionally outside the PumpSteer control
+loop. It does not calculate temperature, classify price, alter PI state, or change
+thermal behavior.
+
+The responsibilities are separate:
+
+```text
+PumpSteer control → calculates virtual outdoor temperature
+Ohmigo Push       → decides whether setpoints are sent to Ohmigo
+Relay Guard       → keeps the configured Active signal path available
+```
+
+Relay recovery is eligible only when the guard is armed, Ohmigo Push explicitly
+reports On, and the configured relay explicitly reports Off. Unknown, unavailable or
+missing relay state fails closed and never causes a relay command.
+
+This separation is important in `safe_mode`: PumpSteer may still send the real outdoor
+temperature through Ohmigo, so safe mode alone must not disable the physical Active
+signal path.
+
+Relay recovery uses a short reconnect stabilization delay, at most three
+`switch.turn_on` attempts, and state verification after every attempt. Successful
+service dispatch is not treated as success until the relay itself reports On.
+
+---
+
 ## State Machine — Priority Order
 
 The control loop evaluates blocks in strict priority order and returns on the first match:
