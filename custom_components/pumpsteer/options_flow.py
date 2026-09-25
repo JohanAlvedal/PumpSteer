@@ -94,9 +94,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         OHMIGO_RELAY_ENTITY,
                         description={
-                            "suggested_value": current_data.get(
-                                OHMIGO_RELAY_ENTITY, ""
-                            )
+                            "suggested_value": current_data.get(OHMIGO_RELAY_ENTITY, "")
                         },
                     ): selector({"entity": {"domain": "switch"}}),
                     vol.Optional(

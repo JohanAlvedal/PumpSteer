@@ -93,9 +93,7 @@ class OhmigoRelayGuard:
             "status": self._status,
             "relay_entity": self.relay_entity,
             "relay_state": relay_state.state if relay_state is not None else None,
-            "ohmigo_push_state": (
-                push_state.state if push_state is not None else None
-            ),
+            "ohmigo_push_state": (push_state.state if push_state is not None else None),
             "recovery_attempts": self._attempts,
             "last_recovery": self._last_recovery,
             "last_failure": self._last_failure,
@@ -145,9 +143,7 @@ class OhmigoRelayGuard:
         if self.hass.is_running:
             self._schedule_check("integration_setup")
 
-        _LOGGER.debug(
-            "Ohmigo Relay Guard monitoring %s", self.relay_entity
-        )
+        _LOGGER.debug("Ohmigo Relay Guard monitoring %s", self.relay_entity)
 
     async def async_stop(self) -> None:
         """Stop monitoring and cancel any in-flight recovery."""

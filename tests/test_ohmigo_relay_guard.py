@@ -309,7 +309,7 @@ def test_unavailable_to_off_state_change_schedules_recovery(guard_setup, monkeyp
     monkeypatch.setattr(
         relay_guard,
         "async_track_time_interval",
-        lambda hass_obj, callback, interval: (lambda: None),
+        lambda hass_obj, callback, interval: lambda: None,
     )
 
     def succeed(attempt):
