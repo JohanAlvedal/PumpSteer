@@ -144,4 +144,7 @@ def test_preheating_notification_is_unchanged():
         }
     )
 
-    assert _notification_content("preheating", state) == MODE_NOTIFICATIONS["preheating"]
+    assert (
+        _notification_content("preheating", state)
+        == MODE_NOTIFICATIONS["preheating"]
+    )
