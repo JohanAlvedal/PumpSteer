@@ -11,6 +11,7 @@ template:
           {% elif mode == 'preheating' %}  Pre-heating
           {% elif mode == 'pre_braking' %} Brake warming
           {% elif mode == 'braking' %}     Saving
+          {% elif mode == 'brake_hold' %}   Saving hold
           {% elif mode == 'summer_mode' %} Summer
           {% elif mode == 'precool' %}     Pre-cooling
           {% elif mode == 'holiday' %}     Holiday
@@ -22,6 +23,7 @@ template:
           {% elif mode == 'preheating' %}  mdi:fire-alert
           {% elif mode == 'pre_braking' %} mdi:car-brake-alert
           {% elif mode == 'braking' %}     mdi:piggy-bank
+          {% elif mode == 'brake_hold' %}   mdi:pause-circle-outline
           {% elif mode == 'summer_mode' %} mdi:weather-sunny
           {% elif mode == 'precool' %}     mdi:snowflake-alert
           {% elif mode == 'holiday' %}     mdi:beach
@@ -44,6 +46,8 @@ template:
             ⏱️ Brake warming — expensive soon
           {% elif mode == 'braking' %}
             💰 Saving — {{ price | title }} price
+          {% elif mode == 'brake_hold' %}
+            ⏸️ Holding brake across short price gap
           {% elif mode == 'summer_mode' %}
             ☀️ Summer mode — no heating needed
           {% elif mode == 'precool' %}
@@ -120,7 +124,7 @@ template:
         unique_id: ps_is_saving
         state: >
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
-          {{ mode in ['braking', 'preheating', 'pre_braking'] }}
+          {{ mode in ['braking', 'brake_hold', 'preheating', 'pre_braking'] }}
         icon: mdi:piggy-bank
 
       - name: "PumpSteer Holiday Status"
