@@ -139,7 +139,7 @@ By default, prices are classified relative to today's spread:
 - P30 to P80 → `normal`
 - Above P80 → `expensive`
 
-This means roughly 70% of hours are normal and 20% are expensive.
+Ignoring the absolute-cheap override, this corresponds roughly to 30% cheap, 50% normal and 20% expensive slots.
 
 If you want to brake less frequently (fewer hours classified as expensive), raise
 `PRICE_PERCENTILE_EXPENSIVE` toward 90. If you want to brake more often, lower it toward 70.
@@ -151,42 +151,48 @@ all slots are classified as cheap regardless of percentile — no braking occurs
 
 ## Forecast and Preheat
 
-Preheat boost (`switch.pumpsteer_preheat_boost`) only triggers when:
+Preheat boost (`switch.pumpsteer_preheat_boost`) is an overlay on the ordinary PI
+comfort loop. It can activate when:
 
-1. An expensive slot is coming within the lookahead window
-2. A simple cold-forecast heuristic (`_forecast_is_cold()`) returns True
-3. Indoor temperature is **below** the target temperature
+1. An expensive period is inside the lookahead window
+2. ThermalOutlook says preheating is worthwhile, or the cold-forecast fallback is used
+   because ThermalOutlook is unavailable
+3. Thermal headroom remains
+4. The Preheat Boost switch is on
 
-{: .note }
-`sensor.pumpsteer_thermal_outlook` provides richer forecast analysis but does **not**
-yet influence the preheat decision. The control loop still uses the simple
-`_forecast_is_cold()` heuristic. The thermal outlook sensor is diagnostic only in
-the current version. Use it to understand why preheat did or did not trigger — not
-as a guarantee that preheat will follow its `preheat_worthwhile` attribute.
+When ThermalOutlook is available, `preheat_strength` scales the boost. PumpSteer can
+preheat slightly above the normal target: saving levels 1–5 allow 0.3 / 0.5 / 0.7 /
+1.0 / 1.5 °C of headroom. The boost tapers linearly above target and reaches zero at
+the headroom ceiling.
 
 If preheat never triggers but you expect it to:
 
-- Check that your weather entity is correctly configured in the options flow
-- Check `sensor.pumpsteer_thermal_outlook` attributes for context (warming trend, night min temp)
-- Ensure the price sensor has `raw_tomorrow` populated (required for lookahead)
-- Check that indoor temperature is below target — preheat is suppressed when already at target
+- Check that the weather entity is correctly configured and returning a forecast
+- Check `sensor.pumpsteer_thermal_outlook` → `preheat_worthwhile` and `preheat_strength`
+- Verify tomorrow/lookahead prices are available from `tomorrow` or `raw_tomorrow`
+- Check `preheat_headroom_factor`; 0.0 means the thermal ceiling has been reached
+- Confirm `switch.pumpsteer_preheat_boost` is on
 
 If preheat triggers too often or during warm weather:
 
-- This indicates the weather entity is reporting cold temps when it should not
-- Check `sensor.pumpsteer_thermal_outlook` → `warming_trend` and `day_max_temp` attributes
-- Consider lowering `PRECOOL_MARGIN` in `settings.py` if you see unwanted precool behavior
+- Inspect ThermalOutlook's `warming_trend`, `day_max_temp` and `preheat_strength`
+- Verify the configured weather entity represents the home's actual local conditions
+- Check the saving level: higher levels intentionally allow more preheat headroom
 
 ---
 
-## Recorder Requirement
+## Price data and Recorder
 
-PumpSteer reads price history from the HA Recorder to compute daily thresholds.
-The integration requires at least a few hours of recorded price data on the first day.
-This is normally satisfied automatically as long as the Recorder integration is active
-(it is enabled by default in HA).
+The active P30/P80 control thresholds are computed from **today's available price
+list** and cached for the calendar day. PumpSteer does not require recorded price
+history from Home Assistant Recorder for the current daily classification strategy.
 
-If you see safe mode triggered with a reason mentioning price data, check that:
-- Your price sensor is reporting valid states
-- The `raw_today` attribute contains a list of numeric prices
-- The Recorder is active and not excluded from recording the price sensor
+The integration still declares Recorder as a dependency, but Recorder history is not
+what drives today's P30/P80 thresholds.
+
+If safe mode reports missing price data, check that:
+
+- the configured price entity exists and is available
+- today's prices are present in `today` or `raw_today`
+- tomorrow prices, when used for lookahead, are present in `tomorrow` or `raw_tomorrow`
+- list entries are plain numbers or objects containing a numeric `value` / `price`
