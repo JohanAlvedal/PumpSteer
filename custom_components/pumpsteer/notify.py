@@ -1,4 +1,5 @@
 import logging
+import math
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -43,6 +44,27 @@ def _get_main_sensor_entity_id(hass: HomeAssistant, entry: ConfigEntry) -> str |
     return registry.async_get_entity_id("sensor", DOMAIN, entry.entry_id)
 
 
+def _notification_content(mode: str, state) -> tuple[str, str]:
+    """Build notification content from the state that triggered the transition."""
+    title, message = MODE_NOTIFICATIONS[mode]
+
+    if mode != "braking":
+        return title, message
+
+    raw_price = state.attributes.get("current_price")
+    try:
+        price = float(raw_price)
+    except (TypeError, ValueError):
+        return title, message
+
+    if not math.isfinite(price):
+        return title, message
+
+    unit = state.attributes.get("current_price_unit")
+    unit_suffix = f" {unit.strip()}" if isinstance(unit, str) and unit.strip() else ""
+    return title, f"{message}\nCurrent price: {price:.2f}{unit_suffix}"
+
+
 @callback
 def async_setup_notifications(hass: HomeAssistant, entry: ConfigEntry):
     """Call from __init__.py async_setup_entry. Returns unsubscribe callable."""
@@ -77,7 +99,7 @@ def async_setup_notifications(hass: HomeAssistant, entry: ConfigEntry):
             )
             return
 
-        title, message = MODE_NOTIFICATIONS[new_mode]
+        title, message = _notification_content(new_mode, new_state)
         hass.async_create_task(
             async_send_notification(hass, entry, title, message, "pumpsteer_price")
         )
