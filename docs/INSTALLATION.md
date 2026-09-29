@@ -165,7 +165,7 @@ After setup, PumpSteer registers the following entities:
 | `switch.pumpsteer_preheat_boost` | Enable/disable preheat boost | On |
 | `switch.pumpsteer_notifications` | Enable/disable price notifications | On |
 | `switch.pumpsteer_holiday_mode` | Enable holiday mode (16 °C target) | Off |
-| `switch.pumpsteer_ohmigo_enabled` | Enable/disable Ohmigo push | On |
+| `switch.pumpsteer_ohmigo_push` | Enable/disable Ohmigo push | On |
 | `switch.pumpsteer_ohmigo_relay_guard` | Optional Active/Bypass relay recovery guard; created only when a relay is configured | Off on first creation |
 
 ### Datetime helpers
