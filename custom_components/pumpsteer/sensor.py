@@ -131,6 +131,8 @@ class PumpSteerSensor(RestoreEntity):
         self._last_price_categories: List[str] = []
         self._p30: float = 0.0
         self._p80: float = 0.0
+        self._current_price: Optional[float] = None
+        self._current_price_unit: Optional[str] = None
 
         # Cache price thresholds once per calendar day per entity.
         # Recomputing every hour caused mid-slot reclassification: P80 could
@@ -656,6 +658,12 @@ class PumpSteerSensor(RestoreEntity):
             "target_temperature": target,
             "outdoor_temperature": outdoor,
             "price_category": price_category,
+            "current_price": (
+                round(self._current_price, 4)
+                if self._current_price is not None
+                else None
+            ),
+            "current_price_unit": self._current_price_unit,
             "aggressiveness": aggressiveness,
             "p30": round(self._p30, 3),
             "p80": round(self._p80, 3),
@@ -1371,6 +1379,9 @@ class PumpSteerSensor(RestoreEntity):
         cfg: Dict[str, Any],
         now: datetime,
     ) -> Tuple[List[float], List[str], int, int]:
+        self._current_price = None
+        self._current_price_unit = None
+
         today_entity_id = cfg.get("electricity_price_entity")
         tomorrow_entity_id = cfg.get("price_tomorrow_entity") or today_entity_id
 
@@ -1553,6 +1564,17 @@ class PumpSteerSensor(RestoreEntity):
             PEAK_FILTER_MIN_DURATION_MINUTES,
         )
         current_slot = compute_price_slot_index(now, interval_minutes, len(prices))
+
+        # Capture the exact price value from the same parsed price snapshot and
+        # slot index used for this control cycle's price classification. This
+        # lets notifications and diagnostics report the price that actually
+        # drove the mode decision, without re-reading a separate entity later.
+        if 0 <= current_slot < len(prices):
+            self._current_price = prices[current_slot]
+
+        unit = get_attr(self.hass, today_entity_id, "unit_of_measurement")
+        if isinstance(unit, str) and unit.strip():
+            self._current_price_unit = unit.strip()
 
         return prices, categories, interval_minutes, current_slot
 

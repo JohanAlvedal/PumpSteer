@@ -109,7 +109,7 @@ Copy individual cards from this file into your own dashboard via the
 
 | Entity | State | Key attributes |
 |---|---|---|
-| `sensor.pumpsteer` | Fake outdoor temperature (°C) | `mode`, `price_category`, `brake_factor`, `heating_demand_c`, `p30`, `p80`, `indoor_temperature`, `outdoor_temperature`, `minutes_until_expensive`, `status`, `last_updated` |
+| `sensor.pumpsteer` | Fake outdoor temperature (°C) | `mode`, `price_category`, `current_price`, `current_price_unit`, `brake_factor`, `heating_demand_c`, `p30`, `p80`, `indoor_temperature`, `outdoor_temperature`, `minutes_until_expensive`, `status`, `last_updated` |
 | `sensor.pumpsteer_thermal_outlook` | `preheat` / `neutral` / `warming` / `precool_risk` | `preheat_worthwhile`, `preheat_strength`, `warming_trend`, `cooling_trend`, `night_min_temp`, `day_max_temp` |
 
 ### Numbers

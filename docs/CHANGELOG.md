@@ -13,6 +13,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased] — Thermal control review
 
 ### Added
+- Braking notifications now include the exact current-slot electricity price from the same price snapshot that triggered PumpSteer's control decision, including the configured price sensor's unit when available.
+- The main PumpSteer sensor exposes `current_price` and `current_price_unit` for diagnostics.
 - Optional **Ohmigo Relay Guard** for installations with a physical Active/Bypass relay.
 - Relay recovery is opt-in, fail-closed for unknown/unavailable states, inhibited when Ohmigo Push is off, and verified from the actual relay state with bounded retries.
 
