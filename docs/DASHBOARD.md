@@ -58,7 +58,7 @@ that adds helper template sensors on top of the built-in PumpSteer entities:
 | `sensor.pumpsteer_temperature_difference` | Indoor vs target temperature delta |
 | `sensor.pumpsteer_fake_temp_delta` | Virtual vs real outdoor temperature delta |
 | `sensor.pumpsteer_brake_factor` | Brake factor as percentage (0–100 %) |
-| `sensor.pumpsteer_is_saving` | Boolean — true when in braking, pre_braking, or preheating mode |
+| `sensor.pumpsteer_is_saving` | Boolean — true when in braking, brake_hold, pre_braking, or preheating mode |
 | `sensor.pumpsteer_holiday_status` | Holiday mode state with scheduled start/end times |
 | `sensor.pumpsteer_price_thresholds` | P30/P80 thresholds as a readable string |
 
@@ -119,7 +119,7 @@ Copy individual cards from this file into your own dashboard via the
 | `number.pumpsteer_target_temperature` | Target indoor temperature |
 | `number.pumpsteer_summer_mode_threshold` | Summer mode activation temperature |
 | `number.pumpsteer_saving_level` | Aggressiveness / saving level (0–5) |
-| `number.pumpsteer_house_thermal_mass` | Brake ramp time (house inertia) |
+| `number.pumpsteer_brake_ramp_time` | Brake ramp time (house inertia) |
 
 ### Switches
 
@@ -129,6 +129,7 @@ Copy individual cards from this file into your own dashboard via the
 | `switch.pumpsteer_notifications` | Price notifications on/off |
 | `switch.pumpsteer_holiday_mode` | Holiday mode on/off |
 | `switch.pumpsteer_ohmigo_push` | Ohmigo push on/off |
+| `switch.pumpsteer_ohmigo_relay_guard` | Optional Active/Bypass relay recovery guard; only exists when a relay is configured |
 
 ### Datetime helpers
 
@@ -180,7 +181,7 @@ cards:
           - entity: number.pumpsteer_summer_mode_threshold
             name: Summer Threshold
             icon: mdi:weather-sunny
-          - entity: number.pumpsteer_house_thermal_mass
+          - entity: number.pumpsteer_brake_ramp_time
             icon: mdi:home-thermometer
           - entity: switch.pumpsteer_notifications
             name: Notifications
@@ -329,6 +330,7 @@ template:
         state: >
           {% set mode = state_attr('sensor.pumpsteer', 'mode') %}
           {% if mode == 'braking' %} red
+          {% elif mode == 'brake_hold' %} amber
           {% elif mode == 'pre_braking' %} orange
           {% elif mode == 'preheating' %} blue
           {% elif mode == 'summer_mode' %} yellow
