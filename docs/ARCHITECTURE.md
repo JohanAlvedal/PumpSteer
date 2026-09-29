@@ -121,19 +121,27 @@ service dispatch is not treated as success until the relay itself reports On.
 
 ---
 
-## State Machine — Priority Order
+## State Machine — Evaluation Order
 
-The control loop evaluates blocks in strict priority order and returns on the first match:
+Required inputs are validated before the control branches. Missing indoor/outdoor
+temperature or unusable price data currently enters `safe_mode` before optimization
+continues.
+
+With required inputs available, the control branches are evaluated in order:
 
 ```
-1. Summer mode    → outdoor ≥ summer_threshold → passthrough real temp
-2. Safe mode      → required sensor missing    → passthrough real temp
+1. Summer mode      → outdoor ≥ summer_threshold → passthrough real temp
+2. Precool          → warm-period risk detected
 3. Aggressiveness 0 → pure PI, all price logic disabled
-4. Braking        → current price is expensive AND comfort allows
-5a. Pre-brake     → expensive imminent, within ramp_in window AND comfort allows
-5b. Preheat-boost → expensive imminent, forecast supports preheat, thermal headroom remains
-6. Normal PI      → default, with optional ramp-out from previous brake
+4. Braking          → current price is expensive AND comfort allows
+5a. Pre-brake       → expensive imminent, within ramp_in window AND comfort allows
+5b. Preheat-boost   → expensive imminent, forecast supports preheat, thermal headroom remains
+6. Normal / holiday PI → default, including brake ramp-out or short-dip hold
 ```
+
+A valid short-dip bridge is reported as `brake_hold`. It is not a separate price
+decision; it is the normal-control path preserving the existing brake factor while a
+nearby expensive period approaches.
 
 ---
 
@@ -142,10 +150,12 @@ The control loop evaluates blocks in strict priority order and returns on the fi
 | Mode | Trigger | PI active | Brake active | Integral |
 |---|---|---|---|---|
 | `summer_mode` | outdoor ≥ summer threshold | No | No | — |
-| `safe_mode` | sensor data missing | No | No | — |
+| `safe_mode` | required temperature or price input missing/invalid | No | No | — |
+| `precool` | warm-period risk detected | No | Yes (precool brake ramp) | — |
 | `normal` | default | Yes | No (or ramp-out) | Accumulates |
-| `holiday` | holiday switch on | Yes (lower target) | No (or ramp-out) | Accumulates |
+| `holiday` | holiday target active while otherwise in normal PI | Yes (lower target) | No (or ramp-out) | Accumulates |
 | `braking` | price expensive, comfort OK | Frozen¹ | Yes | Frozen |
+| `brake_hold` | short non-expensive gap before nearby expensive period | Frozen¹ | Held flat | Frozen |
 | `pre_braking` | expensive imminent, within ramp_in, comfort OK | Frozen¹ | Yes (ramping in) | Frozen |
 | `preheating` | expensive imminent + forecast worthwhile + headroom remaining | Yes + tapered boost | No | Accumulates |
 
@@ -204,8 +214,8 @@ brake ramps out normally.
 Ramp timing from house inertia slider:
 
 ```
-ramp_in  = clamp(house_inertia × 10, 20 min, 60 min)
-ramp_out = clamp(ramp_in × 0.8, 20 min, 60 min)   # ramp-out is 20% faster than ramp-in
+ramp_in  = clamp(house_inertia × 6, 15 min, 60 min)
+ramp_out = clamp(ramp_in × 0.5, 15 min, 60 min)
 ```
 
 ---
@@ -286,18 +296,24 @@ When outdoor temperature reaches or exceeds `summer_threshold` (default 17 °C):
 - PI is reset, brake ramp is cleared
 - Heat pump operates on its own summer logic
 
-Summer mode is the **highest-priority check** — it short-circuits everything else.
+Summer mode is the highest-priority **control branch after required input validation**.
+The current implementation validates required temperature and price inputs first; the
+roadmap tracks a future change where missing price data may fall back to comfort-only PI
+instead of safe passthrough.
 
 ---
 
 ## Safe Mode
 
-When any required sensor is missing or invalid:
+When required control input is missing or invalid:
 
-- Real outdoor temperature is passed through unchanged
-- PI is reset, brake ramp is cleared
-- `status` attribute contains the specific failure reason
-- Resolves automatically when valid data returns
+- Missing indoor/outdoor temperature enters safe mode
+- Missing or unusable price-list data also currently enters safe mode
+- If real outdoor temperature is available, it is passed through unchanged
+- If the outdoor sensor itself is unavailable, the PumpSteer sensor becomes unavailable
+- PI and both brake/preheat ramps are reset
+- `status` contains the specific failure reason
+- Safe mode resolves automatically when valid data returns
 
 ---
 
@@ -321,8 +337,14 @@ ThermalOutlook determines:
 | `night_min_temp` | Lowest forecast temp in 22:00–06:00 window |
 | `day_max_temp` | Highest forecast temp in 06:00–22:00 window |
 
-The thermal model remains separate: ThermalOutlook influences preheat, while `ThermalModel`
-is still observational/future-facing and does not yet decide brake depth or preheat headroom.
+ThermalOutlook and ThermalModel remain separate. ThermalOutlook actively influences
+preheat. `ThermalModel` collects valid cooling samples during braking and, after a
+completed brake phase, fits its cooling constant `k` when at least 20 samples are
+available. The fitted `thermal_k` is restored across Home Assistant restarts.
+
+ThermalModel is still **diagnostic with respect to control decisions**: it does not yet
+decide brake depth, override the comfort floor, or determine preheat headroom. Prediction
+helpers such as expected temperature drop and brake safety remain the next validation step.
 
 ---
 
