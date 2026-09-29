@@ -34,7 +34,7 @@ sections:
               - entity: number.pumpsteer_summer_mode_threshold
                 name: Summer Threshold
                 icon: mdi:weather-sunny
-              - entity: number.pumpsteer_house_thermal_mass
+              - entity: number.pumpsteer_brake_ramp_time
                 icon: mdi:home-thermometer
                 name: Brake ramp time
               - entity: switch.pumpsteer_notifications
