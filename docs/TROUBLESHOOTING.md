@@ -210,7 +210,7 @@ logs. This can happen if the entity failed to save state before the restart.
 
 **Check these:**
 
-1. `switch.pumpsteer_ohmigo_enabled` is `on`
+1. `switch.pumpsteer_ohmigo_push` is `on`
 2. The Ohmigo entity ID in the options flow matches the actual entity
 3. At least `ohmigo_interval_minutes` have passed since the last Ohmigo command
 4. Changes smaller than 0.2 °C are treated as an unchanged setpoint, but the current setpoint is still resent when the interval is due to keep the Ohmigo watchdog alive
@@ -226,7 +226,7 @@ Check HA debug logs for `Ohmigo push` or `Ohmigo keepalive resend` messages to c
 Check these gates:
 
 1. `switch.pumpsteer_ohmigo_relay_guard` is `on`
-2. `switch.pumpsteer_ohmigo_enabled` (Ohmigo Push) is explicitly `on`
+2. `switch.pumpsteer_ohmigo_push` (Ohmigo Push) is explicitly `on`
 3. The configured relay explicitly reports `off`
 
 If the relay is `unknown`, `unavailable` or missing, Relay Guard intentionally sends
