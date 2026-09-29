@@ -45,8 +45,8 @@ The PI controller is the only feedback loop in the system.
 
 ```
 fake_temp = outdoor − PI_demand
-          + brake_overlay    (raises fake temp during expensive slots)
-          + preheat_boost    (lowers fake temp before expensive slots)
+          + brake_overlay     (raises fake temp during expensive slots)
+          − preheat_overlay   (lowers fake temp before expensive slots)
 ```
 
 The PI integral is **frozen** (not decayed, not reset) while braking is active. When
@@ -59,9 +59,9 @@ Feedforward signals come exclusively from electricity price and weather forecast
 
 | Signal source | Effect |
 |---|---|
-| Cheap electricity | Preheat boost — lower fake temp = more heating |
+| Non-expensive period before a costly block | Opportunity for bounded preheat |
 | Expensive electricity | Brake overlay — raise fake temp = less heating |
-| Cold forecast + upcoming expensive | Preheat boost to build thermal mass |
+| Forecast supports preheat + upcoming expensive | Preheat overlay to build thermal reserve |
 
 Feedforward is applied as a **bounded overlay** on top of PI output.
 
