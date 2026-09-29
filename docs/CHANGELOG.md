@@ -10,33 +10,67 @@ All notable changes are documented here.
 Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
-## [Unreleased] — Thermal control review
+
+## [Unreleased]
+
+No user-facing changes are documented yet. See the [Roadmap](ROADMAP) for active work.
+
+---
+
+## [2.2.2] — Price-aware braking notifications
 
 ### Added
-- Braking notifications now include the exact current-slot electricity price from the same price snapshot that triggered PumpSteer's control decision, including the configured price sensor's unit when available.
+- Braking notifications include the exact current-slot electricity price from the same parsed price snapshot and slot index used by PumpSteer's control decision.
 - The main PumpSteer sensor exposes `current_price` and `current_price_unit` for diagnostics.
+
+### Safety / compatibility
+- Missing, invalid or non-finite price values keep the existing braking notification unchanged.
+- Preheating notifications are unchanged.
+- PI, price classification, braking and thermal-control behavior are unchanged.
+
+---
+
+## [2.2.1] — Brake-hold observability & Ohmigo Relay Guard
+
+### Added
+- Explicit `brake_hold` mode while bridging a short non-expensive gap between expensive price periods.
+- `BRIDGE_SHORT_DIP_START` and `BRIDGE_SHORT_DIP_END` transition logging without repeated start events.
 - Optional **Ohmigo Relay Guard** for installations with a physical Active/Bypass relay.
-- Relay recovery is opt-in, fail-closed for unknown/unavailable states, inhibited when Ohmigo Push is off, and verified from the actual relay state with bounded retries.
+- Separate restorable Relay Guard switch with diagnostics for relay state, Push state, attempts and last recovery/failure timestamps.
 
-### Fixed
-- Pre-brake now respects the same comfort floor as active price braking.
-- PumpSteer no longer starts pre-brake when indoor temperature is already below the configured comfort floor.
-- An existing pre-brake ramp is allowed to release when the comfort floor is crossed.
-- Short-dip bridging cannot override the comfort floor.
-- Added regression tests for pre-brake comfort protection.
-- `bridge_short_dip` now bridges only when the next expensive period begins within the configured `brake_hold_minutes` window.
-- Weather forecast no longer decides whether a short price dip is bridged; bridging is a pure price-gap decision.
+### Relay Guard behavior
+- Existing behavior is unchanged when no relay is configured.
+- Recovery requires Relay Guard armed, Ohmigo Push explicitly on, and the configured relay explicitly off.
+- `unknown`, `unavailable` or missing relay state never causes a relay command.
+- Ohmigo Push off inhibits recovery without changing the relay.
+- `safe_mode` does not by itself disable Relay Guard.
+- Recovery uses a stabilization delay, at most three attempts and actual relay-state verification.
+- State changes, Home Assistant startup and a five-minute safety check can trigger evaluation.
+- Overlapping recovery sequences are suppressed.
+
+---
+
+## [2.2.0] — Comfort-aware thermal & price control
+
+### Added / changed
+- Pre-brake respects the same comfort floor as active price braking.
+- PumpSteer does not start pre-brake below the comfort floor and releases an existing pre-brake ramp when the floor is crossed.
+- Short price dips are bridged only when the next expensive period starts within the configured `brake_hold_minutes` window.
+- Weather forecast no longer decides short-dip bridging; bridging is a price-gap decision.
 - The brake factor is held constant during a bridged dip instead of continuing to ramp upward.
-- Longer non-expensive gaps now start ramping the brake out immediately.
-- Added regression tests for short, long, and custom bridge windows.
-- Added saving-level-based preheat headroom: 0.3 / 0.5 / 0.7 / 1.0 / 1.5 °C for levels 1-5.
-- Preheat boost now tapers linearly above target and reaches zero at `target + headroom` instead of allowing uncontrolled thermal overcharge.
-- Added `preheat_headroom_c`, `preheat_ceiling_c`, and `preheat_headroom_factor` diagnostics.
-- Added regression tests for full, tapered, and blocked preheat headroom states.
+- Longer non-expensive gaps start ramping the brake out immediately.
+- ThermalOutlook now gates preheat when available; the simpler cold-forecast check is used only as fallback.
+- `preheat_strength` scales the preheat boost.
+- Saving-level-based preheat headroom: 0.3 / 0.5 / 0.7 / 1.0 / 1.5 °C for levels 1–5.
+- Preheat boost tapers above target and reaches zero at `target + headroom`.
+- Added `preheat_headroom_c`, `preheat_ceiling_c` and `preheat_headroom_factor` diagnostics.
+- ThermalModel fitting is performed after a completed braking phase when at least 20 valid samples have accumulated; the fitted model remains diagnostic and does not directly control brake depth.
+- Electricity price slot indexing correctly handles DST transitions, including the repeated autumn hour and shortened spring day.
 
-### Notes
-- This review is being implemented incrementally on the thermal-control development branch.
-- Steps 1-3 leave PI tuning, price classification, and ThermalModel behavior unchanged. Step 3 intentionally bounds and tapers the existing preheat strategy.
+### Control philosophy
+- PI remains the primary comfort loop.
+- Price and forecast logic remain overlays.
+- ThermalModel does not override the comfort floor or directly control the state machine.
 
 ---
 
