@@ -221,7 +221,7 @@ is sent.
 
 ### 📡 Ohmigo Push
 
-**Entity:** `switch.pumpsteer_ohmigo_enabled`
+**Entity:** `switch.pumpsteer_ohmigo_push`
 **Default:** On
 
 Enables or disables automatic pushing of the fake outdoor temperature to the configured
