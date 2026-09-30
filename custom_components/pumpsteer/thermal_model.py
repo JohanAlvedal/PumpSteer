@@ -8,16 +8,16 @@ This module estimates the house cooling rate constant k
 braking periods, when reduced heating demand makes thermal loss
 easier to observe.
 
-In PumpSteer 2.1.0, this model is used for:
-- observability
-- telemetry
-- future validation work
+In PumpSteer 2.2.x, the model collects cooling samples during braking
+and may fit its cooling constant k after a completed brake phase when
+enough valid samples have accumulated.
 
-It does NOT directly control brake/pre-brake/preheat decisions in 2.1.0.
+The fitted model is still diagnostic with respect to control decisions.
+It does NOT directly control brake/pre-brake/preheat decisions.
 
 The model can estimate expected indoor temperature drop during
-reduced-heating periods, but these prediction helpers are currently
-diagnostic/future-facing and not part of the active control path.
+reduced-heating periods, but these prediction helpers are not yet part
+of the active control path.
 """
 
 from __future__ import annotations
@@ -78,9 +78,9 @@ class ThermalModel:
     k is estimated by linear regression over samples collected
     during braking periods.
 
-    In PumpSteer 2.1.0, this model is observational only:
-    - it may expose fitted values and sample counts
-    - it may support diagnostics and future validation
+    In PumpSteer 2.2.x, fitting is active after qualifying brake phases:
+    - fitted values and sample counts are exposed for diagnostics
+    - fitted k may be restored across Home Assistant restarts
     - it does NOT directly drive the state machine
 
     Persistence:
@@ -227,7 +227,7 @@ class ThermalModel:
             rate = -k * delta_T
             k = -sum(rate * delta_T) / sum(delta_T²)
 
-        In PumpSteer 2.1.0, fitting improves diagnostics and observability.
+        In PumpSteer 2.2.x, fitting improves diagnostics and observability.
         It does not by itself activate any control behavior.
         """
         if len(self._samples) < _MIN_SAMPLES:
@@ -285,8 +285,8 @@ class ThermalModel:
 
         Returns the predicted drop in degrees Celsius as a positive number.
 
-        In PumpSteer 2.1.0, this is a diagnostic/future-facing helper and is
-        not part of the active state-machine decision path.
+        This remains a diagnostic/future-facing helper and is not part of
+        the active state-machine decision path.
         """
         delta_t = max(0.0, indoor - outdoor)
         return self._k * delta_t * (duration_minutes / 60.0)
@@ -304,8 +304,8 @@ class ThermalModel:
         This helper uses predict_drop() and returns True when the predicted
         end temperature remains at or above the comfort floor.
 
-        In PumpSteer 2.1.0, this is diagnostic/future-facing only and does
-        not directly gate brake/pre-brake decisions.
+        This remains diagnostic/future-facing only and does not directly
+        gate brake/pre-brake decisions.
         """
         drop = self.predict_drop(indoor, outdoor, brake_duration_minutes)
         predicted = indoor - drop

@@ -6,12 +6,11 @@ This module provides two separate responsibilities:
 1. Forecast normalization for PumpSteer utility/control support
 2. Thermal outlook analysis for diagnostics and observability
 
-IMPORTANT:
-In PumpSteer 2.1.0, ThermalOutlook is diagnostic only.
-It does not directly influence active control decisions.
-
-The main control loop continues to use simpler forecast gating
-such as _forecast_is_cold() and _should_precool().
+CURRENT 2.2.x BEHAVIOR:
+ThermalOutlook.preheat_worthwhile and preheat_strength are used by the
+main control loop to gate and scale preheat boost. Other outlook fields
+remain primarily diagnostic. The simpler _forecast_is_cold() path is
+used only when ThermalOutlook cannot be built.
 """
 
 from __future__ import annotations
@@ -51,12 +50,12 @@ class ThermalOutlook:
     This structure provides diagnostic insight into upcoming thermal conditions,
     such as cold periods, warming trends, and precool risk.
 
-    In PumpSteer 2.1.x, preheat_worthwhile and preheat_strength are used
+    In PumpSteer 2.2.x, preheat_worthwhile and preheat_strength are used
     in block 5b of sensor.py to gate and scale the preheat boost.
-    All other fields remain diagnostic only and do not influence control.
+    Other fields remain primarily diagnostic.
 
-    The active control loop continues to use simpler forecast gating
-    such as _forecast_is_cold().
+    The simpler _forecast_is_cold() path is retained only as a fallback
+    when ThermalOutlook is unavailable.
     """
 
     # Raw values
@@ -285,9 +284,9 @@ async def async_build_forecast(
     - future weather forecast from a weather entity
     - future electricity prices from a price entity
 
-    In 2.1.0, this supports both:
-    - simple control-facing forecast helpers
-    - richer diagnostic analysis such as ThermalOutlook
+    This supports both:
+    - control-facing ThermalOutlook analysis for bounded preheat
+    - diagnostic forecast observability
     """
     weather_points = await _async_extract_weather_points(
         hass, weather_entity_id, horizon_hours

@@ -96,13 +96,15 @@ class PumpSteerSensor(RestoreEntity):
     PumpSteer heat pump controller.
 
     State machine:
+        safe_mode    -> required temperature/price input missing or invalid
         summer_mode  -> outdoor >= summer_threshold, passthrough
         precool      -> forecast shows warm period coming, raise fake temp
-        holiday      -> lower target, same PI/braking logic
-        preheating   -> expensive period coming, boost heating now
-        braking      -> expensive period active, PI disconnected
+        preheating   -> expensive period coming, bounded forecast-driven boost
+        pre_braking  -> expensive period imminent, price-only brake ramp
+        braking      -> expensive period active, PI integral frozen
+        brake_hold   -> short gap before another expensive period, factor held
+        holiday      -> lower target, otherwise same PI/price logic
         normal       -> PI regulates fake temp toward target
-        safe_mode    -> required data missing, passthrough real outdoor temp
     """
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):

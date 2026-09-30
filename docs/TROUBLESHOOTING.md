@@ -47,11 +47,11 @@ Safe mode resolves itself as soon as valid data is available. No restart needed.
 
 **Symptom:** Safe mode due to missing price data, or `price_category` is always `normal`.
 
-**Diagnosis:** PumpSteer reads price data from these attributes on your electricity
-price sensor entity:
+**Diagnosis:** PumpSteer accepts these list attributes on the configured electricity
+price entities:
 
-- `raw_today` — list of today's prices (required)
-- `raw_tomorrow` — list of tomorrow's prices (used for lookahead)
+- `today` or `raw_today` — today's prices
+- `tomorrow` or `raw_tomorrow` — tomorrow's prices used for lookahead
 
 Each item must be a dict with a `value` or `price` key, or a plain number:
 
@@ -64,10 +64,11 @@ Each item must be a dict with a `value` or `price` key, or a plain number:
 **Check in Developer Tools → States:**
 1. Find your price entity (e.g. `sensor.elpris_spot_avgifter`)
 2. Expand attributes
-3. Verify `raw_today` exists and contains a list with numeric values
+3. Verify `today` or `raw_today` contains a list with usable numeric prices
 
-If `raw_today` is missing, your price sensor integration may use a different attribute
-name or format. Check the documentation for your Nordpool or Tibber integration.
+If neither supported attribute exists, your price integration may use a different
+format. Check the integration's documentation. PumpSteer accepts plain numbers and
+objects with a numeric `value` or `price` field.
 
 {: .note }
 PumpSteer supports both hourly (24 slots/day) and 15-minute (96 slots/day) price
@@ -104,9 +105,10 @@ does not rise.
 
 ---
 
-## Braking never stops
+## Brake factor remains active after the price drops
 
-**Symptom:** Mode is stuck in `braking` even after the price drops.
+**Symptom:** Price is no longer expensive, but the brake factor remains above zero or
+the mode changes to `brake_hold`.
 
 **Possible causes:**
 
@@ -141,8 +143,9 @@ If thresholds seem clearly wrong:
 - Compare with today's actual price spread
 - Thresholds refresh at midnight when new price data arrives
 
-If tomorrow's prices have not arrived yet (before ~13:00 CET), thresholds are computed
-from today's data only. This is correct behavior.
+P30/P80 thresholds are intentionally computed from **today's price list only**.
+Tomorrow prices are used for lookahead decisions, not for changing today's cached
+classification thresholds.
 
 ---
 
@@ -207,12 +210,44 @@ logs. This can happen if the entity failed to save state before the restart.
 
 **Check these:**
 
-1. `switch.pumpsteer_ohmigo_enabled` is `on`
+1. `switch.pumpsteer_ohmigo_push` is `on`
 2. The Ohmigo entity ID in the options flow matches the actual entity
 3. At least `ohmigo_interval_minutes` have passed since the last Ohmigo command
 4. Changes smaller than 0.2 °C are treated as an unchanged setpoint, but the current setpoint is still resent when the interval is due to keep the Ohmigo watchdog alive
 
 Check HA debug logs for `Ohmigo push` or `Ohmigo keepalive resend` messages to confirm commands are occurring.
+
+---
+
+## Ohmigo Relay Guard does not recover the relay
+
+**Symptom:** A configured Active/Bypass relay is off, but Relay Guard does not turn it on.
+
+Check these gates:
+
+1. `switch.pumpsteer_ohmigo_relay_guard` is `on`
+2. `switch.pumpsteer_ohmigo_push` (Ohmigo Push) is explicitly `on`
+3. The configured relay explicitly reports `off`
+
+If the relay is `unknown`, `unavailable` or missing, Relay Guard intentionally sends
+no command. This fail-closed behavior avoids guessing the state of the physical signal
+path.
+
+When recovery is eligible, Relay Guard waits briefly for state stabilization, then
+tries `switch.turn_on` at most three times. A service call is not considered success
+until the relay itself reports `on`.
+
+Inspect the Relay Guard switch attributes for:
+
+- `status`
+- `relay_state`
+- `ohmigo_push_state`
+- `recovery_attempts`
+- `last_recovery`
+- `last_failure`
+
+`safe_mode` alone does not inhibit Relay Guard. Ohmigo may still be forwarding the
+real outdoor temperature, so the Active path can still be required.
 
 ---
 
@@ -225,9 +260,14 @@ In **Developer Tools → Template**, you can inspect PumpSteer state directly:
 {{ states('sensor.pumpsteer') }}
 {{ state_attr('sensor.pumpsteer', 'mode') }}
 {{ state_attr('sensor.pumpsteer', 'price_category') }}
+{{ state_attr('sensor.pumpsteer', 'current_price') }}
+{{ state_attr('sensor.pumpsteer', 'current_price_unit') }}
 {{ state_attr('sensor.pumpsteer', 'brake_factor') }}
 {{ state_attr('sensor.pumpsteer', 'p30') }}
 {{ state_attr('sensor.pumpsteer', 'p80') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_k') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_k_valid') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_k_samples') }}
 
 # Thermal outlook
 {{ state_attr('sensor.pumpsteer_thermal_outlook', 'preheat_worthwhile') }}
@@ -285,7 +325,7 @@ brake ramp updates, and Ohmigo push events.
 ## Safety reminder
 
 {: .warning }
-Heating is a critical system. PumpSteer's safe mode passes through the real outdoor
-temperature unchanged, so the heat pump continues to operate on its own heating curve
-even if PumpSteer loses sensor data. Monitor your system for the first few days after
-installation and after any configuration changes.
+Heating is a critical system. In safe mode PumpSteer passes through the real outdoor
+temperature when that sensor is still available, so the heat pump can continue on its
+own heating curve. If the outdoor sensor itself is unavailable, PumpSteer's output is
+also unavailable. Monitor the system after installation and configuration changes.

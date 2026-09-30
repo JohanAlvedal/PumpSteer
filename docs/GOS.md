@@ -14,8 +14,10 @@ virtual outdoor temperature (`fake_temp`) to a configurable Home Assistant servi
 This makes it possible to connect PumpSteer to external systems such as helpers,
 MQTT, Modbus, REST commands, ESPHome entities or other Home Assistant integrations.
 
-GOS is experimental in PumpSteer 2.1.1 and should be tested carefully before being
-used for production heating control.
+GOS remains an **optional advanced/experimental output path** in PumpSteer 2.2.x.
+The core PumpSteer controller does not depend on it. Test the selected Home Assistant
+service and payload against a harmless target before using GOS for production heating
+control.
 
 ---
 
@@ -62,7 +64,7 @@ Examples:
 
 ```text
 input_number.set_value
-````
+```
 
 ```text
 system_log.write
@@ -205,4 +207,3 @@ This can be used with an ESPHome number entity or similar Home Assistant number 
 * Invalid templates or payloads are logged as warnings and should not stop PumpSteer.
 * Always verify the output with `system_log.write` or an `input_number` helper before writing to real hardware.
 
-```

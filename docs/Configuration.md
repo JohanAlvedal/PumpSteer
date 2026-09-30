@@ -18,7 +18,7 @@ nav_order: 3
 
 PumpSteer has two layers of configuration:
 
-- **HA interface** — sliders, switches, and options you set in Home Assistant (take effect after reload)
+- **HA interface** — sliders, switches, and options you set in Home Assistant. Number/switch changes are immediate; saved integration options are picked up by the integration, and changing the configured Relay Guard relay may trigger an integration reload.
 - **`settings.py`** — advanced constants that require editing the source file and a full HA restart
 
 ---
@@ -32,8 +32,8 @@ These are set when you first add the integration. You can change them later via
 |---|---|---|
 | **Indoor temperature sensor** | ✅ | The sensor PumpSteer uses for current indoor temperature. Must be a `sensor` with `device_class: temperature`. |
 | **Outdoor temperature sensor** | ✅ | The real outdoor temperature. PumpSteer manipulates this signal before sending it to the heat pump. |
-| **Electricity price sensor** | ✅ | Today's hourly or 15-minute price (e.g. Nordpool). Must have a `today` or `raw_today` attribute containing a list of prices. |
-| **Tomorrow price sensor** | ✅ | Tomorrow's prices. Used for lookahead braking and preheat. Can be the same entity if it includes `raw_tomorrow`. |
+| **Electricity price sensor** | ✅ | Today's hourly or 15-minute prices (e.g. Nordpool). PumpSteer accepts a `today` or `raw_today` list with plain numeric entries or objects containing `value` / `price`. |
+| **Tomorrow price sensor** | ✅ | Tomorrow's prices for lookahead braking and preheat. Can be the same entity when it exposes `tomorrow` or `raw_tomorrow`. |
 | **Weather entity** | Optional | A `weather` entity used for forecast-based preheat and precool. Leave empty to disable forecast features. |
 
 ---
@@ -51,6 +51,9 @@ Go to **Settings → Devices & Services → PumpSteer → Configure** to access 
 | **Ohmigo entity** | Number entity to push the fake outdoor temperature to. Leave empty to disable. | — |
 | **Ohmigo Active/Bypass relay** | Optional `switch` entity for the physical Ohmigo Active/Bypass relay. Configuring it exposes the separate **Ohmigo Relay Guard** switch. | — |
 | **Ohmigo push interval** | Minimum minutes between Ohmigo pushes. | 5 min |
+| **Generic output service** | Optional Home Assistant service used by GOS, for example `modbus.write_register`, `mqtt.publish` or `number.set_value`. | — |
+| **Generic output payload template** | YAML payload template for GOS. May use the `fake_temp` variable. | — |
+| **Generic output interval** | Minimum minutes between Generic Output System calls. | 5 min |
 
 {: .note }
 The notification service is configured directly here in the integration options — no
@@ -161,22 +164,33 @@ the moment the slot begins. A thermally heavy house needs more lead time.
 **Entity:** `switch.pumpsteer_preheat_boost`
 **Default:** On
 
-When enabled, PumpSteer heats extra (by `PREHEAT_BOOST_C = 4 °C` equivalent) before
-an upcoming expensive period when a simple cold-forecast heuristic (`_forecast_is_cold()`)
-returns true. This pre-charges the house with thermal mass so the heat pump can brake
-longer without discomfort.
+When enabled, PumpSteer can build thermal reserve before an upcoming expensive period.
+The ordinary PI controller remains the baseline; preheat adds a bounded forecast-driven
+boost on top.
 
-Only activates when:
-1. An expensive price slot is coming within the lookahead window
-2. The cold-forecast heuristic returns True
-3. Indoor temperature is below target (preheat is suppressed if already at target)
+Preheat requires:
 
-{: .note }
-`sensor.pumpsteer_thermal_outlook` is diagnostic only and does not yet control this
-switch. Preheat decisions are made by the simple `_forecast_is_cold()` heuristic.
+1. An expensive price period inside the lookahead window
+2. Forecast context that supports preheating
+3. Remaining thermal headroom above the current indoor temperature
+4. The Preheat Boost switch to be on
 
-Disable this switch if you prefer to avoid pre-heating behavior, or if your forecast
-sensor is unreliable.
+When ThermalOutlook is available, `preheat_worthwhile` gates the decision and
+`preheat_strength` scales the boost. The simpler `_forecast_is_cold()` heuristic is
+used only when ThermalOutlook cannot be built.
+
+Preheat is **not** hard-stopped at the normal target temperature. Saving levels 1–5
+allow headroom of 0.3 / 0.5 / 0.7 / 1.0 / 1.5 °C above target. Full boost is available
+up to target, then tapers linearly and reaches zero at `target + headroom`.
+
+Useful diagnostics on `sensor.pumpsteer`:
+
+- `preheat_headroom_c`
+- `preheat_ceiling_c`
+- `preheat_headroom_factor`
+
+Disable this switch if you prefer to avoid forecast-based preheating, or if your
+weather source is unreliable.
 
 ---
 
@@ -207,7 +221,7 @@ is sent.
 
 ### 📡 Ohmigo Push
 
-**Entity:** `switch.pumpsteer_ohmigo_enabled`
+**Entity:** `switch.pumpsteer_ohmigo_push`
 **Default:** On
 
 Enables or disables automatic pushing of the fake outdoor temperature to the configured
@@ -346,9 +360,10 @@ output. At 15 °C, the effect is very strong.
 BRAKE_HOLD_MINUTES: Final[float] = 30.0
 ```
 
-After an expensive period ends, the brake is held for this many minutes before ramping
-out. This prevents oscillation when 15-minute price slots alternate between cheap and
-expensive within a longer expensive block.
+This is the maximum non-expensive gap PumpSteer may bridge between expensive periods.
+A gap is held only when the next expensive period starts within this window; otherwise
+the brake begins ramping out immediately. During a bridge the existing brake factor is
+held flat rather than ramped higher.
 
 ---
 
@@ -358,8 +373,10 @@ expensive within a longer expensive block.
 PREHEAT_BOOST_C: Final[float] = 4.0
 ```
 
-How much extra heating demand (in °C equivalent) is added during preheat mode.
-This is added on top of the PI output, so the total demand is `PI_demand + PREHEAT_BOOST_C`.
+Maximum extra heating demand (in °C equivalent) available to preheat mode.
+The effective boost is scaled by the preheat ramp, ThermalOutlook
+`preheat_strength` when available, and the remaining thermal-headroom factor.
+It is then added on top of the ordinary PI demand.
 
 ---
 

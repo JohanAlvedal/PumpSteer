@@ -213,12 +213,79 @@ price classification — harder to explain, harder to tune.
 
 ---
 
+## Forecast and Thermal Model
+
+### Why ThermalOutlook actively gates and scales preheat
+
+**Decision:** Use `ThermalOutlook.preheat_worthwhile` to gate block 5b and
+`preheat_strength` to scale the available boost whenever ThermalOutlook can be built.
+Use the simpler cold-forecast heuristic only as a fallback.
+
+**Reasoning:** A binary "cold/not cold" check throws away useful information about the
+duration and strength of the coming cold period. ThermalOutlook already summarizes the
+forecast into explainable attributes, so reusing those attributes avoids a second,
+competing forecast interpretation.
+
+This does not turn ThermalOutlook into a feedback controller. PI remains the comfort
+loop, price still decides when an expensive period matters, and ThermalOutlook only
+modulates the bounded preheat overlay.
+
+---
+
+### Why ThermalModel may fit automatically but not control braking yet
+
+**Decision:** Collect cooling samples during braking and fit `thermal_k` after a
+completed brake phase when at least 20 valid samples are available, but keep the fitted
+model out of the active brake-depth decision for now.
+
+**Reasoning:** Fitting the model is observational: it improves diagnostics without
+changing heating behavior. Using a fitted model to reduce heat is a higher-risk step
+because a poor fit could affect comfort.
+
+The rollout order is therefore:
+
+1. collect samples
+2. fit and persist `thermal_k`
+3. validate predicted temperature drop against real production data
+4. expose diagnostic brake-safety information
+5. only then consider bounded assistance to brake depth
+
+The hard comfort floor remains authoritative regardless of any future model assistance.
+
+---
+
+## Output-path Safety
+
+### Why Ohmigo Relay Guard is separate from PumpSteer control
+
+**Decision:** Relay Guard may recover a configured physical Active/Bypass relay, but it
+must not participate in PI, price classification, forecast decisions or virtual
+temperature calculation.
+
+**Reasoning:** These are different responsibilities:
+
+```text
+PumpSteer control → calculates virtual outdoor temperature
+Ohmigo Push       → decides whether PumpSteer sends it
+Relay Guard       → keeps the configured Active signal path available
+```
+
+Recovery is fail-closed: the guard acts only when it is armed, Ohmigo Push explicitly
+reports on and the relay explicitly reports off. Unknown/unavailable state never causes
+a command. A successful service call is not success until the relay itself reports on.
+
+This separation also explains why `safe_mode` alone does not disable Relay Guard:
+PumpSteer may still be forwarding the real outdoor temperature through the same physical
+Active path.
+
+---
+
 ## Summer Mode
 
-### Why summer mode is the highest-priority check
+### Why summer mode is the highest-priority control branch
 
-**Decision:** Summer mode short-circuits all other logic and passes through the real
-outdoor temperature unchanged.
+**Decision:** After required input validation, summer mode short-circuits the remaining
+control branches and passes through the real outdoor temperature unchanged.
 
 **Reasoning:**
 In summer, the heat pump may be in passive cooling or off entirely. Any fake temperature
@@ -226,8 +293,12 @@ offset — whether from PI, brake, or preheat — is meaningless or harmful. The
 pump's own summer logic handles this correctly; PumpSteer should stay completely out
 of the way.
 
-Summer mode must be checked before everything else because no other block has enough
-context to know whether its output makes sense under summer conditions.
+Once required indoor/outdoor and price inputs have been validated, summer mode is
+checked before PI, precool, brake and preheat decisions because those offsets are not
+useful when the heat pump should be operating on its own summer logic.
+
+Input validation still occurs first in the current implementation. Missing required
+inputs can therefore enter `safe_mode` before the summer branch is reached.
 
 ---
 
@@ -268,7 +339,9 @@ dedicated service call. The service call approach is forward-compatible.
 Integration reload re-instantiates the integration but does not re-import already-loaded
 Python modules.
 
-Options flow values are read on every update cycle and take effect after a reload.
+Most options are read from the current config entry on each update and take effect after
+saving. Changing the configured Relay Guard relay is special: the integration reloads so
+listeners can be rebuilt for the new relay entity.
 
 ---
 
@@ -277,6 +350,7 @@ Options flow values are read on every update cycle and take effect after a reloa
 **Decision:** All tunable parameters are read from `config_entry.options` on each
 `_do_update()` call.
 
-**Reason:** Changes made via the options flow take effect on the next polling cycle
-after a reload, without requiring a restart. It also avoids stale cached values if
-options are updated externally.
+**Reason:** Changes made via the options flow can be used on the next update without a
+full Home Assistant restart. Reading current entry data also avoids stale cached values
+when options change. Hardware-listener changes that require re-registration may still
+trigger an integration reload.

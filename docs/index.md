@@ -48,12 +48,16 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 | **PI control** | Maintains indoor temperature at your target regardless of weather |
 | **Price braking** | Reduces heating during expensive electricity slots (P80 threshold) |
 | **Pre-brake** | Starts brake ramp before the expensive slot begins, while comfort allows |
-| **Preheat boost** | Heats extra before expensive periods when forecast is cold |
+| **Preheat boost** | Builds bounded thermal reserve before expensive periods when the forecast supports it |
+| **Thermal headroom** | Saving level limits how far preheat may charge above target |
 | **Comfort floor** | Brake and pre-brake release automatically if indoor temp drops too far |
-| **Summer mode** | Passes through real outdoor temp when it is warm enough |
+| **Brake hold** | Bridges only short gaps between nearby expensive periods without ramp oscillation |
+| **Summer / precool** | Pass-through in summer plus forecast-based warm-period protection |
 | **Ohmigo support** | Pushes fake temp directly to Ohmigo WiFi controller |
+| **Ohmigo Relay Guard** | Optional recovery of a configured Active/Bypass relay, outside the control loop |
+| **Generic Output System** | Optional service-based output to Modbus, MQTT, ESPHome and other HA targets |
 | **Holiday mode** | Lowers target to 16 °C during absence |
-| **Fully local** | No cloud, no API keys, no ML |
+| **Fully local** | No cloud dependency and no black-box control loop |
 
 ## Documentation
 
@@ -67,19 +71,21 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 | Mode | What triggers it |
 |---|---|
 | `normal` | Default PI control |
-| `braking` | Current price slot is expensive |
+| `braking` | Current price slot is expensive and comfort allows braking |
+| `brake_hold` | Existing brake factor is held across a short gap before another expensive period |
 | `pre_braking` | Expensive slot is imminent, within ramp window, and comfort allows |
-| `preheating` | Expensive slot is imminent AND forecast is cold |
+| `preheating` | Expensive period is imminent, forecast supports preheat, and thermal headroom remains |
+| `precool` | Warm-period risk triggers a temporary protective brake ramp |
 | `summer_mode` | Outdoor temp ≥ summer threshold |
-| `safe_mode` | Required sensor data is missing |
-| `holiday` | Holiday mode switch is on |
+| `safe_mode` | Required temperature or price input is missing/invalid |
+| `holiday` | Holiday target is active during otherwise normal PI operation |
 
 ---
 
 ## Requirements
 
 - Home Assistant 2023.12 or later
-- A Nordpool (or compatible) electricity price sensor with `raw_today` / `raw_tomorrow` attributes
+- A Nordpool (or compatible) electricity price source exposing `today` / `raw_today` and `tomorrow` / `raw_tomorrow` price lists
 - An indoor temperature sensor
 - An outdoor temperature sensor
 - *(Optional)* A weather entity for forecast-based preheat
