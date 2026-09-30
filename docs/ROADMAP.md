@@ -80,14 +80,19 @@ across delayed polls, reloads and different update intervals.
 
 ### 4. Validate ThermalModel in production
 
-ThermalModel fitting is already active, but it does not yet control brake depth.
+ThermalModel remains shadow-only with respect to control decisions.
 
-Next validation step:
+Implemented validation support:
 
-- observe fitted `thermal_k` over real brake sessions
-- expose predicted temperature drop for planned brakes
-- expose a diagnostic `brake_safe` result
-- compare predictions with actual indoor temperature response
+- ✅ learning is limited to stable braking with real heating demand and sufficiently cold outdoor conditions
+- ✅ raw learning memory is bounded
+- ✅ fitted-model RMSE and heuristic confidence are exposed
+- ✅ 30/60-minute and current expensive-block temperature-drop predictions are exposed
+- ✅ future outdoor temperatures are used when available
+- ✅ predicted end temperature, comfort margin and diagnostic `thermal_brake_safe` are exposed
+- ✅ completed relevant sessions compare predicted vs actual temperature drop and maintain prediction MAE
+- ⏳ collect several real cold-weather sessions and verify that prediction error is consistently acceptable
+- ⏳ define the minimum confidence/validation requirements before any control influence is permitted
 
 Only after production validation should ThermalModel be considered for bounded
 assistance to brake depth.
