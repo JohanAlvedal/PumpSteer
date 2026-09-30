@@ -114,6 +114,13 @@ BRAKE_HOLD_MINUTES: Final[float] = 30.0
 #   This may be useful in climates where cold weather is the default assumption.
 PREHEAT_ON_MISSING_FORECAST: Final[bool] = False
 
+# === THERMAL MODEL LEARNING ===
+# ThermalModel learns only during stable, relevant heating-season braking.
+# These are intentionally internal safety gates, not normal user tuning controls.
+THERMAL_LEARNING_MIN_BRAKE_FACTOR: Final[float] = 0.75
+THERMAL_LEARNING_MIN_HEATING_DEMAND_C: Final[float] = 0.5
+THERMAL_LEARNING_OUTDOOR_MARGIN_C: Final[float] = 2.0
+
 # === DEFAULTS ===
 DEFAULT_SUMMER_THRESHOLD: Final[float] = 18.0
 DEFAULT_AGGRESSIVENESS: Final[float] = 3.0
