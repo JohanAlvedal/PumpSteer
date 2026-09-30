@@ -638,21 +638,26 @@ class PumpSteerSensor(RestoreEntity):
         outdoor: float,
     ) -> None:
         """Collect/validate ThermalModel data without changing controller output."""
+        was_active = self._thermal_learning_active
         self._thermal_learning_active = active
         self._thermal_learning_reason = reason
 
         if active:
-            if not self._thermal_model.validation_session_active:
+            if not was_active:
+                # Start dT/dt measurement from the stable-braking period itself.
+                self._thermal_model.reset_temp_history(now, indoor)
+
+            accepted = self._thermal_model.collect_braking_sample(indoor, outdoor)
+
+            if accepted and not self._thermal_model.validation_session_active:
                 self._thermal_model.start_validation_session(now, indoor, outdoor)
                 log_event(
                     "THERMAL_LEARNING_START",
                     indoor=round(indoor, 2),
                     outdoor=round(outdoor, 2),
                 )
-            else:
+            elif self._thermal_model.validation_session_active:
                 self._thermal_model.update_validation_session(outdoor)
-
-            self._thermal_model.collect_braking_sample(indoor, outdoor)
             return
 
         if self._thermal_model.validation_session_active:
