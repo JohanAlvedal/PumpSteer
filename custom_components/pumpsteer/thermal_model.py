@@ -175,13 +175,13 @@ class ThermalModel:
 
         sample_score = min(1.0, self._sample_count / 60.0)
         fit_score = (
-            0.5
+            0.0
             if self._fit_rmse is None
             else max(0.0, min(1.0, 1.0 - (self._fit_rmse / 1.0)))
         )
         session_score = min(1.0, self._learning_sessions / 5.0)
         validation_score = (
-            0.5
+            0.0
             if self._prediction_mae is None
             else max(0.0, min(1.0, 1.0 - (self._prediction_mae / 1.0)))
         )
