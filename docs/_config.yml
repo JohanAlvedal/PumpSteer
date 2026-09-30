@@ -3,7 +3,7 @@ description: Smart heat pump optimization for Home Assistant
 baseurl: ""
 url: "https://johanalvedal.github.io/PumpSteer"
 
-remote_theme: just-the-docs/just-the-docs@v0.12.0
+theme: just-the-docs
 
 logo: "/assets/img/logo.png"
 
@@ -72,5 +72,4 @@ exclude:
   - custom_components
 
 plugins:
-  - jekyll-remote-theme
   - jekyll-seo-tag
