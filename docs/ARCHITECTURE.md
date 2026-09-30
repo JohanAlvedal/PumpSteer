@@ -338,13 +338,34 @@ ThermalOutlook determines:
 | `day_max_temp` | Highest forecast temp in 06:00–22:00 window |
 
 ThermalOutlook and ThermalModel remain separate. ThermalOutlook actively influences
-preheat. `ThermalModel` collects valid cooling samples during braking and, after a
-completed brake phase, fits its cooling constant `k` when at least 20 samples are
-available. The fitted `thermal_k` is restored across Home Assistant restarts.
+preheat. ThermalModel learns the **observed cooling response during PumpSteer braking**.
 
-ThermalModel is still **diagnostic with respect to control decisions**: it does not yet
-decide brake depth, override the comfort floor, or determine preheat headroom. Prediction
-helpers such as expected temperature drop and brake safety remain the next validation step.
+Learning is intentionally selective. A training sample is eligible only while:
+
+- the expensive-price brake is still requested
+- brake factor is at least 0.75 so the brake is established
+- PI heating demand is at least 0.5 °C equivalent
+- outdoor temperature is at least 2 °C below the configured summer threshold
+- the measured indoor trend represents plausible cooling
+
+This prevents warm-season and weak-heating periods from dominating the model. Raw
+learning memory is bounded to 240 relevant samples. The separate dT/dt history is only
+a 10-reading ring buffer and never grows.
+
+After a completed brake phase, ThermalModel fits `k` when at least 20 relevant
+samples are available. It also reports fit RMSE, session counts, prediction MAE and a
+conservative 0–1 confidence indicator.
+
+Prediction is now forecast-aware: the model can step through available future outdoor
+temperatures to estimate 30/60-minute drop and the expected drop across the remaining
+current expensive block. PumpSteer exposes predicted end temperature, comfort margin
+and `thermal_brake_safe`.
+
+{: .important }
+All ThermalModel prediction values are still **shadow diagnostics only**. They do not
+change brake depth, PI output, price classification, comfort floor or state-machine
+decisions. Production validation must demonstrate reliable predictions before any
+bounded control influence is considered.
 
 ---
 
