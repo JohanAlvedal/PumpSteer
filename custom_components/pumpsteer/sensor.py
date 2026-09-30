@@ -745,6 +745,21 @@ class PumpSteerSensor(RestoreEntity):
                 if model.last_prediction_error is not None
                 else None
             ),
+            "thermal_last_session_duration_minutes": (
+                round(model.last_session_duration_minutes, 1)
+                if model.last_session_duration_minutes is not None
+                else None
+            ),
+            "thermal_last_session_actual_drop_c": (
+                round(model.last_session_actual_drop, 3)
+                if model.last_session_actual_drop is not None
+                else None
+            ),
+            "thermal_last_session_predicted_drop_c": (
+                round(model.last_session_predicted_drop, 3)
+                if model.last_session_predicted_drop is not None
+                else None
+            ),
             "thermal_predicted_drop_30m_c": round(drop_30, 3),
             "thermal_predicted_drop_60m_c": round(drop_60, 3),
             "thermal_predicted_end_60m_c": round(indoor - drop_60, 3),
@@ -1346,7 +1361,19 @@ class PumpSteerSensor(RestoreEntity):
                 # once, using the relevant samples collected during completed sessions.
                 if self._was_braking_last_cycle:
                     if self._thermal_model.pending_samples >= 20:
-                        self._thermal_model.fit()
+                        fitted = self._thermal_model.fit()
+                        if fitted:
+                            log_event(
+                                "THERMAL_MODEL_FIT",
+                                thermal_k=round(self._thermal_model.k, 4),
+                                samples=self._thermal_model.sample_count,
+                                rmse=(
+                                    round(self._thermal_model.fit_rmse, 3)
+                                    if self._thermal_model.fit_rmse is not None
+                                    else None
+                                ),
+                                confidence=round(self._thermal_model.confidence, 3),
+                            )
                     self._was_braking_last_cycle = False
 
                 pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
@@ -1597,7 +1624,19 @@ class PumpSteerSensor(RestoreEntity):
         # Fit the thermal model once after a completed brake phase has fully ramped out.
         if self._was_braking_last_cycle and factor <= 0.0:
             if self._thermal_model.pending_samples >= 20:
-                self._thermal_model.fit()
+                fitted = self._thermal_model.fit()
+                if fitted:
+                    log_event(
+                        "THERMAL_MODEL_FIT",
+                        thermal_k=round(self._thermal_model.k, 4),
+                        samples=self._thermal_model.sample_count,
+                        rmse=(
+                            round(self._thermal_model.fit_rmse, 3)
+                            if self._thermal_model.fit_rmse is not None
+                            else None
+                        ),
+                        confidence=round(self._thermal_model.confidence, 3),
+                    )
             self._was_braking_last_cycle = False
 
         if factor > 0.0:
