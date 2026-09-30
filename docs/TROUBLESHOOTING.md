@@ -286,6 +286,10 @@ Useful shadow diagnostics include:
 - `thermal_learning_sessions`
 - `thermal_validated_sessions`
 - `thermal_prediction_mae_c`
+- `thermal_last_prediction_error_c`
+- `thermal_last_session_duration_minutes`
+- `thermal_last_session_actual_drop_c`
+- `thermal_last_session_predicted_drop_c`
 - `thermal_predicted_drop_30m_c`
 - `thermal_predicted_drop_60m_c`
 - `thermal_expensive_minutes_remaining`
@@ -321,6 +325,8 @@ In **Developer Tools → Template**, you can inspect PumpSteer state directly:
 {{ state_attr('sensor.pumpsteer', 'thermal_confidence') }}
 {{ state_attr('sensor.pumpsteer', 'thermal_fit_rmse_c_per_hour') }}
 {{ state_attr('sensor.pumpsteer', 'thermal_prediction_mae_c') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_last_session_actual_drop_c') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_last_session_predicted_drop_c') }}
 {{ state_attr('sensor.pumpsteer', 'thermal_predicted_end_planned_c') }}
 {{ state_attr('sensor.pumpsteer', 'thermal_comfort_margin_planned_c') }}
 {{ state_attr('sensor.pumpsteer', 'thermal_brake_safe') }}
