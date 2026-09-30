@@ -251,6 +251,53 @@ real outdoor temperature, so the Active path can still be required.
 
 ---
 
+## ThermalModel is not learning
+
+**Symptom:** `thermal_pending_samples` stays at 0 or
+`thermal_learning_active` is false.
+
+This can be completely normal. ThermalModel intentionally ignores conditions that are
+not useful for learning the house's braking response.
+
+Learning requires all of the following at the same time:
+
+- an expensive-period brake is actively requested
+- `brake_factor >= 0.75`
+- PI heating demand is at least 0.5 °C equivalent
+- outdoor temperature is at least 2 °C below the configured summer threshold
+- indoor temperature is showing a plausible cooling trend
+
+Check `thermal_learning_reason` for the current gate:
+
+- `brake_ramp_not_stable` — wait until the brake is established
+- `heating_demand_too_low` — the house currently does not need enough heat for useful learning
+- `outdoor_too_warm` — warm-weather data is intentionally ignored
+- `brake_not_requested` / `price_not_expensive` — no qualifying active brake
+
+This is intentional: PumpSteer should learn when heating behavior is relevant, not
+collect large amounts of summer data.
+
+### ThermalModel prediction attributes
+
+Useful shadow diagnostics include:
+
+- `thermal_confidence`
+- `thermal_fit_rmse_c_per_hour`
+- `thermal_learning_sessions`
+- `thermal_validated_sessions`
+- `thermal_prediction_mae_c`
+- `thermal_predicted_drop_30m_c`
+- `thermal_predicted_drop_60m_c`
+- `thermal_expensive_minutes_remaining`
+- `thermal_predicted_end_planned_c`
+- `thermal_comfort_margin_planned_c`
+- `thermal_brake_safe`
+
+`thermal_brake_safe` is diagnostic only. It does not currently release, deepen or
+otherwise change the real brake.
+
+---
+
 ## Useful Developer Tools queries
 
 In **Developer Tools → Template**, you can inspect PumpSteer state directly:
@@ -268,6 +315,15 @@ In **Developer Tools → Template**, you can inspect PumpSteer state directly:
 {{ state_attr('sensor.pumpsteer', 'thermal_k') }}
 {{ state_attr('sensor.pumpsteer', 'thermal_k_valid') }}
 {{ state_attr('sensor.pumpsteer', 'thermal_k_samples') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_pending_samples') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_learning_active') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_learning_reason') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_confidence') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_fit_rmse_c_per_hour') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_prediction_mae_c') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_predicted_end_planned_c') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_comfort_margin_planned_c') }}
+{{ state_attr('sensor.pumpsteer', 'thermal_brake_safe') }}
 
 # Thermal outlook
 {{ state_attr('sensor.pumpsteer_thermal_outlook', 'preheat_worthwhile') }}
