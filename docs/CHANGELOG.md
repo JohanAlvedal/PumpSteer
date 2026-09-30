@@ -13,7 +13,21 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-No user-facing changes are documented yet. See the [Roadmap](ROADMAP) for active work.
+### Added
+- ThermalModel shadow diagnostics for 30-minute, 60-minute and current expensive-block temperature-drop predictions.
+- Forecast-aware thermal prediction using the available future outdoor-temperature profile.
+- Diagnostic `thermal_brake_safe`, predicted end temperature and comfort-margin attributes. These do **not** change braking behavior.
+- ThermalModel fit RMSE, prediction MAE, learning-session counts and a conservative diagnostic confidence score.
+- Session-level predicted-vs-actual validation after relevant braking periods.
+
+### Changed
+- ThermalModel training samples are now accepted only during stable requested braking, with brake factor at least 0.75, meaningful PI heating demand and outdoor temperature at least 2 °C below the configured summer threshold.
+- The raw learning-sample buffer is capped at 240 samples and remains memory-only.
+- The rolling indoor-temperature history remains capped at 10 readings and invalid indoor values are no longer inserted into it.
+- ThermalModel quality summaries are restored across Home Assistant restarts together with fitted `thermal_k`.
+
+### Safety
+- ThermalModel remains shadow/diagnostic only. It does not change brake factor, price classification, PI behavior, comfort floor or state-machine decisions.
 
 ---
 
