@@ -68,6 +68,30 @@ def test_learning_sample_memory_is_bounded():
     assert model.pending_samples == 240
 
 
+def test_restored_k_has_zero_confidence_without_quality_data():
+    model = ThermalModel()
+    model.restore_k(0.05)
+
+    assert model.is_valid is True
+    assert model.confidence == 0.0
+
+
+def test_short_validation_session_is_ignored():
+    model = ThermalModel()
+    model.restore_k(0.05)
+    start = datetime(2026, 1, 15, 18, 0, tzinfo=timezone.utc)
+
+    model.start_validation_session(start, indoor_temp=21.0, outdoor_temp=5.0)
+    counted = model.end_validation_session(
+        start + timedelta(minutes=5),
+        indoor_temp=20.9,
+    )
+
+    assert counted is False
+    assert model.learning_sessions == 0
+    assert model.validated_sessions == 0
+
+
 def test_forecast_profile_changes_predicted_drop():
     model = ThermalModel()
     model.restore_k(0.05)
