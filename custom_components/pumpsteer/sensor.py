@@ -690,8 +690,7 @@ class PumpSteerSensor(RestoreEntity):
         model = self._thermal_model
         forecast = (
             self._latest_forecast_temps[1:]
-            if self._latest_forecast_temps
-            and len(self._latest_forecast_temps) > 1
+            if self._latest_forecast_temps and len(self._latest_forecast_temps) > 1
             else None
         )
         comfort_floor = self._comfort_floor(target, aggressiveness)
@@ -721,9 +720,7 @@ class PumpSteerSensor(RestoreEntity):
             else None
         )
         planned_end = indoor - planned_drop if planned_drop is not None else None
-        planned_margin = (
-            planned_end - comfort_floor if planned_end is not None else None
-        )
+        planned_margin = planned_end - comfort_floor if planned_end is not None else None
 
         return {
             "thermal_k": round(model.k, 4),
