@@ -720,7 +720,9 @@ class PumpSteerSensor(RestoreEntity):
             else None
         )
         planned_end = indoor - planned_drop if planned_drop is not None else None
-        planned_margin = planned_end - comfort_floor if planned_end is not None else None
+        planned_margin = (
+            planned_end - comfort_floor if planned_end is not None else None
+        )
 
         return {
             "thermal_k": round(model.k, 4),
