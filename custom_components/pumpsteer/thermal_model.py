@@ -242,6 +242,11 @@ class ThermalModel:
         """Record one value in the fixed-size dT/dt history buffer."""
         self._temp_history.append((now, indoor_temp))
 
+    def reset_temp_history(self, now: datetime, indoor_temp: float) -> None:
+        """Start a fresh rate window when stable thermal learning becomes eligible."""
+        self._temp_history.clear()
+        self._temp_history.append((now, indoor_temp))
+
     def collect_braking_sample(
         self,
         indoor_temp: float,
