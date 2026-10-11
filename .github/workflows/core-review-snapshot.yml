@@ -1,0 +1,33 @@
+name: Core review snapshot (workbench only)
+on:
+  push:
+    branches: [workbench/core-review-20261011]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7cdd22f76e854a26dee9f54863f8cf1b0a61312a
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: pip install pytest ruff==0.15.8
+      - name: Baseline
+        run: |
+          mkdir -p /tmp/core-review
+          pytest -q | tee /tmp/core-review/baseline.txt
+          ruff check
+          ruff format --check
+      - name: Export immutable source and formatter
+        run: |
+          git archive --format=tar HEAD > /tmp/core-review/source.tar
+          git rev-parse HEAD > /tmp/core-review/source-sha.txt
+          pip download --no-deps --dest /tmp/core-review ruff==0.15.8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-review-baseline
+          path: /tmp/core-review
+          retention-days: 7
