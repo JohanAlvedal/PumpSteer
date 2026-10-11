@@ -154,4 +154,6 @@ def test_preheating_notification_includes_current_price():
 
 def test_preheating_notification_without_price_keeps_useful_message():
     state = _DummyState(attributes={"mode": "preheating"})
-    assert _notification_content("preheating", state) == MODE_NOTIFICATIONS["preheating"]
+    assert (
+        _notification_content("preheating", state) == MODE_NOTIFICATIONS["preheating"]
+    )

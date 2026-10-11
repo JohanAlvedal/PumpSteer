@@ -130,9 +130,7 @@ def test_master_notifications_switch_overrides_all(monkeypatch):
 
 
 def test_cooldown_per_mode_does_not_silence_opposite_mode(monkeypatch):
-    _, _, clock, sent, emit = _setup(
-        monkeypatch, {NOTIFICATION_COOLDOWN_OPTION: "60"}
-    )
+    _, _, clock, sent, emit = _setup(monkeypatch, {NOTIFICATION_COOLDOWN_OPTION: "60"})
     emit("normal", "preheating")
     clock[0] = 5 * 60
     emit("preheating", "braking")
@@ -165,9 +163,7 @@ def test_cooldown_boundaries(monkeypatch, minutes):
 
 @pytest.mark.parametrize("invalid", ["banana", "-30", "999", None])
 def test_invalid_cooldown_fails_open_without_crashing(monkeypatch, invalid):
-    _, _, _, sent, emit = _setup(
-        monkeypatch, {NOTIFICATION_COOLDOWN_OPTION: invalid}
-    )
+    _, _, _, sent, emit = _setup(monkeypatch, {NOTIFICATION_COOLDOWN_OPTION: invalid})
     emit("normal", "braking")
     emit("normal", "braking")
     assert len(sent) == 2

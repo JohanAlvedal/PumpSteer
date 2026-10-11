@@ -92,7 +92,10 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         {
                             "select": {
                                 "options": [
-                                    {"value": "all", "label": "All price notifications"},
+                                    {
+                                        "value": "all",
+                                        "label": "All price notifications",
+                                    },
                                     {"value": "braking_only", "label": "Braking only"},
                                     {"value": "off", "label": "No price notifications"},
                                 ],
@@ -102,14 +105,19 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                     vol.Optional(
                         NOTIFICATION_COOLDOWN_OPTION,
-                        default=str(current_data.get(NOTIFICATION_COOLDOWN_OPTION, "0")),
+                        default=str(
+                            current_data.get(NOTIFICATION_COOLDOWN_OPTION, "0")
+                        ),
                     ): selector(
                         {
                             "select": {
                                 "options": [
                                     {"value": "0", "label": "No repeat limit"},
                                     {"value": "30", "label": "30 minutes"},
-                                    {"value": "60", "label": "60 minutes (recommended)"},
+                                    {
+                                        "value": "60",
+                                        "label": "60 minutes (recommended)",
+                                    },
                                     {"value": "120", "label": "120 minutes"},
                                 ],
                                 "mode": "dropdown",
@@ -205,9 +213,7 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             errors[NOTIFICATION_LEVEL_OPTION] = "invalid_notification_setting"
 
         cooldown = user_input.get(NOTIFICATION_COOLDOWN_OPTION, "0")
-        if str(cooldown) not in {
-            str(value) for value in NOTIFICATION_COOLDOWN_CHOICES
-        }:
+        if str(cooldown) not in {str(value) for value in NOTIFICATION_COOLDOWN_CHOICES}:
             errors[NOTIFICATION_COOLDOWN_OPTION] = "invalid_notification_setting"
 
         # weather_entity is optional — validate only if set
