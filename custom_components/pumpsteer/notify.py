@@ -53,7 +53,11 @@ def _notification_level(entry: ConfigEntry) -> str:
     """Return the configured price-alert level, preserving legacy defaults."""
     cfg = {**entry.data, **entry.options}
     level = cfg.get(NOTIFICATION_LEVEL_OPTION, NOTIFICATION_LEVEL_ALL)
-    return level if level in NOTIFICATION_LEVELS else NOTIFICATION_LEVEL_ALL
+    return (
+        level
+        if isinstance(level, str) and level in NOTIFICATION_LEVELS
+        else NOTIFICATION_LEVEL_ALL
+    )
 
 
 def _notification_cooldown_minutes(entry: ConfigEntry) -> int:
@@ -62,7 +66,7 @@ def _notification_cooldown_minutes(entry: ConfigEntry) -> int:
     raw = cfg.get(NOTIFICATION_COOLDOWN_OPTION, 0)
     try:
         minutes = int(raw)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
     return minutes if minutes in NOTIFICATION_COOLDOWN_CHOICES else 0
 

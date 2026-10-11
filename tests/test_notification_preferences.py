@@ -113,12 +113,12 @@ def test_only_braking_level_does_not_block_braking(monkeypatch):
     assert "Price braking active" in sent[0][0]
 
 
-@pytest.mark.parametrize("level", ["off", "invalid-setting"])
+@pytest.mark.parametrize("level", ["off", "invalid-setting", ["invalid"]])
 def test_level_off_or_invalid(monkeypatch, level):
     _, _, _, sent, emit = _setup(monkeypatch, {NOTIFICATION_LEVEL_OPTION: level})
     emit("normal", "preheating")
     emit("normal", "braking")
-    assert len(sent) == (2 if level == "invalid-setting" else 0)
+    assert len(sent) == (0 if level == "off" else 2)
 
 
 def test_master_notifications_switch_overrides_all(monkeypatch):
@@ -161,7 +161,7 @@ def test_cooldown_boundaries(monkeypatch, minutes):
     assert len(sent) == 2
 
 
-@pytest.mark.parametrize("invalid", ["banana", "-30", "999", None])
+@pytest.mark.parametrize("invalid", ["banana", "-30", "999", None, [], float("inf")])
 def test_invalid_cooldown_fails_open_without_crashing(monkeypatch, invalid):
     _, _, _, sent, emit = _setup(monkeypatch, {NOTIFICATION_COOLDOWN_OPTION: invalid})
     emit("normal", "braking")
