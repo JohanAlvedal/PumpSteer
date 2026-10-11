@@ -13,7 +13,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-No user-facing changes are documented yet. See the [Roadmap](ROADMAP) for active work.
+### Added / improved
+- Include the actual current-slot electricity price in preheating notifications too, using the same PumpSteer state snapshot introduced in 2.2.2.
+- Correct the preheating message so it does not claim the current price is always cheap.
+- Add opt-in price-notification levels (all, braking only, none) and independent per-mode repeat cooldowns (0, 30, 60 or 120 minutes). The existing Notifications switch remains the master control.
+- Keep legacy defaults (all alerts, no cooldown), leave heat control and Relay Guard untouched, and keep holiday notifications separate.
 
 ---
 
