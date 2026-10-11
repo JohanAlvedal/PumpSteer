@@ -5,7 +5,13 @@ from homeassistant import config_entries
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.helpers.selector import selector
 
-from .const import OHMIGO_RELAY_ENTITY
+from .const import (
+    NOTIFICATION_COOLDOWN_CHOICES,
+    NOTIFICATION_COOLDOWN_OPTION,
+    NOTIFICATION_LEVEL_OPTION,
+    NOTIFICATION_LEVELS,
+    OHMIGO_RELAY_ENTITY,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -79,6 +85,45 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                         "notify_service",
                         default=current_data.get("notify_service", ""),
                     ): selector({"text": {}}),
+                    vol.Optional(
+                        NOTIFICATION_LEVEL_OPTION,
+                        default=current_data.get(NOTIFICATION_LEVEL_OPTION, "all"),
+                    ): selector(
+                        {
+                            "select": {
+                                "options": [
+                                    {
+                                        "value": "all",
+                                        "label": "All price notifications",
+                                    },
+                                    {"value": "braking_only", "label": "Braking only"},
+                                    {"value": "off", "label": "No price notifications"},
+                                ],
+                                "mode": "dropdown",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        NOTIFICATION_COOLDOWN_OPTION,
+                        default=str(
+                            current_data.get(NOTIFICATION_COOLDOWN_OPTION, "0")
+                        ),
+                    ): selector(
+                        {
+                            "select": {
+                                "options": [
+                                    {"value": "0", "label": "No repeat limit"},
+                                    {"value": "30", "label": "30 minutes"},
+                                    {
+                                        "value": "60",
+                                        "label": "60 minutes (recommended)",
+                                    },
+                                    {"value": "120", "label": "120 minutes"},
+                                ],
+                                "mode": "dropdown",
+                            }
+                        }
+                    ),
                     vol.Optional(
                         "ohmigo_entity",
                         default=current_data.get("ohmigo_entity", ""),
@@ -161,6 +206,15 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
             if not self._entity_available(entity_id):
                 _LOGGER.warning("%s unavailable: %s", description, entity_id)
                 errors[field] = "entity_unavailable"
+
+        # Restrict notification preferences to recognized selection values.
+        level = user_input.get(NOTIFICATION_LEVEL_OPTION, "all")
+        if level not in NOTIFICATION_LEVELS:
+            errors[NOTIFICATION_LEVEL_OPTION] = "invalid_notification_setting"
+
+        cooldown = user_input.get(NOTIFICATION_COOLDOWN_OPTION, "0")
+        if str(cooldown) not in {str(value) for value in NOTIFICATION_COOLDOWN_CHOICES}:
+            errors[NOTIFICATION_COOLDOWN_OPTION] = "invalid_notification_setting"
 
         # weather_entity is optional — validate only if set
         weather = user_input.get("weather_entity")

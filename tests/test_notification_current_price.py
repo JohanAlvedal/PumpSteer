@@ -135,7 +135,7 @@ def test_braking_notification_falls_back_for_invalid_price():
     assert _notification_content("braking", state) == MODE_NOTIFICATIONS["braking"]
 
 
-def test_preheating_notification_is_unchanged():
+def test_preheating_notification_includes_current_price():
     state = _DummyState(
         attributes={
             "mode": "preheating",
@@ -144,6 +144,16 @@ def test_preheating_notification_is_unchanged():
         }
     )
 
+    title, message = _notification_content("preheating", state)
+    assert title == MODE_NOTIFICATIONS["preheating"][0]
+    assert message == (
+        "Heating is being boosted ahead of an upcoming expensive period.\n"
+        "Current price: 0.25 SEK/kWh"
+    )
+
+
+def test_preheating_notification_without_price_keeps_useful_message():
+    state = _DummyState(attributes={"mode": "preheating"})
     assert (
         _notification_content("preheating", state) == MODE_NOTIFICATIONS["preheating"]
     )

@@ -38,7 +38,9 @@
           "modbus_service": "Generisk utgångstjänst",
           "modbus_payload_template": "Mall för generisk utgångspayload",
           "modbus_interval_minutes": "Intervall för generisk utgång",
-          "ohmigo_relay_entity": "Ohmigo Active/Bypass-relä (valfritt)"
+          "ohmigo_relay_entity": "Ohmigo Active/Bypass-relä (valfritt)",
+          "notification_level": "Prisnotiser",
+          "notification_cooldown_minutes": "Spärrtid för upprepade prisnotiser"
         },
         "data_description": {
           "pid_kp": "Hur kraftigt PumpSteer reagerar på aktuell temperaturdifferens. Typiskt intervall: 2,0 till 5,0.",
@@ -53,14 +55,17 @@
           "modbus_service": "Home Assistant-tjänsten som ska anropas, till exempel modbus.write_register, mqtt.publish eller input_number.set_value.",
           "modbus_payload_template": "YAML-mall för tjänsteanropets payload. Mallen kan använda variabeln fake_temp.",
           "modbus_interval_minutes": "Minsta tid mellan anrop från Generic Output System.",
-          "ohmigo_relay_entity": "Valfri switch-entitet för Ohmigos Active/Bypass-relä. När den är konfigurerad skapar PumpSteer en separat Relay Guard-brytare. Skyddet återställer bara ett uttryckligt OFF-läge när Ohmigo Push är på; unknown eller unavailable skickar aldrig något reläkommando."
+          "ohmigo_relay_entity": "Valfri switch-entitet för Ohmigos Active/Bypass-relä. När den är konfigurerad skapar PumpSteer en separat Relay Guard-brytare. Skyddet återställer bara ett uttryckligt OFF-läge när Ohmigo Push är på; unknown eller unavailable skickar aldrig något reläkommando.",
+          "notification_level": "Välj alla prisnotiser, endast bromsning eller inga. Den befintliga notisbrytaren är fortfarande huvudbrytare.",
+          "notification_cooldown_minutes": "Minsta tid mellan två notiser av samma typ. Välj 0 för ingen spärr; 60 minuter rekommenderas. Bromsning och förvärmning har separata spärrtider."
         }
       }
     },
     "error": {
       "required": "Det här fältet är obligatoriskt",
       "entity_not_found": "Entiteten hittades inte",
-      "entity_unavailable": "Entiteten är otillgänglig"
+      "entity_unavailable": "Entiteten är otillgänglig",
+      "invalid_notification_setting": "Ogiltig notisinställning"
     }
   }
 }

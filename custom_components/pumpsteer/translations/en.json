@@ -37,7 +37,9 @@
           "modbus_service": "Generic output service",
           "modbus_payload_template": "Generic output payload template",
           "modbus_interval_minutes": "Generic output push interval",
-          "ohmigo_relay_entity": "Ohmigo Active/Bypass relay (optional)"
+          "ohmigo_relay_entity": "Ohmigo Active/Bypass relay (optional)",
+          "notification_level": "Price notification level",
+          "notification_cooldown_minutes": "Repeat notification cooldown"
         },
         "data_description": {
           "pid_kp": "How strongly PumpSteer reacts to current temperature error. Typical range: 2.0 to 5.0.",
@@ -52,14 +54,17 @@
           "modbus_service": "Home Assistant service to call, for example modbus.write_register, mqtt.publish or input_number.set_value.",
           "modbus_payload_template": "YAML payload template for the service call. The template can use the fake_temp variable.",
           "modbus_interval_minutes": "Minimum time between Generic Output System service calls.",
-          "ohmigo_relay_entity": "Optional switch entity for the Ohmigo Active/Bypass relay. When configured, PumpSteer exposes a separate Relay Guard switch. The guard only recovers an explicit OFF state while Ohmigo Push is ON; unknown or unavailable states never cause a relay command."
+          "ohmigo_relay_entity": "Optional switch entity for the Ohmigo Active/Bypass relay. When configured, PumpSteer exposes a separate Relay Guard switch. The guard only recovers an explicit OFF state while Ohmigo Push is ON; unknown or unavailable states never cause a relay command.",
+          "notification_level": "Choose all price alerts, braking only, or none. The existing Notifications switch remains the master on/off control.",
+          "notification_cooldown_minutes": "Minimum time between repeated alerts of the same type. Choose 0 for no limit; 60 minutes is recommended. Braking and preheating have independent timers."
         }
       }
     },
     "error": {
       "required": "This field is required",
       "entity_not_found": "Entity not found",
-      "entity_unavailable": "Entity unavailable"
+      "entity_unavailable": "Entity unavailable",
+      "invalid_notification_setting": "Invalid notification setting"
     }
   }
 }

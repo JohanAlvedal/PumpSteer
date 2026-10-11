@@ -48,6 +48,8 @@ Go to **Settings → Devices & Services → PumpSteer → Configure** to access 
 | Field | Description | Default |
 |---|---|---|
 | **Notification service** | Push service for price alerts, e.g. `notify.mobile_app_my_phone`. Leave empty to use HA persistent notifications. | — |
+| **Price notification level** | All price alerts, braking only, or none. The Notifications switch remains the master on/off control. | All |
+| **Repeat notification cooldown** | Minimum time between repeated alerts of the *same mode*: none (0), 30, 60 or 120 min. Preheating never suppresses the first braking alert, or vice versa. | 0 min (legacy behavior); 60 min recommended |
 | **Ohmigo entity** | Number entity to push the fake outdoor temperature to. Leave empty to disable. | — |
 | **Ohmigo Active/Bypass relay** | Optional `switch` entity for the physical Ohmigo Active/Bypass relay. Configuring it exposes the separate **Ohmigo Relay Guard** switch. | — |
 | **Ohmigo push interval** | Minimum minutes between Ohmigo pushes. | 5 min |
@@ -199,9 +201,24 @@ weather source is unreliable.
 **Entity:** `switch.pumpsteer_notifications`
 **Default:** On
 
-Enables or disables push notifications when braking or preheating starts.
-Notifications are sent to the service configured in the options flow, or via HA
-persistent notifications if no service is configured.
+Enables or disables *price* notifications when braking or preheating starts.
+The optional **Price notification level** in the integration options selects
+all alerts, braking only, or none. Both this switch and the level must permit
+an alert for one to be sent.
+
+Braking and preheating notifications include the current electricity price from
+the same PumpSteer state that drove the control decision (when valid). Preheating
+does not assume that the current price is always cheap.
+
+The optional **Repeat notification cooldown** limits alerts only when re-entering
+the *same* mode. Braking and preheating use separate timers; a recent preheating
+alert never blocks the first braking alert. These timers reset on an integration
+reload or HA restart. With no cooldown configured, existing behavior is preserved.
+The cooldown applies only to price notifications, not independent holiday notices
+or Relay Guard recovery behavior.
+
+Notifications are sent to the configured service or, if no service is set, via
+HA persistent notifications.
 
 ---
 
