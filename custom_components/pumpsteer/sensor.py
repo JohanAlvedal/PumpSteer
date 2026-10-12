@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import homeassistant.util.dt as dt_util
@@ -1425,13 +1425,9 @@ class PumpSteerSensor(RestoreEntity):
 
         today_attr = get_attr(self.hass, today_entity_id, "today")
         today_raw_attr = get_attr(self.hass, today_entity_id, "raw_today")
-        raw_today = (
-            today_attr
-            if isinstance(today_attr, list)
-            else today_raw_attr
-            if isinstance(today_raw_attr, list)
-            else []
-        )
+        # Prefer a timestamped source when both numeric and detailed data exist.
+        # A shortened numeric list can otherwise mimic a different valid interval.
+        raw_today = self._prefer_timestamped_prices(today_attr, today_raw_attr)
 
         tomorrow_attr = get_attr(self.hass, tomorrow_entity_id, "tomorrow")
         tomorrow_raw_attr = get_attr(self.hass, tomorrow_entity_id, "raw_tomorrow")
@@ -1439,23 +1435,14 @@ class PumpSteerSensor(RestoreEntity):
         fallback_tomorrow_raw_attr = get_attr(
             self.hass, today_entity_id, "raw_tomorrow"
         )
-        raw_tomorrow = (
-            tomorrow_attr
-            if isinstance(tomorrow_attr, list)
-            else (
-                tomorrow_raw_attr
-                if isinstance(tomorrow_raw_attr, list)
-                else (
-                    fallback_tomorrow_attr
-                    if isinstance(fallback_tomorrow_attr, list)
-                    else (
-                        fallback_tomorrow_raw_attr
-                        if isinstance(fallback_tomorrow_raw_attr, list)
-                        else []
-                    )
-                )
+        if isinstance(tomorrow_attr, list) or isinstance(tomorrow_raw_attr, list):
+            raw_tomorrow = self._prefer_timestamped_prices(
+                tomorrow_attr, tomorrow_raw_attr
             )
-        )
+        else:
+            raw_tomorrow = self._prefer_timestamped_prices(
+                fallback_tomorrow_attr, fallback_tomorrow_raw_attr
+            )
 
         prices_raw = [*raw_today, *raw_tomorrow]
 
@@ -1498,41 +1485,41 @@ class PumpSteerSensor(RestoreEntity):
                 )
             return [], [], 60, 0
 
-        prices: List[float] = []
-        invalid_entries = 0
-        for item in prices_raw:
-            value = PumpSteerSensor._extract_price(item)
-            if value is not None and math.isfinite(value):
-                prices.append(value)
-            else:
-                invalid_entries += 1
-
-        if not prices:
+        # A list position is a time slot. Dropping a malformed entry would
+        # silently move every later price to an earlier time (or even day).
+        interval_minutes = detect_price_interval_minutes(raw_today)
+        today_prices = self._parse_price_day(raw_today)
+        if not today_prices or not self._price_day_matches_slots(
+            raw_today, now, interval_minutes
+        ):
             self._set_price_issue(
-                "no_usable_prices",
+                "invalid_today_prices",
                 (
-                    "PumpSteer price parsing failed: received raw entries but parsed 0 "
-                    f"usable numeric prices (today='{today_entity_id}', "
-                    f"tomorrow='{tomorrow_entity_id}', raw_count={len(prices_raw)}, "
-                    f"invalid_count={invalid_entries})"
+                    "PumpSteer price parsing failed: today's price list has missing, "
+                    f"invalid or misaligned slots (today='{today_entity_id}'); "
+                    "cannot safely map prices to time slots"
                 ),
             )
             return [], [], 60, 0
-        self._clear_price_issue(today_entity_id, tomorrow_entity_id)
 
-        if invalid_entries > 0:
-            _LOGGER.debug(
-                "PumpSteer price parsing skipped %d invalid entries (today='%s', tomorrow='%s')",
-                invalid_entries,
-                today_entity_id,
-                tomorrow_entity_id,
+        tomorrow_prices = self._parse_price_day(raw_tomorrow)
+        if tomorrow_prices and not self._price_day_matches_slots(
+            raw_tomorrow, now + timedelta(days=1), interval_minutes
+        ):
+            tomorrow_prices = None
+        if tomorrow_prices is None:
+            self._set_price_issue(
+                "invalid_tomorrow_prices",
+                (
+                    "PumpSteer ignoring tomorrow's price list because it has missing, "
+                    f"invalid or misaligned slots (tomorrow='{tomorrow_entity_id}'); "
+                    "using today's prices only"
+                ),
             )
+        else:
+            self._clear_price_issue(today_entity_id, tomorrow_entity_id)
 
-        today_prices: List[float] = []
-        for item in raw_today:
-            value = PumpSteerSensor._extract_price(item)
-            if value is not None and math.isfinite(value):
-                today_prices.append(value)
+        prices = today_prices + (tomorrow_prices or [])
 
         # Cache price thresholds once per calendar day per entity.
         # Recomputing hourly caused mid-slot reclassification: P80 could shift
@@ -1587,8 +1574,6 @@ class PumpSteerSensor(RestoreEntity):
             self._p80 = 0.0
 
         categories = classify_price_list(prices, self._p30, self._p80)
-        interval_source = raw_today if raw_today else prices_raw
-        interval_minutes = detect_price_interval_minutes(interval_source)
         categories = filter_short_peaks(
             categories,
             interval_minutes,
@@ -1610,8 +1595,68 @@ class PumpSteerSensor(RestoreEntity):
         return prices, categories, interval_minutes, current_slot
 
     @staticmethod
+    def _prefer_timestamped_prices(values: Any, detailed: Any) -> List[Any]:
+        """Prefer explicit slot identity without rejecting numeric-only sensors."""
+        if isinstance(detailed, list) and any(
+            isinstance(item, dict) and ("start" in item or "end" in item)
+            for item in detailed
+        ):
+            return detailed
+        if isinstance(values, list):
+            return values
+        return detailed if isinstance(detailed, list) else []
+
+    @staticmethod
+    def _price_day_matches_slots(
+        items: List[Any], day: datetime, interval_minutes: int
+    ) -> bool:
+        """Require a complete day and check explicit timestamps when supplied."""
+        start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        if start.utcoffset() is not None:
+            # Count elapsed slots, including 23/25-hour DST days.
+            start = start.astimezone(timezone.utc)
+            end = end.astimezone(timezone.utc)
+        interval = timedelta(minutes=interval_minutes)
+        if interval * len(items) != end - start:
+            return False
+        # Mixed timestamped and timestamp-free entries cannot be verified safely.
+        has_timestamps = any(
+            isinstance(item, dict) and ("start" in item or "end" in item)
+            for item in items
+        )
+        for index, item in enumerate(items):
+            if not has_timestamps:
+                continue
+            if not isinstance(item, dict) or "start" not in item or "end" not in item:
+                return False
+            try:
+                slot_start = datetime.fromisoformat(str(item.get("start")))
+                slot_end = datetime.fromisoformat(str(item.get("end")))
+            except (TypeError, ValueError):
+                return False
+            if (
+                slot_start != start + interval * index
+                or slot_end != start + interval * (index + 1)
+            ):
+                return False
+        return True
+
+    @staticmethod
+    def _parse_price_day(items: List[Any]) -> Optional[List[float]]:
+        """Parse a day atomically so invalid slots cannot shift later prices."""
+        prices: List[float] = []
+        for item in items:
+            value = PumpSteerSensor._extract_price(item)
+            if value is None or not math.isfinite(value):
+                return None
+            prices.append(value)
+        return prices
+
+    @staticmethod
     def _extract_price(item: Any) -> Optional[float]:
-        if item is None:
+        # bool is an int subclass, but never a valid electricity price.
+        if item is None or isinstance(item, bool):
             return None
 
         if isinstance(item, dict):

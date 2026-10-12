@@ -36,6 +36,24 @@ These are set when you first add the integration. You can change them later via
 | **Tomorrow price sensor** | ✅ | Tomorrow's prices for lookahead braking and preheat. Can be the same entity when it exposes `tomorrow` or `raw_tomorrow`. |
 | **Weather entity** | Optional | A `weather` entity used for forecast-based preheat and precool. Leave empty to disable forecast features. |
 
+Each price list must cover its complete local calendar day at a consistent interval,
+including shorter or longer days at daylight saving time changes. Invalid entries
+are not removed or filled in: an invalid today's list triggers safe mode, while an
+invalid optional tomorrow's list is ignored and today's valid prices remain usable.
+When entries include `start` / `end` timestamps, every entry must include
+both fields. They must match their slot positions, be consecutive, and identify
+the correct day and time zone. When both `today` and `raw_today` (or their
+tomorrow equivalents) are present, PumpSteer prefers the timestamped `raw_*`
+list to prevent a shortened numeric list from silently changing the inferred
+price interval. A malformed timestamped today list triggers safe mode rather
+than falling back to a potentially misaligned numeric list.
+
+For numeric-only lists, PumpSteer infers the interval from the number of
+entries. This cannot prove whether a list of 48 values is genuinely made of
+30-minute prices or is a truncated 15-minute day; use a provider that exposes
+`raw_today` timestamps to verify slot identity. Boolean values (`true` /
+`false`) are not valid prices.
+
 ---
 
 ## Options (configure page)
