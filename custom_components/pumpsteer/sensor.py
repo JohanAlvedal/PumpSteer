@@ -775,9 +775,7 @@ class PumpSteerSensor(RestoreEntity):
 
         if not self._thermal_model.validation_session_active:
             self._thermal_model.start_validation_session(now, indoor, outdoor)
-        elif not self._thermal_model.update_validation_session(
-            now, indoor, outdoor
-        ):
+        elif not self._thermal_model.update_validation_session(now, indoor, outdoor):
             # An interrupted session is discarded, then restarted next cycle.
             self._thermal_learning_reason = "observation_gap"
 
@@ -1051,8 +1049,11 @@ class PumpSteerSensor(RestoreEntity):
         # 1. Summer mode.
         if outdoor >= summer_threshold:
             self._update_thermal_learning(
-                active=False, reason="summer_mode", now=now,
-                indoor=indoor, outdoor=outdoor,
+                active=False,
+                reason="summer_mode",
+                now=now,
+                indoor=indoor,
+                outdoor=outdoor,
             )
             self._pi.reset(now)
             self._pi_precool_paused = False
@@ -1084,8 +1085,11 @@ class PumpSteerSensor(RestoreEntity):
         # 2. Precool.
         if self._should_precool(summer_threshold, forecast_temps):
             self._update_thermal_learning(
-                active=False, reason="precool", now=now,
-                indoor=indoor, outdoor=outdoor,
+                active=False,
+                reason="precool",
+                now=now,
+                indoor=indoor,
+                outdoor=outdoor,
             )
             # Keep PI memory and its clock current, but do not use its output.
             self._pi_output(target, indoor, outdoor, now, cfg, freeze_integral=True)
@@ -1122,8 +1126,11 @@ class PumpSteerSensor(RestoreEntity):
         # 3. Aggressiveness 0 -> pure PI, no price logic.
         if aggressiveness == 0:
             self._update_thermal_learning(
-                active=False, reason="price_control_disabled", now=now,
-                indoor=indoor, outdoor=outdoor,
+                active=False,
+                reason="price_control_disabled",
+                now=now,
+                indoor=indoor,
+                outdoor=outdoor,
             )
             if self._prev_aggressiveness != 0:
                 _LOGGER.debug(
@@ -1205,10 +1212,14 @@ class PumpSteerSensor(RestoreEntity):
                     and indoor - outdoor >= 2.0
                 )
                 learning_reason = (
-                    "active" if learning_active
-                    else "comfort_floor" if not brake_requested
-                    else "brake_ramp_not_stable" if factor < 0.75
-                    else "outdoor_too_warm" if outdoor > summer_threshold - 2.0
+                    "active"
+                    if learning_active
+                    else "comfort_floor"
+                    if not brake_requested
+                    else "brake_ramp_not_stable"
+                    if factor < 0.75
+                    else "outdoor_too_warm"
+                    if outdoor > summer_threshold - 2.0
                     else "small_indoor_outdoor_difference"
                 )
                 self._update_thermal_learning(
@@ -1228,8 +1239,11 @@ class PumpSteerSensor(RestoreEntity):
                 mode = MODE_BRAKING
             else:
                 self._update_thermal_learning(
-                    active=False, reason="brake_inactive", now=now,
-                    indoor=indoor, outdoor=outdoor,
+                    active=False,
+                    reason="brake_inactive",
+                    now=now,
+                    indoor=indoor,
+                    outdoor=outdoor,
                 )
                 # Brake phase has ended before this branch. Fit the thermal model only
                 # once, using the samples collected during the completed brake phase.
@@ -1267,8 +1281,11 @@ class PumpSteerSensor(RestoreEntity):
         # The price brake is over; close the last stable learning session.
         # This runs before any pre-brake, preheat or normal-mode early return.
         self._update_thermal_learning(
-            active=False, reason="price_not_expensive", now=now,
-            indoor=indoor, outdoor=outdoor,
+            active=False,
+            reason="price_not_expensive",
+            now=now,
+            indoor=indoor,
+            outdoor=outdoor,
         )
 
         # 5. Pre-brake / preheating before expensive period.
