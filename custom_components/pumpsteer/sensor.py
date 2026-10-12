@@ -118,6 +118,9 @@ class PumpSteerSensor(RestoreEntity):
         self._pi = PIController()
         self._pi_precool_paused: bool = False
         self._thermal_model = ThermalModel()
+        # Thermal Learning is observational and cannot change control output.
+        self._thermal_learning_active: bool = False
+        self._thermal_learning_reason: str = "not_evaluated"
         self._last_outlook: Optional[Any] = None
         self._last_pi_result = None
 
@@ -299,9 +302,18 @@ class PumpSteerSensor(RestoreEntity):
             self._brake_last_expensive_t,
         )
 
-        saved_k = self._attributes.get("thermal_k")
+        saved_k = safe_float(self._attributes.get("thermal_k"))
         if saved_k is not None:
-            self._thermal_model.restore_k(float(saved_k))
+            self._thermal_model.restore_k(saved_k)
+            self._thermal_model.restore_diagnostics(
+                sample_count=self._attributes.get("thermal_k_samples", 0),
+                fit_rmse=self._attributes.get("thermal_fit_rmse_c_per_hour"),
+                learning_sessions=self._attributes.get("thermal_learning_sessions", 0),
+                validated_sessions=self._attributes.get(
+                    "thermal_validated_sessions", 0
+                ),
+                prediction_mae=self._attributes.get("thermal_prediction_mae_c"),
+            )
 
         # Wait until Home Assistant is fully started before the first real update.
         self.hass.bus.async_listen_once(
@@ -698,7 +710,78 @@ class PumpSteerSensor(RestoreEntity):
             "thermal_k_valid": self._thermal_model.is_valid,
             "thermal_k_samples": self._thermal_model.sample_count,
             "thermal_pending_samples": self._thermal_model.pending_samples,
+            "thermal_confidence": round(self._thermal_model.confidence, 3),
+            "thermal_confidence_percent": round(
+                self._thermal_model.confidence * 100, 1
+            ),
+            "thermal_fit_rmse_c_per_hour": (
+                round(self._thermal_model.fit_rmse, 3)
+                if self._thermal_model.fit_rmse is not None
+                else None
+            ),
+            "thermal_learning_active": self._thermal_learning_active,
+            "thermal_learning_reason": self._thermal_learning_reason,
+            "thermal_learning_sessions": self._thermal_model.learning_sessions,
+            "thermal_validated_sessions": self._thermal_model.validated_sessions,
+            "thermal_prediction_mae_c": (
+                round(self._thermal_model.prediction_mae, 3)
+                if self._thermal_model.prediction_mae is not None
+                else None
+            ),
+            "thermal_last_prediction_error_c": (
+                round(self._thermal_model.last_prediction_error, 3)
+                if self._thermal_model.last_prediction_error is not None
+                else None
+            ),
+            "thermal_last_session_duration_minutes": (
+                round(self._thermal_model.last_session_duration_minutes, 1)
+                if self._thermal_model.last_session_duration_minutes is not None
+                else None
+            ),
+            "thermal_last_session_actual_drop_c": (
+                round(self._thermal_model.last_session_actual_drop, 3)
+                if self._thermal_model.last_session_actual_drop is not None
+                else None
+            ),
+            "thermal_last_session_predicted_drop_c": (
+                round(self._thermal_model.last_session_predicted_drop, 3)
+                if self._thermal_model.last_session_predicted_drop is not None
+                else None
+            ),
         }
+
+    def _update_thermal_learning(
+        self,
+        *,
+        active: bool,
+        reason: str,
+        now: datetime,
+        indoor: float,
+        outdoor: float,
+    ) -> None:
+        """Observe stable braking without changing the heat pump control path."""
+        was_active = self._thermal_learning_active
+        self._thermal_learning_active = active
+        self._thermal_learning_reason = reason
+
+        if not active:
+            if self._thermal_model.validation_session_active:
+                self._thermal_model.end_validation_session(now, indoor)
+            return
+
+        if not was_active:
+            # Never infer the stable brake cooling rate from earlier PI/ramp history.
+            self._thermal_model.reset_temp_history(now, indoor)
+
+        if not self._thermal_model.validation_session_active:
+            self._thermal_model.start_validation_session(now, indoor, outdoor)
+        elif not self._thermal_model.update_validation_session(
+            now, indoor, outdoor
+        ):
+            # An interrupted session is discarded, then restarted next cycle.
+            self._thermal_learning_reason = "observation_gap"
+
+        self._thermal_model.collect_braking_sample(indoor, outdoor)
 
     async def _enter_safe_mode(
         self,
@@ -706,6 +789,9 @@ class PumpSteerSensor(RestoreEntity):
         outdoor: Optional[float],
         now: datetime,
     ) -> None:
+        self._thermal_model.cancel_validation_session()
+        self._thermal_learning_active = False
+        self._thermal_learning_reason = "safe_mode"
         if not self._safe_mode_warned:
             _LOGGER.warning(
                 "PumpSteer entered SAFE MODE: %s — optimization paused, sending real outdoor temp",
@@ -961,6 +1047,10 @@ class PumpSteerSensor(RestoreEntity):
 
         # 1. Summer mode.
         if outdoor >= summer_threshold:
+            self._update_thermal_learning(
+                active=False, reason="summer_mode", now=now,
+                indoor=indoor, outdoor=outdoor,
+            )
             self._pi.reset(now)
             self._pi_precool_paused = False
             self._last_pi_result = None
@@ -990,6 +1080,10 @@ class PumpSteerSensor(RestoreEntity):
 
         # 2. Precool.
         if self._should_precool(summer_threshold, forecast_temps):
+            self._update_thermal_learning(
+                active=False, reason="precool", now=now,
+                indoor=indoor, outdoor=outdoor,
+            )
             # Keep PI memory and its clock current, but do not use its output.
             self._pi_output(target, indoor, outdoor, now, cfg, freeze_integral=True)
             # The interval until the first resume also belongs to precool.
@@ -1024,6 +1118,10 @@ class PumpSteerSensor(RestoreEntity):
 
         # 3. Aggressiveness 0 -> pure PI, no price logic.
         if aggressiveness == 0:
+            self._update_thermal_learning(
+                active=False, reason="price_control_disabled", now=now,
+                indoor=indoor, outdoor=outdoor,
+            )
             if self._prev_aggressiveness != 0:
                 _LOGGER.debug(
                     "Aggressiveness changed to 0 (was %s): resetting PI integral once",
@@ -1086,12 +1184,6 @@ class PumpSteerSensor(RestoreEntity):
             )
 
             if factor > 0.0:
-                self._thermal_model.collect_braking_sample(indoor, outdoor)
-
-                # Mark that this cycle had active braking so we can fit the thermal
-                # model once the brake phase has fully ended.
-                self._was_braking_last_cycle = True
-
                 pi_demand = self._pi_output(
                     target,
                     indoor,
@@ -1100,11 +1192,42 @@ class PumpSteerSensor(RestoreEntity):
                     cfg,
                     freeze_integral=True,
                 )
+
+                # Learn only from actual, stable heating-season price braking.
+                # Ramp-in, comfort-floor release and precooling are not training.
+                learning_active = (
+                    brake_requested
+                    and factor >= 0.75
+                    and outdoor <= summer_threshold - 2.0
+                    and indoor - outdoor >= 2.0
+                )
+                learning_reason = (
+                    "active" if learning_active
+                    else "comfort_floor" if not brake_requested
+                    else "brake_ramp_not_stable" if factor < 0.75
+                    else "outdoor_too_warm" if outdoor > summer_threshold - 2.0
+                    else "small_indoor_outdoor_difference"
+                )
+                self._update_thermal_learning(
+                    active=learning_active,
+                    reason=learning_reason,
+                    now=now,
+                    indoor=indoor,
+                    outdoor=outdoor,
+                )
+
+                # Mark that this cycle had active braking so we can fit the thermal
+                # model once the brake phase has fully ended.
+                self._was_braking_last_cycle = True
                 pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
                 brake_temp = self._brake_temp(outdoor, delta_c=brake_delta)
                 fake_temp = pi_fake + (brake_temp - pi_fake) * factor
                 mode = MODE_BRAKING
             else:
+                self._update_thermal_learning(
+                    active=False, reason="brake_inactive", now=now,
+                    indoor=indoor, outdoor=outdoor,
+                )
                 # Brake phase has ended before this branch. Fit the thermal model only
                 # once, using the samples collected during the completed brake phase.
                 if self._was_braking_last_cycle:
