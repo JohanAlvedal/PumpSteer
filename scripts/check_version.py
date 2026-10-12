@@ -19,7 +19,10 @@ def _settings_version(path: Path) -> str:
     for node in tree.body:
         value = None
         if isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name) and node.target.id == "PUMPSTEER_VERSION":
+            if (
+                isinstance(node.target, ast.Name)
+                and node.target.id == "PUMPSTEER_VERSION"
+            ):
                 value = node.value
         elif isinstance(node, ast.Assign):
             if any(
