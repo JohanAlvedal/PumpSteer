@@ -23,6 +23,7 @@ of the active control path.
 from __future__ import annotations
 
 import logging
+import math
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
@@ -52,6 +53,10 @@ _TEMP_BUFFER_SIZE = 10
 # Minimum history span before rate is considered reliable.
 # A few minutes gives a more stable estimate than a near-instant sample.
 _MIN_RATE_WINDOW_MINUTES = 3.0
+
+# Tolerate ordinary polling jitter, but never estimate a continuous cooling
+# rate across a long outage or a known invalid observation.
+_MAX_TEMP_GAP_MINUTES = 5.0
 
 # Plausible bounds for measured indoor temperature rate (°C/h).
 # These are intentionally conservative and only reject obvious spikes/noise.
@@ -143,13 +148,20 @@ class ThermalModel:
 
     # ── Sample collection ──────────────────────────────────────────────────────
 
-    def record_temp(self, now: datetime, indoor_temp: float) -> None:
+    def record_temp(self, now: datetime, indoor_temp: Optional[float]) -> None:
         """
         Record indoor temperature for later cooling-rate estimation.
 
-        This should be called every polling cycle when indoor temperature
-        is available.
+        Call every polling cycle, including missing readings, so an invalid
+        observation breaks the rate history instead of inventing a temperature.
         """
+        if indoor_temp is None or not math.isfinite(indoor_temp):
+            self._temp_history.clear()
+            return
+        if self._temp_history:
+            elapsed_seconds = now.timestamp() - self._temp_history[-1][0].timestamp()
+            if elapsed_seconds <= 0.0 or elapsed_seconds > _MAX_TEMP_GAP_MINUTES * 60:
+                self._temp_history.clear()
         self._temp_history.append((now, indoor_temp))
 
     def collect_braking_sample(
@@ -210,7 +222,7 @@ class ThermalModel:
         t_old, temp_old = self._temp_history[0]
         t_now, temp_now = self._temp_history[-1]
 
-        dt_hours = (t_now - t_old).total_seconds() / 3600.0
+        dt_hours = (t_now.timestamp() - t_old.timestamp()) / 3600.0
         if dt_hours < (_MIN_RATE_WINDOW_MINUTES / 60.0):
             # Too little history — the estimate becomes noisy and unstable.
             return None
