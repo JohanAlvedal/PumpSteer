@@ -261,23 +261,25 @@ def test_invalid_today_enters_safe_mode_in_real_update(monkeypatch):
 
 def _timestamped_day(start, count, interval_minutes=15):
     """Build Nord Pool-style prices carrying an explicit UTC slot timeline."""
-    return [
-        {
-            "start": (start + timedelta(minutes=interval_minutes * index)).isoformat(),
-            "end": (
-                start + timedelta(minutes=interval_minutes * (index + 1))
-            ).isoformat(),
-            "value": float(index),
-        }
-        for index in range(count)
-    ]
+    records = []
+    for index in range(count):
+        slot_start = start + timedelta(minutes=interval_minutes * index)
+        slot_end = slot_start + timedelta(minutes=interval_minutes)
+        records.append(
+            {
+                "start": slot_start.isoformat(),
+                "end": slot_end.isoformat(),
+                "value": float(index),
+            }
+        )
+    return records
 
 
 def test_timestamped_raw_today_preferred_over_shorter_numeric_today():
     sensor = _sensor([float(i) for i in range(48)])
-    sensor.hass.states.values["sensor.price"].attributes["raw_today"] = (
-        _timestamped_day(datetime(2026, 10, 11, tzinfo=timezone.utc), 96)
-    )
+    attrs = sensor.hass.states.values["sensor.price"].attributes
+    start = datetime(2026, 10, 11, tzinfo=timezone.utc)
+    attrs["raw_today"] = _timestamped_day(start, 96)
 
     prices, _, interval, current_slot = _prices(sensor)
 
@@ -289,9 +291,9 @@ def test_timestamped_raw_today_preferred_over_shorter_numeric_today():
 
 def test_incomplete_timestamped_raw_today_cannot_fall_back_to_numeric_today():
     sensor = _sensor([float(i) for i in range(96)])
-    sensor.hass.states.values["sensor.price"].attributes["raw_today"] = (
-        _timestamped_day(datetime(2026, 10, 11, tzinfo=timezone.utc), 48)
-    )
+    attrs = sensor.hass.states.values["sensor.price"].attributes
+    start = datetime(2026, 10, 11, tzinfo=timezone.utc)
+    attrs["raw_today"] = _timestamped_day(start, 48)
 
     assert _prices(sensor) == ([], [], 60, 0)
     assert sensor._current_price is None
@@ -300,9 +302,9 @@ def test_incomplete_timestamped_raw_today_cannot_fall_back_to_numeric_today():
 def test_timestamped_raw_tomorrow_preferred_over_shorter_numeric_tomorrow():
     today = [1.0] * 96
     sensor = _sensor(today, [2.0] * 48)
-    sensor.hass.states.values["sensor.price"].attributes["raw_tomorrow"] = (
-        _timestamped_day(datetime(2026, 10, 12, tzinfo=timezone.utc), 96)
-    )
+    attrs = sensor.hass.states.values["sensor.price"].attributes
+    start = datetime(2026, 10, 12, tzinfo=timezone.utc)
+    attrs["raw_tomorrow"] = _timestamped_day(start, 96)
 
     prices, _, interval, slot = _prices(sensor)
 
@@ -315,9 +317,9 @@ def test_timestamped_raw_tomorrow_preferred_over_shorter_numeric_tomorrow():
 def test_incomplete_raw_tomorrow_is_discarded_without_shifting_today():
     today = [float(i) for i in range(96)]
     sensor = _sensor(today, [2.0] * 96)
-    sensor.hass.states.values["sensor.price"].attributes["raw_tomorrow"] = (
-        _timestamped_day(datetime(2026, 10, 12, tzinfo=timezone.utc), 48)
-    )
+    attrs = sensor.hass.states.values["sensor.price"].attributes
+    start = datetime(2026, 10, 12, tzinfo=timezone.utc)
+    attrs["raw_tomorrow"] = _timestamped_day(start, 48)
 
     prices, _, interval, slot = _prices(sensor)
 
@@ -327,7 +329,8 @@ def test_incomplete_raw_tomorrow_is_discarded_without_shifting_today():
 
 
 def test_mixed_timestamped_and_untimestamped_slots_are_rejected():
-    today = _timestamped_day(datetime(2026, 10, 11, tzinfo=timezone.utc), 96)
+    start = datetime(2026, 10, 11, tzinfo=timezone.utc)
+    today = _timestamped_day(start, 96)
     today[3] = 3.0
 
     assert _prices(_sensor(today, raw=True)) == ([], [], 60, 0)
@@ -335,9 +338,8 @@ def test_mixed_timestamped_and_untimestamped_slots_are_rejected():
 
 def test_partial_timestamped_tomorrow_is_rejected_without_losing_today():
     today = [1.0] * 96
-    tomorrow = _timestamped_day(
-        datetime(2026, 10, 12, tzinfo=timezone.utc), 96
-    )
+    start = datetime(2026, 10, 12, tzinfo=timezone.utc)
+    tomorrow = _timestamped_day(start, 96)
     tomorrow[3] = 3.0
 
     assert _prices(_sensor(today, tomorrow))[0] == today
