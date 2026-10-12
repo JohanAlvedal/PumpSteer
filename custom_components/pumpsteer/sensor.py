@@ -1566,9 +1566,7 @@ class PumpSteerSensor(RestoreEntity):
         return prices, categories, interval_minutes, current_slot
 
     @staticmethod
-    def _prefer_timestamped_prices(
-        values: Any, detailed: Any
-    ) -> List[Any]:
+    def _prefer_timestamped_prices(values: Any, detailed: Any) -> List[Any]:
         """Prefer explicit slot identity without rejecting numeric-only sensors."""
         if isinstance(detailed, list) and any(
             isinstance(item, dict) and ("start" in item or "end" in item)
