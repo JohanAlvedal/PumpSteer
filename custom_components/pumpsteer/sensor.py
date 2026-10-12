@@ -1396,13 +1396,9 @@ class PumpSteerSensor(RestoreEntity):
 
         today_attr = get_attr(self.hass, today_entity_id, "today")
         today_raw_attr = get_attr(self.hass, today_entity_id, "raw_today")
-        raw_today = (
-            today_attr
-            if isinstance(today_attr, list)
-            else today_raw_attr
-            if isinstance(today_raw_attr, list)
-            else []
-        )
+        # Prefer a timestamped source when both numeric and detailed data exist.
+        # A shortened numeric list can otherwise mimic a different valid interval.
+        raw_today = self._prefer_timestamped_prices(today_attr, today_raw_attr)
 
         tomorrow_attr = get_attr(self.hass, tomorrow_entity_id, "tomorrow")
         tomorrow_raw_attr = get_attr(self.hass, tomorrow_entity_id, "raw_tomorrow")
@@ -1410,23 +1406,14 @@ class PumpSteerSensor(RestoreEntity):
         fallback_tomorrow_raw_attr = get_attr(
             self.hass, today_entity_id, "raw_tomorrow"
         )
-        raw_tomorrow = (
-            tomorrow_attr
-            if isinstance(tomorrow_attr, list)
-            else (
-                tomorrow_raw_attr
-                if isinstance(tomorrow_raw_attr, list)
-                else (
-                    fallback_tomorrow_attr
-                    if isinstance(fallback_tomorrow_attr, list)
-                    else (
-                        fallback_tomorrow_raw_attr
-                        if isinstance(fallback_tomorrow_raw_attr, list)
-                        else []
-                    )
-                )
+        if isinstance(tomorrow_attr, list) or isinstance(tomorrow_raw_attr, list):
+            raw_tomorrow = self._prefer_timestamped_prices(
+                tomorrow_attr, tomorrow_raw_attr
             )
-        )
+        else:
+            raw_tomorrow = self._prefer_timestamped_prices(
+                fallback_tomorrow_attr, fallback_tomorrow_raw_attr
+            )
 
         prices_raw = [*raw_today, *raw_tomorrow]
 
@@ -1579,6 +1566,20 @@ class PumpSteerSensor(RestoreEntity):
         return prices, categories, interval_minutes, current_slot
 
     @staticmethod
+    def _prefer_timestamped_prices(
+        values: Any, detailed: Any
+    ) -> List[Any]:
+        """Prefer explicit slot identity without rejecting numeric-only sensors."""
+        if isinstance(detailed, list) and any(
+            isinstance(item, dict) and ("start" in item or "end" in item)
+            for item in detailed
+        ):
+            return detailed
+        if isinstance(values, list):
+            return values
+        return detailed if isinstance(detailed, list) else []
+
+    @staticmethod
     def _price_day_matches_slots(
         items: List[Any], day: datetime, interval_minutes: int
     ) -> bool:
@@ -1592,9 +1593,16 @@ class PumpSteerSensor(RestoreEntity):
         interval = timedelta(minutes=interval_minutes)
         if interval * len(items) != end - start:
             return False
+        # Mixed timestamped and timestamp-free entries cannot be verified safely.
+        has_timestamps = any(
+            isinstance(item, dict) and ("start" in item or "end" in item)
+            for item in items
+        )
         for index, item in enumerate(items):
-            if not isinstance(item, dict) or not ({"start", "end"} & item.keys()):
+            if not has_timestamps:
                 continue
+            if not isinstance(item, dict) or "start" not in item or "end" not in item:
+                return False
             try:
                 slot_start = datetime.fromisoformat(str(item.get("start")))
                 slot_end = datetime.fromisoformat(str(item.get("end")))
@@ -1620,7 +1628,8 @@ class PumpSteerSensor(RestoreEntity):
 
     @staticmethod
     def _extract_price(item: Any) -> Optional[float]:
-        if item is None:
+        # bool is an int subclass, but never a valid electricity price.
+        if item is None or isinstance(item, bool):
             return None
 
         if isinstance(item, dict):
