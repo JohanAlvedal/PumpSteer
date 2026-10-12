@@ -152,8 +152,8 @@ nearby expensive period approaches.
 | `summer_mode` | outdoor ≥ summer threshold | No | No | — |
 | `safe_mode` | required temperature or price input missing/invalid | No | No | — |
 | `precool` | warm-period risk detected | No | Yes (precool brake ramp) | — |
-| `normal` | default | Yes | No (or ramp-out) | Accumulates |
-| `holiday` | holiday target active while otherwise in normal PI | Yes (lower target) | No (or ramp-out) | Accumulates |
+| `normal` | default | Yes | No (or ramp-out) | Frozen during ramp-out; otherwise accumulates |
+| `holiday` | holiday target active while otherwise in normal PI | Yes (lower target) | No (or ramp-out) | Frozen during ramp-out; otherwise accumulates |
 | `braking` | price expensive, comfort OK | Frozen¹ | Yes | Frozen |
 | `brake_hold` | short non-expensive gap before nearby expensive period | Frozen¹ | Held flat | Frozen |
 | `pre_braking` | expensive imminent, within ramp_in, comfort OK | Frozen¹ | Yes (ramping in) | Frozen |
