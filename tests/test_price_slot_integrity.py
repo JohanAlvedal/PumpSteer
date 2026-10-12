@@ -42,7 +42,19 @@ def _prices(sensor, now=None):
 @pytest.mark.parametrize("interval", [5, 10, 15, 20, 30, 60, 120])
 @pytest.mark.parametrize("position", [0, 0.5, 1])
 @pytest.mark.parametrize(
-    "bad", [None, "unavailable", "bad", {}, {"value": "nan"}, float("inf")]
+    "bad",
+    [
+        None,
+        "unavailable",
+        "bad",
+        {},
+        {"value": "nan"},
+        float("inf"),
+        True,
+        False,
+        {"value": True},
+        {"price": False},
+    ],
 )
 def test_invalid_today_slot_fails_safe_instead_of_shifting(interval, position, bad):
     today = [float(i) for i in range(1440 // interval)]
@@ -245,3 +257,95 @@ def test_invalid_today_enters_safe_mode_in_real_update(monkeypatch):
     asyncio.run(sensor.async_update())
     assert sensor.extra_state_attributes["mode"] == "safe_mode"
     assert sensor.state == 5.0
+
+
+def _timestamped_day(start, count, interval_minutes=15):
+    """Build Nord Pool-style prices carrying an explicit UTC slot timeline."""
+    return [
+        {
+            "start": (start + timedelta(minutes=interval_minutes * index)).isoformat(),
+            "end": (start + timedelta(minutes=interval_minutes * (index + 1))).isoformat(),
+            "value": float(index),
+        }
+        for index in range(count)
+    ]
+
+
+def test_timestamped_raw_today_preferred_over_shorter_numeric_today():
+    sensor = _sensor([float(i) for i in range(48)])
+    sensor.hass.states.values["sensor.price"].attributes["raw_today"] = (
+        _timestamped_day(datetime(2026, 10, 11, tzinfo=timezone.utc), 96)
+    )
+
+    prices, _, interval, current_slot = _prices(sensor)
+
+    assert prices == [float(i) for i in range(96)]
+    assert interval == 15
+    assert current_slot == 48
+    assert sensor._current_price == 48.0
+
+
+def test_incomplete_timestamped_raw_today_cannot_fall_back_to_numeric_today():
+    sensor = _sensor([float(i) for i in range(96)])
+    sensor.hass.states.values["sensor.price"].attributes["raw_today"] = (
+        _timestamped_day(datetime(2026, 10, 11, tzinfo=timezone.utc), 48)
+    )
+
+    assert _prices(sensor) == ([], [], 60, 0)
+    assert sensor._current_price is None
+
+
+def test_timestamped_raw_tomorrow_preferred_over_shorter_numeric_tomorrow():
+    today = [1.0] * 96
+    sensor = _sensor(today, [2.0] * 48)
+    sensor.hass.states.values["sensor.price"].attributes["raw_tomorrow"] = (
+        _timestamped_day(datetime(2026, 10, 12, tzinfo=timezone.utc), 96)
+    )
+
+    prices, _, interval, slot = _prices(sensor)
+
+    assert prices[:96] == today
+    assert prices[96:] == [float(i) for i in range(96)]
+    assert interval == 15
+    assert slot == 48
+
+
+def test_incomplete_raw_tomorrow_is_discarded_without_shifting_today():
+    today = [float(i) for i in range(96)]
+    sensor = _sensor(today, [2.0] * 96)
+    sensor.hass.states.values["sensor.price"].attributes["raw_tomorrow"] = (
+        _timestamped_day(datetime(2026, 10, 12, tzinfo=timezone.utc), 48)
+    )
+
+    prices, _, interval, slot = _prices(sensor)
+
+    assert prices == today
+    assert interval == 15
+    assert slot == 48
+
+
+def test_mixed_timestamped_and_untimestamped_slots_are_rejected():
+    today = _timestamped_day(datetime(2026, 10, 11, tzinfo=timezone.utc), 96)
+    today[3] = 3.0
+
+    assert _prices(_sensor(today, raw=True)) == ([], [], 60, 0)
+
+
+def test_partial_timestamped_tomorrow_is_rejected_without_losing_today():
+    today = [1.0] * 96
+    tomorrow = _timestamped_day(
+        datetime(2026, 10, 12, tzinfo=timezone.utc), 96
+    )
+    tomorrow[3] = 3.0
+
+    assert _prices(_sensor(today, tomorrow))[0] == today
+
+
+def test_numeric_only_half_hour_day_remains_supported():
+    # Without timestamps, 48 half-hour prices and truncated quarter-hour prices
+    # are indistinguishable; do not reject valid 30-minute price sources.
+    today = [float(i) for i in range(48)]
+    prices, _, interval, slot = _prices(_sensor(today))
+    assert prices == today
+    assert interval == 30
+    assert slot == 24
