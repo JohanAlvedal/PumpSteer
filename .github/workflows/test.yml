@@ -40,6 +40,8 @@ jobs:
         run: ruff check
         if: ${{ !cancelled() }}
 
+      - name: Formatter diagnostics (temporary)
+        run: ruff format --diff custom_components/pumpsteer/sensor.py tests/test_thermal_learning_confidence.py
       - name: ruff format
         run: ruff format --check
         if: ${{ !cancelled() }}
