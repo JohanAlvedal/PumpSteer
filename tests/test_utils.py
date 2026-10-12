@@ -2,6 +2,7 @@ import builtins
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from custom_components.pumpsteer.settings import PUMPSTEER_VERSION
 from custom_components.pumpsteer.utils import (
     compute_price_slot_index,
     detect_price_interval_minutes,
@@ -11,8 +12,7 @@ from custom_components.pumpsteer.utils import (
 
 
 def test_get_version_reads_manifest():
-    # FIX: updated to match the current version in manifest.json
-    assert get_version() == "2.2.0"
+    assert get_version() == PUMPSTEER_VERSION
 
 
 def test_get_version_missing_manifest(monkeypatch):
