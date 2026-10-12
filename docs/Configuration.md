@@ -36,6 +36,13 @@ These are set when you first add the integration. You can change them later via
 | **Tomorrow price sensor** | ✅ | Tomorrow's prices for lookahead braking and preheat. Can be the same entity when it exposes `tomorrow` or `raw_tomorrow`. |
 | **Weather entity** | Optional | A `weather` entity used for forecast-based preheat and precool. Leave empty to disable forecast features. |
 
+Each price list must cover its complete local calendar day at a consistent interval,
+including shorter or longer days at daylight saving time changes. Invalid entries
+are not removed or filled in: an invalid today's list triggers safe mode, while an
+invalid optional tomorrow's list is ignored and today's valid prices remain usable.
+When entries include `start` / `end` timestamps, they must match their slot positions,
+be consecutive, and identify the correct day and time zone.
+
 ---
 
 ## Options (configure page)
