@@ -6,11 +6,17 @@ on:
     paths:
       - 'custom_components/**'
       - 'manifest.json'
+      - 'scripts/check_version.py'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'custom_components/**'
       - 'manifest.json'
+      - 'scripts/check_version.py'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
   schedule:
     - cron: '0 6 * * 1'
   release:
@@ -36,6 +42,9 @@ jobs:
         with:
           python-version: '3.11'
           
+      - name: Check integration version consistency
+        run: python scripts/check_version.py
+
       - name: Run Hassfest
         uses: home-assistant/actions/hassfest@master
         
@@ -104,6 +113,11 @@ jobs:
         with:
           python-version: '3.11'
           
+      - name: Check release tag and integration versions
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: python scripts/check_version.py --tag "$RELEASE_TAG"
+
       - name: Validate with Hassfest
         uses: home-assistant/actions/hassfest@master
         
@@ -134,12 +148,6 @@ jobs:
           print('✓ All files validated for release')
           "
           
-      - name: Update version in manifest.json
-        run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" custom_components/pumpsteer/manifest.json
-
       - name: Remove __pycache__ directories
         run: |
           find . -name '__pycache__' -type d -exec rm -rf {} +
