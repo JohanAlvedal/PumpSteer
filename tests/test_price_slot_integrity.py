@@ -264,7 +264,9 @@ def _timestamped_day(start, count, interval_minutes=15):
     return [
         {
             "start": (start + timedelta(minutes=interval_minutes * index)).isoformat(),
-            "end": (start + timedelta(minutes=interval_minutes * (index + 1))).isoformat(),
+            "end": (
+                start + timedelta(minutes=interval_minutes * (index + 1))
+            ).isoformat(),
             "value": float(index),
         }
         for index in range(count)
