@@ -163,6 +163,11 @@ nearby expensive period approaches.
 on `fake_temp`. It influences output only during ramp-in/ramp-out (`0 < factor < 1`)
 as part of the blend.
 
+During precool, PI is computed only to advance its clock with a frozen integral;
+its output is discarded. The first PI computation after precool also freezes the
+integral, so it does not integrate the paused interval. Later unrestricted cycles
+resume ordinary integration. Existing PI resets clear this pause state.
+
 ---
 
 ## Price Classification

@@ -115,6 +115,7 @@ class PumpSteerSensor(RestoreEntity):
         self._ohmigo_last_push = None
 
         self._pi = PIController()
+        self._pi_precool_paused: bool = False
         self._thermal_model = ThermalModel()
         self._last_outlook: Optional[Any] = None
         self._last_pi_result = None
@@ -707,6 +708,7 @@ class PumpSteerSensor(RestoreEntity):
             _LOGGER.debug("PumpSteer safe mode still active: %s", reason)
 
         self._pi.reset(now)
+        self._pi_precool_paused = False
         self._last_pi_result = None
         self._brake_ramp = 0.0
         self._preheat_ramp = 0.0
@@ -811,7 +813,7 @@ class PumpSteerSensor(RestoreEntity):
             outdoor_temp=outdoor,
             aggressiveness=1.0,
             update_time=now,
-            braking_active=freeze_integral,
+            braking_active=freeze_integral or self._pi_precool_paused,
             kp=kp,
             ki=ki,
             kd=kd,
@@ -824,6 +826,7 @@ class PumpSteerSensor(RestoreEntity):
             decay_per_minute_on_brake=0.98,
         )
 
+        self._pi_precool_paused = False
         self._last_pi_result = result
         return -result.offset
 
@@ -944,6 +947,7 @@ class PumpSteerSensor(RestoreEntity):
         # 1. Summer mode.
         if outdoor >= summer_threshold:
             self._pi.reset(now)
+            self._pi_precool_paused = False
             self._last_pi_result = None
             self._brake_ramp = 0.0
             self._preheat_ramp = 0.0
@@ -971,6 +975,10 @@ class PumpSteerSensor(RestoreEntity):
 
         # 2. Precool.
         if self._should_precool(summer_threshold, forecast_temps):
+            # Keep PI memory and its clock current, but do not use its output.
+            self._pi_output(target, indoor, outdoor, now, cfg, freeze_integral=True)
+            # The interval until the first resume also belongs to precool.
+            self._pi_precool_paused = True
             brake_temp = self._brake_temp(outdoor)
             factor = self._update_brake_ramp(
                 True,
@@ -1007,6 +1015,7 @@ class PumpSteerSensor(RestoreEntity):
                     self._prev_aggressiveness,
                 )
                 self._pi.reset(now)
+                self._pi_precool_paused = False
                 self._last_pi_result = None
                 self._brake_ramp = 0.0
                 self._preheat_ramp = 0.0
