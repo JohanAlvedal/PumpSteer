@@ -82,6 +82,7 @@ MODE_SAFE = "safe_mode"
 _RESTORE_BRAKE_RAMP = "brake_ramp"
 _RESTORE_BRAKE_LAST_T = "brake_last_t"
 _RESTORE_BRAKE_LAST_EXPENSIVE_T = "brake_last_expensive_t"
+_RESTORE_WAS_BRAKING = "was_braking_last_cycle"
 
 # Maximum dt_seconds allowed in _update_brake_ramp.
 # Caps the step size so a long gap between mode transitions (e.g. normal →
@@ -220,13 +221,17 @@ class PumpSteerSensor(RestoreEntity):
         from homeassistant.helpers.restore_state import ExtraStoredData
 
         class _BrakeData(ExtraStoredData):
-            def __init__(self, brake_ramp, brake_last_t, brake_last_expensive_t):
+            def __init__(
+                self, brake_ramp, brake_last_t, brake_last_expensive_t, was_braking
+            ):
                 self.brake_ramp = brake_ramp
                 self.brake_last_t = brake_last_t
                 self.brake_last_expensive_t = brake_last_expensive_t
+                self.was_braking = was_braking
 
             def as_dict(self):
                 return {
+                    _RESTORE_WAS_BRAKING: self.was_braking,
                     _RESTORE_BRAKE_RAMP: self.brake_ramp,
                     _RESTORE_BRAKE_LAST_T: (
                         self.brake_last_t.isoformat() if self.brake_last_t else None
@@ -242,6 +247,7 @@ class PumpSteerSensor(RestoreEntity):
             self._brake_ramp,
             self._brake_last_t,
             self._brake_last_expensive_t,
+            self._was_braking_last_cycle,
         )
 
     async def async_added_to_hass(self) -> None:
@@ -267,6 +273,9 @@ class PumpSteerSensor(RestoreEntity):
         extra = await self.async_get_last_extra_data()
         if extra is not None:
             data = extra.as_dict()
+            # Older timestamps also record pre-brake/precool requests, so they
+            # cannot prove that an expensive braking phase actually occurred.
+            self._was_braking_last_cycle = data.get(_RESTORE_WAS_BRAKING) is True
             self._brake_ramp = float(data.get(_RESTORE_BRAKE_RAMP, 0.0))
             raw_last_t = data.get(_RESTORE_BRAKE_LAST_T)
             raw_last_exp = data.get(_RESTORE_BRAKE_LAST_EXPENSIVE_T)
@@ -1152,6 +1161,7 @@ class PumpSteerSensor(RestoreEntity):
         # The bridge is price-only and must never override the comfort floor.
         bridge_short_dip = (
             upcoming
+            and self._was_braking_last_cycle
             and minutes_until_expensive is not None
             and minutes_until_expensive <= brake_hold
             and self._brake_ramp > 0.0

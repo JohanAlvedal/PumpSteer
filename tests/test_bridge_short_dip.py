@@ -61,7 +61,10 @@ def _make_sensor(brake_hold_minutes=30.0):
             "brake_hold_minutes": brake_hold_minutes,
         },
     )
-    return PumpSteerSensor(_DummyHass(), entry)
+    sensor = PumpSteerSensor(_DummyHass(), entry)
+    # These bridge fixtures start after an actual expensive braking phase.
+    sensor._was_braking_last_cycle = True
+    return sensor
 
 
 def _run_cycle(sensor, monkeypatch, now, categories, forecast_temps=None):
