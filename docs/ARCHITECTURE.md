@@ -143,6 +143,11 @@ A valid short-dip bridge is reported as `brake_hold`. It is not a separate price
 decision; it is the normal-control path preserving the existing brake factor while a
 nearby expensive period approaches.
 
+When preheat takes over, the previous brake phase ends: its ramp, timestamps and
+actual-braking provenance are cleared. The diagnostic thermal model uses the same
+20-sample fit threshold as an ordinary completed brake phase. A later expensive
+period starts a fresh ramp instead of reviving an old hold.
+
 ---
 
 ## Operating Modes
