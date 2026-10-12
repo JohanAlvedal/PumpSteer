@@ -690,7 +690,7 @@ class PumpSteerSensor(RestoreEntity):
             "thermal_pending_samples": self._thermal_model.pending_samples,
         }
 
-    def _enter_safe_mode(
+    async def _enter_safe_mode(
         self,
         reason: str,
         outdoor: Optional[float],
@@ -723,6 +723,12 @@ class PumpSteerSensor(RestoreEntity):
                 "last_updated": now.isoformat(),
                 "outdoor_temperature": outdoor,
             }
+            self._ohmigo_last_push = await async_push_ohmigo(
+                self.hass,
+                self._config_entry,
+                outdoor,
+                self._ohmigo_last_push,
+            )
         else:
             self._state = None
             self._attributes = {
@@ -873,7 +879,7 @@ class PumpSteerSensor(RestoreEntity):
                 missing.append(
                     f"outdoor sensor '{cfg.get('real_outdoor_entity') or 'not configured'}'"
                 )
-            self._enter_safe_mode(
+            await self._enter_safe_mode(
                 "Missing sensors: " + ", ".join(missing),
                 outdoor,
                 now,
@@ -894,7 +900,7 @@ class PumpSteerSensor(RestoreEntity):
         if not prices:
             today_entity_id = cfg.get("electricity_price_entity") or "not configured"
             tomorrow_entity_id = cfg.get("price_tomorrow_entity") or today_entity_id
-            self._enter_safe_mode(
+            await self._enter_safe_mode(
                 f"No price data from today='{today_entity_id}', "
                 f"tomorrow='{tomorrow_entity_id}'",
                 outdoor,

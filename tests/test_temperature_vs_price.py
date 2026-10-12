@@ -10,6 +10,7 @@ Nya tester i denna version:
 Kör med: pytest tests/ -v
 """
 
+import asyncio
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -527,7 +528,7 @@ def test_safe_mode_passthrough():
     from custom_components.pumpsteer.sensor import MODE_SAFE, PumpSteerSensor
 
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
-    s._enter_safe_mode("test", outdoor=5.0, now=now_utc())
+    asyncio.run(s._enter_safe_mode("test", outdoor=5.0, now=now_utc()))
     assert s._state == 5.0
     assert s._attributes["mode"] == MODE_SAFE
     assert s.available is True
@@ -537,7 +538,7 @@ def test_safe_mode_no_outdoor():
     from custom_components.pumpsteer.sensor import MODE_SAFE, PumpSteerSensor
 
     s = PumpSteerSensor(DummyHass(), DummyConfigEntry())
-    s._enter_safe_mode("ingen ute", outdoor=None, now=now_utc())
+    asyncio.run(s._enter_safe_mode("ingen ute", outdoor=None, now=now_utc()))
     assert s._state is None
     assert s.available is False
     assert s._attributes["mode"] == MODE_SAFE
@@ -551,7 +552,7 @@ def test_safe_mode_resets_pi_and_brake():
     s._brake_ramp = 1.0
     s._brake_last_t = t
     s._brake_last_expensive_t = t
-    s._enter_safe_mode("test", outdoor=5.0, now=t)
+    asyncio.run(s._enter_safe_mode("test", outdoor=5.0, now=t))
     assert s._brake_ramp == 0.0
     assert s._brake_last_t is None
     assert s._brake_last_expensive_t is None
