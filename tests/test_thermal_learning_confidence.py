@@ -34,9 +34,7 @@ def _run_session(model: ThermalModel, minutes: int = 60, drop: float = 0.8) -> N
         assert model.update_validation_session(
             _START + timedelta(minutes=minute), indoor, 5.0
         )
-    model.end_validation_session(
-        _START + timedelta(minutes=minutes), 21.0 - drop
-    )
+    model.end_validation_session(_START + timedelta(minutes=minutes), 21.0 - drop)
 
 
 def test_fitting_requires_20_accepted_samples_not_100():
@@ -44,13 +42,11 @@ def test_fitting_requires_20_accepted_samples_not_100():
     _feed_cooling(model, 22)
     assert model.pending_samples == 19
     assert model.fit() is False
-    _feed_cooling(model, 23)
-    # Duplicated timestamps reset the rate window; add enough new observations.
-    _feed_cooling_continuous = ThermalModel()
-    _feed_cooling(_feed_cooling_continuous, 23)
-    assert _feed_cooling_continuous.pending_samples == 20
-    assert _feed_cooling_continuous.fit() is True
-    assert _feed_cooling_continuous.is_valid
+    enough_samples = ThermalModel()
+    _feed_cooling(enough_samples, 23)
+    assert enough_samples.pending_samples == 20
+    assert enough_samples.fit() is True
+    assert enough_samples.is_valid
 
 
 def test_94_accepted_samples_yield_nonzero_confidence():
