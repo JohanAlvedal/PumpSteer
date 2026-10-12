@@ -1322,9 +1322,6 @@ class PumpSteerSensor(RestoreEntity):
             preheat_headroom,
         )
 
-        pi_demand = self._pi_output(target, indoor, outdoor, now, cfg)
-        pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
-
         brake_should_hold = bridge_short_dip
 
         if brake_should_hold:
@@ -1340,6 +1337,13 @@ class PumpSteerSensor(RestoreEntity):
                 ramp_out,
                 hold_minutes=0.0,
             )
+
+        # Hold and ramp-out still limit heating through the brake overlay.
+        # Resume integration only once that overlay has fully released.
+        pi_demand = self._pi_output(
+            target, indoor, outdoor, now, cfg, freeze_integral=factor > 0.0
+        )
+        pi_fake = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - pi_demand))
 
         # Fit the thermal model once after a completed brake phase has fully ramped out.
         if self._was_braking_last_cycle and factor <= 0.0:
