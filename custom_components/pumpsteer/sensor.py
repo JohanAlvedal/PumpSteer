@@ -936,6 +936,9 @@ class PumpSteerSensor(RestoreEntity):
         try:
             await self._do_update()
         except Exception as err:
+            self._thermal_model.cancel_validation_session()
+            self._thermal_learning_active = False
+            self._thermal_learning_reason = "update_error"
             _LOGGER.exception("PumpSteer update failed: %s", err)
             self._last_pi_result = None
             self._state = None
@@ -1260,6 +1263,13 @@ class PumpSteerSensor(RestoreEntity):
                 now,
             )
             return
+
+        # The price brake is over; close the last stable learning session.
+        # This runs before any pre-brake, preheat or normal-mode early return.
+        self._update_thermal_learning(
+            active=False, reason="price_not_expensive", now=now,
+            indoor=indoor, outdoor=outdoor,
+        )
 
         # 5. Pre-brake / preheating before expensive period.
         #
