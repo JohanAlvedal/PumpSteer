@@ -876,7 +876,7 @@ class PumpSteerSensor(RestoreEntity):
         aggressiveness = self._aggressiveness(cfg)
         house_inertia = self._house_inertia(cfg)
 
-        self._thermal_model.record_temp(now, indoor if indoor is not None else 0.0)
+        self._thermal_model.record_temp(now, indoor)
 
         if indoor is None or outdoor is None:
             missing = []

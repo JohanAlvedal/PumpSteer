@@ -342,6 +342,12 @@ preheat. `ThermalModel` collects valid cooling samples during braking and, after
 completed brake phase, fits its cooling constant `k` when at least 20 samples are
 available. The fitted `thermal_k` is restored across Home Assistant restarts.
 
+Rate history includes only valid indoor readings. Missing/non-finite readings,
+duplicate/backwards timestamps, or a gap longer than five minutes break that
+history; three minutes of fresh contiguous readings are needed before collecting
+another cooling sample. Cooling rates use elapsed time across DST transitions.
+Restoring `thermal_k` does not restore old temperature history.
+
 ThermalModel is still **diagnostic with respect to control decisions**: it does not yet
 decide brake depth, override the comfort floor, or determine preheat headroom. Prediction
 helpers such as expected temperature drop and brake safety remain the next validation step.
