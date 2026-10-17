@@ -56,11 +56,14 @@ Run the offline suite from the repository root:
 
 ```bash
 python3 -m pytest -q
-ruff check --config ruff.toml --select E9,F63,F7,F82,F401 custom_components/pumpsteer tests/test_ohmigo_watchdog_safety.py tests/probes/ohmigo_active_core.py
-ruff format --config ruff.toml --check custom_components/pumpsteer/ohmigo.py custom_components/pumpsteer/relay_guard.py tests/test_ohmigo_keepalive.py tests/test_ohmigo_relay_guard.py tests/test_ohmigo_watchdog_safety.py tests/probes/ohmigo_active_core.py
+ruff check
+ruff format --check
 python3 scripts/check_version.py
 git diff --check
 ```
+
+Use Ruff **0.15.8**, matching the existing CI workflow. The full lint and format
+checks pass with that version; the critical runtime lint subset also passes.
 
 The combined offline suite passes 344 cases, including startup/restore markers,
 input loss/recovery, failed services, source flapping during awaits, unload,

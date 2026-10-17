@@ -52,8 +52,8 @@ class Receiver:
 
 
 @pytest.fixture
-def rig(control, monkeypatch):
-    sensor, states, clock = control
+def rig(request, monkeypatch):
+    sensor, states, clock = request.getfixturevalue("control")
     entry = sensor._config_entry
     entry.options.pop("modbus_service")
     entry.options["ohmigo_relay_entity"] = "switch.relay"
