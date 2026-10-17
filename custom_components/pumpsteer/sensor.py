@@ -58,6 +58,7 @@ from .utils import (
     detect_price_interval_minutes,
     get_attr,
     get_state,
+    get_temperature,
     get_version,
     safe_float,
 )
@@ -114,6 +115,10 @@ class PumpSteerSensor(RestoreEntity):
         self._state: Optional[float] = None
         self._attributes: Dict[str, Any] = {}
         self._ohmigo_last_push = None
+        self._temperature_reported_after: Optional[datetime] = None
+        self._remove_start_listener = None
+        self._temperature_unloaded = False
+        self._update_in_progress = False
 
         self._pi = PIController()
         self._pi_precool_paused: bool = False
@@ -252,6 +257,8 @@ class PumpSteerSensor(RestoreEntity):
         )
 
     async def async_added_to_hass(self) -> None:
+        self._temperature_reported_after = dt_util.now()
+        self._temperature_unloaded = False
         await super().async_added_to_hass()
 
         self._remove_update_listener = self._config_entry.add_update_listener(
@@ -304,18 +311,21 @@ class PumpSteerSensor(RestoreEntity):
             self._thermal_model.restore_k(float(saved_k))
 
         # Wait until Home Assistant is fully started before the first real update.
-        self.hass.bus.async_listen_once(
-            "homeassistant_started",
-            self._handle_ha_started,
-        )
-
         # If HA is already running (for example on reload), update immediately.
         if self.hass.is_running:
             await self.async_update()
             self.async_write_ha_state()
+        else:
+            self._remove_start_listener = self.hass.bus.async_listen_once(
+                "homeassistant_started", self._handle_ha_started
+            )
 
     async def async_will_remove_from_hass(self) -> None:
         """Cancel options update listener on unload."""
+        self._temperature_unloaded = True
+        if self._remove_start_listener is not None:
+            self._remove_start_listener()
+            self._remove_start_listener = None
         if self._remove_update_listener is not None:
             self._remove_update_listener()
             self._remove_update_listener = None
@@ -330,6 +340,8 @@ class PumpSteerSensor(RestoreEntity):
 
     async def _handle_ha_started(self, event) -> None:
         """Run when HA is fully started and entities are ready."""
+        self._remove_start_listener = None
+        self._temperature_reported_after = dt_util.now()
         await self.async_update()
         self.async_write_ha_state()
 
@@ -708,7 +720,7 @@ class PumpSteerSensor(RestoreEntity):
     ) -> None:
         if not self._safe_mode_warned:
             _LOGGER.warning(
-                "PumpSteer entered SAFE MODE: %s — optimization paused, sending real outdoor temp",
+                "PumpSteer entered SAFE MODE: %s — optimization paused",
                 reason,
             )
             self._safe_mode_warned = True
@@ -734,11 +746,8 @@ class PumpSteerSensor(RestoreEntity):
                 "last_updated": now.isoformat(),
                 "outdoor_temperature": outdoor,
             }
-            self._ohmigo_last_push = await async_push_ohmigo(
-                self.hass,
-                self._config_entry,
-                outdoor,
-                self._ohmigo_last_push,
+            await self._push_validated_temperature(
+                outdoor, self._cfg(), {"real_outdoor_entity": outdoor}
             )
         else:
             self._state = None
@@ -746,7 +755,50 @@ class PumpSteerSensor(RestoreEntity):
                 "mode": MODE_SAFE,
                 "status": f"safe_mode (no data): {reason}",
                 "last_updated": now.isoformat(),
+                "receiver_state": "unverified",
             }
+
+    def _temperature_inputs_match(self, cfg, expected) -> bool:
+        current_cfg = self._cfg()
+        return not self._temperature_unloaded and all(
+            value is not None
+            and current_cfg.get(key) == cfg.get(key)
+            and get_temperature(
+                self.hass, cfg.get(key), self._temperature_reported_after
+            )
+            == value
+            for key, value in expected.items()
+        )
+
+    async def _temperature_interrupted(self) -> None:
+        # No receiver reset/bypass is implied: its physical fallback is unknown.
+        await self._enter_safe_mode(
+            "Temperature inputs changed during update", None, dt_util.now()
+        )
+        self._attributes["temperature_input_status"] = "interrupted"
+
+    async def _push_validated_temperature(self, fake_temp, cfg, expected) -> None:
+        if not cfg.get("ohmigo_entity") and not cfg.get("modbus_service"):
+            return
+        interrupted = False
+
+        def check():
+            nonlocal interrupted
+            interrupted = interrupted or not self._temperature_inputs_match(
+                cfg, expected
+            )
+            return not interrupted
+
+        if check():
+            self._ohmigo_last_push = await async_push_ohmigo(
+                self.hass,
+                self._config_entry,
+                fake_temp,
+                self._ohmigo_last_push,
+                temperature_check=check,
+            )
+        if not check():
+            await self._temperature_interrupted()
 
     def _update_brake_ramp(
         self,
@@ -847,7 +899,16 @@ class PumpSteerSensor(RestoreEntity):
 
     async def async_update(self) -> None:
         """Update sensor state."""
+        # Options/startup invoke this directly, outside HA's polling update guard.
+        if self._update_in_progress:
+            return
+        self._update_in_progress = True
         try:
+            if self._temperature_unloaded or not getattr(self.hass, "is_running", True):
+                await self._enter_safe_mode(
+                    "Waiting for Home Assistant startup", None, dt_util.now()
+                )
+                return
             await self._do_update()
         except Exception as err:
             _LOGGER.exception("PumpSteer update failed: %s", err)
@@ -858,14 +919,20 @@ class PumpSteerSensor(RestoreEntity):
                 "last_error": str(err),
                 "last_updated": dt_util.now().isoformat(),
             }
+        finally:
+            self._update_in_progress = False
 
     async def _do_update(self) -> None:
         """Run the main control state machine."""
         now = dt_util.now()
         cfg = self._cfg()
 
-        indoor = safe_float(get_state(self.hass, cfg.get("indoor_temp_entity")))
-        outdoor = safe_float(get_state(self.hass, cfg.get("real_outdoor_entity")))
+        indoor = get_temperature(
+            self.hass, cfg.get("indoor_temp_entity"), self._temperature_reported_after
+        )
+        outdoor = get_temperature(
+            self.hass, cfg.get("real_outdoor_entity"), self._temperature_reported_after
+        )
         target = self._helper_value_with_fallback(
             helper_key="target_temperature",
             cfg=cfg,
@@ -908,6 +975,11 @@ class PumpSteerSensor(RestoreEntity):
             cfg,
             now,
         )
+
+        expected = {"indoor_temp_entity": indoor, "real_outdoor_entity": outdoor}
+        if not self._temperature_inputs_match(cfg, expected):
+            await self._temperature_interrupted()
+            return
 
         if not prices:
             today_entity_id = cfg.get("electricity_price_entity") or "not configured"
@@ -958,6 +1030,10 @@ class PumpSteerSensor(RestoreEntity):
                 )
             except Exception as _err:
                 _LOGGER.debug("ThermalOutlook computation failed: %s", _err)
+
+        if not self._temperature_inputs_match(cfg, expected):
+            await self._temperature_interrupted()
+            return
 
         # 1. Summer mode.
         if outdoor >= summer_threshold:
@@ -1681,11 +1757,22 @@ class PumpSteerSensor(RestoreEntity):
             **extra,
         }
 
-        self._ohmigo_last_push = await async_push_ohmigo(
-            self.hass,
-            self._config_entry,
+        cfg = self._cfg()
+        await self._push_validated_temperature(
             fake_temp,
-            self._ohmigo_last_push,
+            cfg,
+            {
+                key: extra.get(
+                    attribute,
+                    get_temperature(
+                        self.hass, cfg.get(key), self._temperature_reported_after
+                    ),
+                )
+                for key, attribute in (
+                    ("indoor_temp_entity", "indoor_temperature"),
+                    ("real_outdoor_entity", "outdoor_temperature"),
+                )
+            },
         )
 
 
