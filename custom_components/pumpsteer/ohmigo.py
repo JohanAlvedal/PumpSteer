@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -183,15 +184,25 @@ async def async_push_ohmigo(
         except (ValueError, TypeError):
             pass
 
+    runtime = getattr(hass, "data", {}).get(DOMAIN, {}).get(entry.entry_id, {})
+    guard = runtime.get("relay_guard")
+    context = (
+        guard.temperature_write(temperature_check)
+        if guard is not None and temperature_check is not None
+        else nullcontext(temperature_check)
+    )
     try:
-        if temperature_check is not None and not temperature_check():
-            return last_push_time
-        await hass.services.async_call(
-            "number",
-            "set_value",
-            {"entity_id": ohmigo_entity, "value": new_val},
-            blocking=False,
-        )
+        with context as check:
+            if check is not None and not check():
+                return last_push_time
+            await hass.services.async_call(
+                "number",
+                "set_value",
+                {"entity_id": ohmigo_entity, "value": new_val},
+                blocking=True,
+            )
+            if guard is not None and check is not None and check():
+                await guard.async_temperature_written(check)
         if within_hysteresis:
             _LOGGER.debug(
                 "Ohmigo keepalive resend: %s → %.1f °C", ohmigo_entity, new_val
