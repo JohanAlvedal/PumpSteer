@@ -84,7 +84,7 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 
 ## Requirements
 
-- Home Assistant 2023.12 or later
+- Home Assistant 2024.4 or later
 - A Nordpool (or compatible) electricity price source exposing `today` / `raw_today` and `tomorrow` / `raw_tomorrow` price lists
 - An indoor temperature sensor
 - An outdoor temperature sensor
