@@ -350,3 +350,56 @@ def test_update_gate_released_after_cancellation(control, monkeypatch):
         assert len(sensor.hass.services.calls) == 2
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("stage", ["prices", "forecast"])
+def test_options_during_calculation_rerun_without_stale_dispatch(control, stage):
+    sensor, _, _ = control
+    sensor._prev_aggressiveness = 0
+    sensor._pi._integral = 5.0
+
+    async def scenario():
+        started, release = asyncio.Event(), asyncio.Event()
+        passes = []
+
+        async def prices(cfg, now):
+            passes.append(cfg.get("electricity_price_entity"))
+            if len(passes) == 2:
+                assert sensor.hass.services.calls == []
+            if stage == "prices" and len(passes) == 1:
+                started.set()
+                await release.wait()
+            # A stale expensive source must never reach the receiver.
+            category = "expensive" if len(passes) == 1 else "normal"
+            return [1.0] * 24, [category] * 24, 60, 0
+
+        async def forecast():
+            if stage == "forecast" and len(passes) == 1:
+                started.set()
+                await release.wait()
+            return []
+
+        sensor._get_prices = prices
+        sensor._forecast_temps = forecast
+        task = asyncio.create_task(sensor.async_update())
+        await started.wait()
+        try:
+            for suffix in ("one", "two"):
+                sensor._config_entry.options.update(
+                    electricity_price_entity=f"sensor.price_{suffix}",
+                    weather_entity=f"weather.{suffix}",
+                )
+                await sensor.async_options_update_listener(
+                    sensor.hass, sensor._config_entry
+                )
+            assert sensor.hass.services.calls == []
+        finally:
+            release.set()
+            await task
+        assert passes == ["sensor.price", "sensor.price_two"]
+        assert sensor._pi._integral == 5.0
+        assert sensor.extra_state_attributes["mode"] == MODE_PI
+        assert len(sensor.hass.services.calls) == 2
+        assert sensor._ohmigo_last_push is not None
+
+    asyncio.run(scenario())
