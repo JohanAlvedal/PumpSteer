@@ -520,3 +520,36 @@ def test_unload_while_number_handler_waits_cannot_activate(rig):
         assert not receiver.active
 
     asyncio.run(scenario())
+
+
+def test_clock_backwards_then_reload_requires_new_reports(rig, monkeypatch):
+    sensor, states, clock, manager, receiver = rig
+    before_clock_change = clock[0]
+    for key in ("sensor.indoor", "sensor.outdoor"):
+        states[key].last_reported = before_clock_change
+    clock[0] -= timedelta(hours=1)
+    sensor.hass.is_running = True
+    sensor.hass.bus = SimpleNamespace(async_listen_once=lambda *args: lambda: None)
+    sensor._config_entry.add_update_listener = lambda callback: lambda: None
+
+    async def no_extra():
+        return None
+
+    monkeypatch.setattr(sensor, "async_get_last_extra_data", no_extra, raising=False)
+
+    async def scenario():
+        # Fresh instance activation (reload), with old states now in the future.
+        await sensor.async_added_to_hass()
+        if manager._recovery_task is not None:
+            await manager._recovery_task
+        await manager.async_check("reload")
+        assert receiver.calls == []
+        assert not receiver.active
+        clock[0] += timedelta(seconds=1)
+        for key in ("sensor.indoor", "sensor.outdoor"):
+            states[key].last_reported = clock[0]
+        await update(sensor, manager)
+        assert [call[0] for call in receiver.calls] == ["number", "switch"]
+        assert receiver.active
+
+    asyncio.run(scenario())
