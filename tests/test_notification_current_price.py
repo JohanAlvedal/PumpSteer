@@ -40,7 +40,7 @@ class _DummyHass:
                 "sensor.price": _DummyState(
                     "2.31",
                     {
-                        "today": [0.40, 2.31, 0.80],
+                        "today": [0.40, 2.31] + [0.80] * 94,
                         "unit_of_measurement": "SEK/kWh",
                     },
                 ),
