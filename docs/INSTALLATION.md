@@ -20,7 +20,7 @@ nav_order: 2
 
 Before installing, make sure you have:
 
-- **Home Assistant** 2023.12 or later
+- **Home Assistant** 2024.4 or later
 - A **Nordpool** (or compatible) electricity price source with `today` / `raw_today` and `tomorrow` / `raw_tomorrow` price lists
 - An **indoor temperature** sensor
 - An **outdoor temperature** sensor

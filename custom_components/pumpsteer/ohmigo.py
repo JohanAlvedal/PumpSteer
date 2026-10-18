@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 import homeassistant.util.dt as dt_util
 from homeassistant.config_entries import ConfigEntry
@@ -45,6 +45,8 @@ async def async_push_modbus(
     entry: ConfigEntry,
     fake_temp: float,
     last_push_time: Optional[datetime],
+    *,
+    temperature_check: Optional[Callable[[], bool]] = None,
 ) -> Optional[datetime]:
     """Push fake_temp through a configurable Home Assistant service call."""
     cfg = {**entry.data, **entry.options}
@@ -97,6 +99,8 @@ async def async_push_modbus(
             return last_push_time
 
     try:
+        if temperature_check is not None and not temperature_check():
+            return last_push_time
         await hass.services.async_call(
             domain,
             service,
@@ -116,6 +120,7 @@ async def _async_push_generic_output(
     hass: HomeAssistant,
     entry: ConfigEntry,
     fake_temp: float,
+    temperature_check: Optional[Callable[[], bool]] = None,
 ) -> None:
     """Run GOS independently from Ohmigo while keeping its own interval state."""
     cfg = {**entry.data, **entry.options}
@@ -131,6 +136,7 @@ async def _async_push_generic_output(
         entry,
         fake_temp,
         last_push_time,
+        temperature_check=temperature_check,
     )
     if updated_last_push is not None:
         _modbus_last_push_by_entry[entry.entry_id] = updated_last_push
@@ -141,10 +147,12 @@ async def async_push_ohmigo(
     entry: ConfigEntry,
     fake_temp: float,
     last_push_time: Optional[datetime],
+    *,
+    temperature_check: Optional[Callable[[], bool]] = None,
 ) -> Optional[datetime]:
     """Push fake_temp to GOS and, when configured, to an Ohmigo number entity."""
     # GOS is independent from Ohmigo and must run even if no Ohmigo entity is configured.
-    await _async_push_generic_output(hass, entry, fake_temp)
+    await _async_push_generic_output(hass, entry, fake_temp, temperature_check)
 
     cfg = {**entry.data, **entry.options}
     ohmigo_entity: str = cfg.get("ohmigo_entity", "")
@@ -176,6 +184,8 @@ async def async_push_ohmigo(
             pass
 
     try:
+        if temperature_check is not None and not temperature_check():
+            return last_push_time
         await hass.services.async_call(
             "number",
             "set_value",

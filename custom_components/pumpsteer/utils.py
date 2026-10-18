@@ -85,6 +85,25 @@ def get_state(
     return entity.state
 
 
+def get_temperature(
+    hass: HomeAssistant, entity_id: str, reported_after: Optional[datetime] = None
+) -> Optional[float]:
+    """Read a numeric, non-restored temperature; HA report time is not measurement time."""
+    if not entity_id:
+        return None
+    entity = hass.states.get(entity_id)
+    if entity is None or entity.attributes.get("restored"):
+        return None
+    if reported_after is not None:
+        reported = getattr(entity, "last_reported", None)
+        try:
+            if not isinstance(reported, datetime) or reported <= reported_after:
+                return None
+        except TypeError:
+            return None
+    return safe_float(entity.state)
+
+
 def get_attr(
     hass: HomeAssistant,
     entity_id: str,
