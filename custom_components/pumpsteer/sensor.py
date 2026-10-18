@@ -119,6 +119,7 @@ class PumpSteerSensor(RestoreEntity):
         self._remove_start_listener = None
         self._temperature_unloaded = False
         self._update_in_progress = False
+        self._options_update_pending = False
 
         self._pi = PIController()
         self._pi_precool_paused: bool = False
@@ -336,6 +337,9 @@ class PumpSteerSensor(RestoreEntity):
     ) -> None:
         """Handle updated options."""
         self._config_entry = entry
+        if self._update_in_progress:
+            self._options_update_pending = True
+            return
         await self.async_update()
 
     async def _handle_ha_started(self, event) -> None:
@@ -769,17 +773,24 @@ class PumpSteerSensor(RestoreEntity):
 
     def _temperature_inputs_match(self, cfg, expected) -> bool:
         current_cfg = self._cfg()
-        return not self._temperature_unloaded and all(
-            value is not None
-            and current_cfg.get(key) == cfg.get(key)
-            and get_temperature(
-                self.hass, cfg.get(key), self._temperature_reported_after
+        return (
+            not self._temperature_unloaded
+            and current_cfg == cfg
+            and all(
+                value is not None
+                and current_cfg.get(key) == cfg.get(key)
+                and get_temperature(
+                    self.hass, cfg.get(key), self._temperature_reported_after
+                )
+                == value
+                for key, value in expected.items()
             )
-            == value
-            for key, value in expected.items()
         )
 
-    async def _temperature_interrupted(self) -> None:
+    async def _temperature_interrupted(self, cfg) -> None:
+        # Options invalidation is retried; it must not reset PI/ramp history.
+        if self._cfg() != cfg:
+            return
         # No receiver reset/bypass is implied: its physical fallback is unknown.
         await self._enter_safe_mode(
             "Temperature inputs changed during update", None, dt_util.now()
@@ -807,7 +818,7 @@ class PumpSteerSensor(RestoreEntity):
                 temperature_check=check,
             )
         if not check():
-            await self._temperature_interrupted()
+            await self._temperature_interrupted(cfg)
 
     def _update_brake_ramp(
         self,
@@ -913,21 +924,28 @@ class PumpSteerSensor(RestoreEntity):
             return
         self._update_in_progress = True
         try:
-            if self._temperature_unloaded or not getattr(self.hass, "is_running", True):
-                await self._enter_safe_mode(
-                    "Waiting for Home Assistant startup", None, dt_util.now()
-                )
-                return
-            await self._do_update()
-        except Exception as err:
-            _LOGGER.exception("PumpSteer update failed: %s", err)
-            self._last_pi_result = None
-            self._state = None
-            self._attributes = {
-                "status": "error",
-                "last_error": str(err),
-                "last_updated": dt_util.now().isoformat(),
-            }
+            while True:
+                self._options_update_pending = False
+                try:
+                    if self._temperature_unloaded or not getattr(
+                        self.hass, "is_running", True
+                    ):
+                        await self._enter_safe_mode(
+                            "Waiting for Home Assistant startup", None, dt_util.now()
+                        )
+                        return
+                    await self._do_update()
+                except Exception as err:
+                    _LOGGER.exception("PumpSteer update failed: %s", err)
+                    self._last_pi_result = None
+                    self._state = None
+                    self._attributes = {
+                        "status": "error",
+                        "last_error": str(err),
+                        "last_updated": dt_util.now().isoformat(),
+                    }
+                if not self._options_update_pending:
+                    break
         finally:
             self._update_in_progress = False
 
@@ -987,7 +1005,7 @@ class PumpSteerSensor(RestoreEntity):
 
         expected = {"indoor_temp_entity": indoor, "real_outdoor_entity": outdoor}
         if not self._temperature_inputs_match(cfg, expected):
-            await self._temperature_interrupted()
+            await self._temperature_interrupted(cfg)
             return
 
         if not prices:
@@ -1041,7 +1059,7 @@ class PumpSteerSensor(RestoreEntity):
                 _LOGGER.debug("ThermalOutlook computation failed: %s", _err)
 
         if not self._temperature_inputs_match(cfg, expected):
-            await self._temperature_interrupted()
+            await self._temperature_interrupted(cfg)
             return
 
         # 1. Summer mode.
