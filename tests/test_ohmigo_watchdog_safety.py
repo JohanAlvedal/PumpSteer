@@ -96,6 +96,104 @@ async def update(sensor, manager):
         await manager._recovery_task
 
 
+@pytest.mark.parametrize("replacement", [None, "number.other_output"])
+def test_output_changed_during_number_await_cannot_authorize_active(rig, replacement):
+    sensor, states, clock, manager, receiver = rig
+    original = sensor.hass.services.async_call
+
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def dispatch(domain, service, data, blocking=False):
+            await original(domain, service, data, blocking)
+            if domain == "number":
+                entered.set()
+                await release.wait()
+
+        sensor.hass.services.async_call = dispatch
+        task = asyncio.create_task(sensor.async_update())
+        await entered.wait()
+        if replacement is None:
+            sensor._config_entry.options.pop("ohmigo_entity")
+        else:
+            sensor._config_entry.options["ohmigo_entity"] = replacement
+        await sensor.async_options_update_listener(sensor.hass, sensor._config_entry)
+        release.set()
+        await task
+        assert len(receiver.calls) == 1
+        assert receiver.calls[0][2]["entity_id"] == "number.ohmigo_test"
+        assert not receiver.active
+        await manager.async_check("changed_output_without_new_write")
+        assert len(receiver.calls) == 1
+
+        sensor.hass.services.async_call = original
+        sensor._config_entry.options["ohmigo_entity"] = "number.other_output"
+        clock[0] += timedelta(minutes=5)
+        await update(sensor, manager)
+        assert receiver.calls[-2][0] == "number"
+        assert receiver.calls[-2][2]["entity_id"] == "number.other_output"
+        assert receiver.calls[-1][0] == "switch"
+        assert receiver.active
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("stage", ["stabilization", "retry"])
+def test_output_change_revokes_grant_before_guard_attempt(rig, monkeypatch, stage):
+    sensor, states, clock, manager, receiver = rig
+    fast_sleep = relay_guard.asyncio.sleep
+    original = sensor.hass.services.async_call
+    attempts = []
+
+    async def delayed(seconds):
+        if stage == "stabilization" and seconds == 2:
+            sensor._config_entry.options["ohmigo_entity"] = "number.other_output"
+        await fast_sleep(seconds)
+
+    async def dispatch(domain, service, data, blocking=False):
+        if domain == "switch":
+            attempts.append(data)
+            sensor._config_entry.options.pop("ohmigo_entity")
+            raise RuntimeError("simulated ACTIVE failure while options change")
+        await original(domain, service, data, blocking)
+
+    monkeypatch.setattr(relay_guard.asyncio, "sleep", delayed)
+    sensor.hass.services.async_call = dispatch
+    asyncio.run(update(sensor, manager))
+    assert len(attempts) == (0 if stage == "stabilization" else 1)
+    assert not receiver.active
+    assert len(receiver.calls) == 1
+
+
+def test_cancelled_number_write_cannot_save_active_grant(rig):
+    sensor, states, clock, manager, receiver = rig
+    original = sensor.hass.services.async_call
+
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def dispatch(domain, service, data, blocking=False):
+            await original(domain, service, data, blocking)
+            if domain == "number":
+                entered.set()
+                await release.wait()
+
+        sensor.hass.services.async_call = dispatch
+        task = asyncio.create_task(sensor.async_update())
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await manager.async_check("cancelled_output")
+        assert len(receiver.calls) == 1
+        assert not receiver.active
+        sensor.hass.services.async_call = original
+        await update(sensor, manager)
+        assert receiver.active
+
+    asyncio.run(scenario())
+
+
 def test_guard_does_not_activate_without_validated_temperature_write(rig):
     sensor, states, clock, manager, receiver = rig
     states["sensor.outdoor"].state = "unavailable"

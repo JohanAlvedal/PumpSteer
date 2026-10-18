@@ -186,10 +186,20 @@ async def async_push_ohmigo(
 
     runtime = getattr(hass, "data", {}).get(DOMAIN, {}).get(entry.entry_id, {})
     guard = runtime.get("relay_guard")
+
+    def output_check():
+        # The grant belongs to this write, never to a newly configured target.
+        current = {**entry.data, **entry.options}.get("ohmigo_entity", "")
+        return (
+            current == ohmigo_entity
+            and temperature_check is not None
+            and temperature_check()
+        )
+
     context = (
-        guard.temperature_write(temperature_check)
+        guard.temperature_write(output_check)
         if guard is not None and temperature_check is not None
-        else nullcontext(temperature_check)
+        else nullcontext(output_check if temperature_check is not None else None)
     )
     try:
         with context as check:
