@@ -91,6 +91,49 @@ def test_start_requires_report_after_start_and_recovers(control, fresh_metadata)
     assert len(sensor.hass.services.calls) == (2 if fresh_metadata else 0)
 
 
+@pytest.mark.parametrize(
+    "report_kind", ["early", "restored", "old", "at_event", "late"]
+)
+def test_start_qualifies_against_event_not_delayed_handler(control, report_kind):
+    sensor, states, clock = control
+    event = SimpleNamespace(time_fired=clock[0])
+    clock[0] += timedelta(seconds=1)
+    _report(states, clock, **({"restored": True} if report_kind == "restored" else {}))
+    if report_kind in ("old", "at_event"):
+        for key in ("sensor.indoor", "sensor.outdoor"):
+            states[key].last_reported = event.time_fired - timedelta(
+                seconds=1 if report_kind == "old" else 0
+            )
+    elif report_kind == "late":
+        for key in ("sensor.indoor", "sensor.outdoor"):
+            states[key].last_reported = event.time_fired
+    clock[0] += timedelta(seconds=1)
+    asyncio.run(sensor._handle_ha_started(event))
+    assert len(sensor.hass.services.calls) == (2 if report_kind == "early" else 0)
+    if report_kind == "late":
+        clock[0] += timedelta(seconds=1)
+        _report(states, clock)
+        asyncio.run(sensor.async_update())
+        assert sensor.extra_state_attributes["mode"] == MODE_PI
+        assert len(sensor.hass.services.calls) == 2
+
+
+@pytest.mark.parametrize("event_time", [None, "invalid", "naive", "future"])
+def test_start_invalid_event_time_uses_conservative_now(control, event_time):
+    sensor, states, clock = control
+    if event_time == "naive":
+        event_time = clock[0].replace(tzinfo=None)
+    elif event_time == "future":
+        event_time = clock[0] + timedelta(days=1)
+    _report(states, clock)
+    asyncio.run(sensor._handle_ha_started(SimpleNamespace(time_fired=event_time)))
+    assert sensor.hass.services.calls == []
+    clock[0] += timedelta(seconds=1)
+    _report(states, clock)
+    asyncio.run(sensor.async_update())
+    assert len(sensor.hass.services.calls) == 2
+
+
 def test_reload_waits_for_new_reports(control, monkeypatch):
     sensor, states, clock = control
     _report(states, clock)

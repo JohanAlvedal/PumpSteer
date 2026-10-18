@@ -341,7 +341,16 @@ class PumpSteerSensor(RestoreEntity):
     async def _handle_ha_started(self, event) -> None:
         """Run when HA is fully started and entities are ready."""
         self._remove_start_listener = None
-        self._temperature_reported_after = dt_util.now()
+        now = dt_util.now()
+        fired = getattr(event, "time_fired", None)
+        # Producers may report after the event but before this coroutine runs.
+        self._temperature_reported_after = (
+            fired
+            if isinstance(fired, datetime)
+            and fired.utcoffset() is not None
+            and fired <= now
+            else now
+        )
         await self.async_update()
         self.async_write_ha_state()
 
