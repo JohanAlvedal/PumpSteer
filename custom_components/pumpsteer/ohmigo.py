@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -183,15 +184,35 @@ async def async_push_ohmigo(
         except (ValueError, TypeError):
             pass
 
-    try:
-        if temperature_check is not None and not temperature_check():
-            return last_push_time
-        await hass.services.async_call(
-            "number",
-            "set_value",
-            {"entity_id": ohmigo_entity, "value": new_val},
-            blocking=False,
+    runtime = getattr(hass, "data", {}).get(DOMAIN, {}).get(entry.entry_id, {})
+    guard = runtime.get("relay_guard")
+
+    def output_check():
+        # The grant belongs to this write, never to a newly configured target.
+        current = {**entry.data, **entry.options}.get("ohmigo_entity", "")
+        return (
+            current == ohmigo_entity
+            and temperature_check is not None
+            and temperature_check()
         )
+
+    context = (
+        guard.temperature_write(output_check)
+        if guard is not None and temperature_check is not None
+        else nullcontext(output_check if temperature_check is not None else None)
+    )
+    try:
+        with context as check:
+            if check is not None and not check():
+                return last_push_time
+            await hass.services.async_call(
+                "number",
+                "set_value",
+                {"entity_id": ohmigo_entity, "value": new_val},
+                blocking=True,
+            )
+            if guard is not None and check is not None and check():
+                await guard.async_temperature_written(check)
         if within_hysteresis:
             _LOGGER.debug(
                 "Ohmigo keepalive resend: %s → %.1f °C", ohmigo_entity, new_val

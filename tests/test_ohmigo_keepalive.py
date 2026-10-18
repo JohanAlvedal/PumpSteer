@@ -65,7 +65,7 @@ def _expected_call():
         "number",
         "set_value",
         {"entity_id": "number.ohmigo_test", "value": 21.5},
-        False,
+        True,
     )
 
 

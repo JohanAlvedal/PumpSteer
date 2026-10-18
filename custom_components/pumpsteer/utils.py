@@ -8,6 +8,7 @@ from typing import Any, List, Optional
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import StateType
+from homeassistant.util import dt as dt_util
 
 from .settings import MAX_REASONABLE_TEMP, MIN_REASONABLE_TEMP
 
@@ -97,7 +98,11 @@ def get_temperature(
     if reported_after is not None:
         reported = getattr(entity, "last_reported", None)
         try:
-            if not isinstance(reported, datetime) or reported <= reported_after:
+            if (
+                not isinstance(reported, datetime)
+                or reported <= reported_after
+                or reported > dt_util.now()
+            ):
                 return None
         except TypeError:
             return None

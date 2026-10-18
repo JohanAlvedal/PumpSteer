@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from datetime import timedelta
 from typing import Any, Callable
 
@@ -18,6 +18,8 @@ from homeassistant.helpers.event import (
 )
 
 from .const import DOMAIN, OHMIGO_RELAY_ENTITY
+from .settings import OHMIGO_DEFAULT_INTERVAL_MINUTES
+from .utils import safe_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +38,8 @@ _STATUS_HEALTHY = "healthy"
 _STATUS_STABILIZING = "stabilizing"
 _STATUS_RECOVERING = "recovering"
 _STATUS_FAILED = "failed"
+_STATUS_TEMPERATURE = "awaiting_temperature_output"
+_STATUS_INTERVAL = "unsafe_push_interval"
 
 
 def configured_relay_entity(entry: ConfigEntry) -> str:
@@ -76,6 +80,47 @@ class OhmigoRelayGuard:
         self._unsubscribers: list[Callable[[], None]] = []
         self._listeners: set[Callable[[], None]] = set()
         self._recovery_task: asyncio.Task[Any] | None = None
+        # One command opportunity per validated, awaited number service write.
+        # Never restored and never renewed by periodic/state checks alone.
+        self._temperature_check: Callable[[], bool] | None = None
+
+    @contextmanager
+    def temperature_write(self, check: Callable[[], bool]):
+        """Latch source changes from before number dispatch through ACTIVE."""
+        interrupted = False
+
+        @callback
+        def changed(event):
+            nonlocal interrupted
+            interrupted = True
+
+        def valid():
+            return not interrupted and check()
+
+        cfg = {**self.entry.data, **self.entry.options}
+        sources = [
+            cfg[key]
+            for key in ("indoor_temp_entity", "real_outdoor_entity")
+            if cfg.get(key)
+        ]
+        unsubscribe = (
+            async_track_state_change_event(self.hass, sources, changed)
+            if sources
+            else lambda: None
+        )
+        try:
+            yield valid
+        finally:
+            unsubscribe()
+
+    async def async_temperature_written(self, check: Callable[[], bool]) -> None:
+        """Allow ACTIVE only after the corresponding temperature was dispatched."""
+        self._temperature_check = check
+        self._schedule_check("temperature_write")
+        if self._recovery_task is not None:
+            await self._recovery_task
+        else:
+            self._temperature_check = None
 
     @property
     def status(self) -> str:
@@ -148,6 +193,7 @@ class OhmigoRelayGuard:
     async def async_stop(self) -> None:
         """Stop monitoring and cancel any in-flight recovery."""
         self._started = False
+        self._temperature_check = None
 
         while self._unsubscribers:
             unsubscribe = self._unsubscribers.pop()
@@ -212,16 +258,22 @@ class OhmigoRelayGuard:
         """Evaluate the guard and recover an explicit OFF relay if eligible."""
         eligibility = self._eligibility()
         if eligibility != _STATUS_RECOVERING:
+            self._temperature_check = None
             self._set_status(eligibility)
             return eligibility
 
-        await self._recover(reason)
+        try:
+            await self._recover(reason)
+        finally:
+            self._temperature_check = None
         return self._status
 
     async def _recover(self, reason: str) -> None:
         self._attempts = 0
+        was_active = self._relay_state() == "on"
         self._set_status(_STATUS_STABILIZING)
-        await asyncio.sleep(_STABILIZE_SECONDS)
+        if not was_active:
+            await asyncio.sleep(_STABILIZE_SECONDS)
 
         eligibility = self._eligibility()
         if eligibility != _STATUS_RECOVERING:
@@ -251,10 +303,18 @@ class OhmigoRelayGuard:
                     self.relay_entity,
                     err,
                 )
+                continue
 
             await asyncio.sleep(_VERIFY_SECONDS)
 
+            eligibility = self._eligibility()
+            if eligibility != _STATUS_RECOVERING:
+                self._set_status(eligibility)
+                return
             if self._relay_state() == "on":
+                if was_active:
+                    self._set_status(_STATUS_HEALTHY)
+                    return
                 timestamp = dt_util.now().isoformat()
                 self._last_recovery = timestamp
                 self._last_failure = None
@@ -280,11 +340,19 @@ class OhmigoRelayGuard:
             return _STATUS_DISARMED
         if not self._ohmigo_push_enabled():
             return _STATUS_INHIBITED
+        cfg = {**self.entry.data, **self.entry.options}
+        interval = safe_float(
+            cfg.get("ohmigo_interval_minutes", OHMIGO_DEFAULT_INTERVAL_MINUTES)
+        )
+        # ACTIVE follows temperature writes; a >=900 s schedule cannot satisfy
+        # the confirmed receiver contract. Do not silently alter user settings.
+        if interval is None or not 0 < interval < 15:
+            return _STATUS_INTERVAL
+        if self._temperature_check is None or not self._temperature_check():
+            return _STATUS_TEMPERATURE
 
         relay_state = self._relay_state()
-        if relay_state == "on":
-            return _STATUS_HEALTHY
-        if relay_state == "off":
+        if relay_state in ("on", "off"):
             return _STATUS_RECOVERING
         return _STATUS_WAITING
 
