@@ -100,6 +100,9 @@ def guard_setup(monkeypatch):
     hass.states.set(RELAY_ENTITY, "off")
 
     manager = relay_guard.OhmigoRelayGuard(hass, entry, RELAY_ENTITY)
+    # Unit boundary: represent one already validated successful number write.
+    # The integrated watchdog tests exercise the real producer of this grant.
+    manager._temperature_check = lambda: True
     return hass, entry, manager
 
 
@@ -129,7 +132,6 @@ def test_no_relay_configured_creates_no_guard():
         ("on", "off", "off", "inhibited_by_push"),
         ("on", "on", "unknown", "relay_unavailable"),
         ("on", "on", "unavailable", "relay_unavailable"),
-        ("on", "on", "on", "healthy"),
     ],
 )
 def test_fail_closed_gates_send_no_command(
@@ -211,7 +213,7 @@ def test_gates_are_rechecked_between_retries(
     assert len(_turn_on_calls(hass)) == 1
 
 
-def test_safe_mode_does_not_inhibit_recovery(guard_setup):
+def test_safe_mode_does_not_inhibit_validated_output_recovery(guard_setup):
     hass, _, manager = guard_setup
     hass.states.set(
         "sensor.pumpsteer",

@@ -50,6 +50,9 @@ def _sensor():
 def _cycle(sensor, monkeypatch, minute):
     now = datetime(2026, 10, 11, 8, tzinfo=timezone.utc) + timedelta(minutes=minute)
     monkeypatch.setattr(sensor_module.dt_util, "now", lambda: now)
+    # Each cycle supplies new HA reports, including after entity restoration.
+    for key in ("indoor_temp_entity", "real_outdoor_entity"):
+        sensor.hass.states.get(sensor._cfg()[key]).last_reported = now
     asyncio.run(sensor._do_update())
     return sensor.extra_state_attributes
 
@@ -132,6 +135,7 @@ def test_brake_provenance_survives_restore(monkeypatch, actual_expensive):
 def test_legacy_or_untrusted_restore_does_not_invent_provenance(monkeypatch, untrusted):
     sensor, _ = _sensor()
     now = datetime(2026, 10, 11, 8, 10, tzinfo=timezone.utc)
+    monkeypatch.setattr(sensor_module.dt_util, "now", lambda: now)
     saved = {
         "brake_ramp": 0.5,
         "brake_last_t": now.isoformat(),
