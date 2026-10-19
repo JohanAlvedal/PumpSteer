@@ -92,6 +92,10 @@ _RESTORE_WAS_BRAKING = "was_braking_last_cycle"
 # 60 s = one polling cycle → max ±5% per step at ramp_in/out = 20 min.
 _BRAKE_RAMP_MAX_DT_SECONDS: float = 60.0
 
+# Allow ordinary scheduling gaps and 30–120 s polling, while preventing a
+# long outage from being counted as continuous preheating in one update.
+_PREHEAT_RAMP_MAX_DT_SECONDS: float = 300.0
+
 
 class PumpSteerSensor(RestoreEntity):
     """
@@ -129,6 +133,7 @@ class PumpSteerSensor(RestoreEntity):
 
         self._brake_ramp: float = 0.0
         self._preheat_ramp: float = 0.0
+        self._preheat_last_t: Optional[datetime] = None
         self._brake_last_t: Optional[datetime] = None
         self._brake_last_expensive_t: Optional[datetime] = None
 
@@ -746,6 +751,7 @@ class PumpSteerSensor(RestoreEntity):
         self._last_pi_result = None
         self._brake_ramp = 0.0
         self._preheat_ramp = 0.0
+        self._preheat_last_t = None
         self._brake_last_t = None
         self._brake_last_expensive_t = None
         self._was_braking_last_cycle = False
@@ -865,10 +871,12 @@ class PumpSteerSensor(RestoreEntity):
         preheat_requested: bool,
         ramp_in: float,
         ramp_out: float,
+        dt_seconds: float = 60.0,
     ) -> float:
         """Update preheat ramp factor for smooth preheat entry and exit."""
-        step_up = 1.0 / max(ramp_in, 1.0)
-        step_down = 1.0 / max(ramp_out, 1.0)
+        elapsed_minutes = max(0.0, min(dt_seconds, _PREHEAT_RAMP_MAX_DT_SECONDS)) / 60.0
+        step_up = elapsed_minutes / max(ramp_in, 1.0)
+        step_down = elapsed_minutes / max(ramp_out, 1.0)
 
         if preheat_requested:
             self._preheat_ramp += step_up
@@ -952,6 +960,15 @@ class PumpSteerSensor(RestoreEntity):
     async def _do_update(self) -> None:
         """Run the main control state machine."""
         now = dt_util.now()
+        # Advance the clock on every control cycle, including branches that
+        # pause the preheat ramp. Never count a backwards clock interval twice.
+        preheat_dt_seconds = 60.0
+        if self._preheat_last_t is not None:
+            preheat_dt_seconds = max(
+                0.0, now.timestamp() - self._preheat_last_t.timestamp()
+            )
+        if self._preheat_last_t is None or preheat_dt_seconds > 0.0:
+            self._preheat_last_t = now
         cfg = self._cfg()
 
         indoor = get_temperature(
@@ -1069,6 +1086,7 @@ class PumpSteerSensor(RestoreEntity):
             self._last_pi_result = None
             self._brake_ramp = 0.0
             self._preheat_ramp = 0.0
+            self._preheat_last_t = None
             self._brake_last_t = None
             self._brake_last_expensive_t = None
             self._was_braking_last_cycle = False
@@ -1137,6 +1155,7 @@ class PumpSteerSensor(RestoreEntity):
                 self._last_pi_result = None
                 self._brake_ramp = 0.0
                 self._preheat_ramp = 0.0
+                self._preheat_last_t = None
                 self._brake_last_t = None
                 self._brake_last_expensive_t = None
                 self._was_braking_last_cycle = False
@@ -1365,6 +1384,7 @@ class PumpSteerSensor(RestoreEntity):
                     True,
                     ramp_in=max(ramp_in, 10.0),
                     ramp_out=max(ramp_out, 10.0),
+                    dt_seconds=preheat_dt_seconds,
                 )
 
                 base_demand = self._pi_output(target, indoor, outdoor, now, cfg)
@@ -1434,6 +1454,7 @@ class PumpSteerSensor(RestoreEntity):
             False,
             ramp_in=max(ramp_in, 10.0),
             ramp_out=max(ramp_out, 10.0),
+            dt_seconds=preheat_dt_seconds,
         )
 
         preheat_headroom = self._preheat_headroom(aggressiveness)

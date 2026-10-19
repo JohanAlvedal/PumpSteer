@@ -251,6 +251,12 @@ These two blocks are distinct and are often confused:
 - Requires `switch.pumpsteer_preheat_boost` to be on
 - Mode: `preheating`
 
+The preheat ramp uses elapsed time between control updates, capped at five minutes
+per update so a long outage cannot charge the whole ramp in one step. The first
+update after startup or a ramp reset retains the nominal one-minute step. Duplicate
+or backwards timestamps do not advance the ramp. The clock advances in other modes
+too, so time spent braking or precooling is not later counted as preheating.
+
 Preheat headroom follows saving level:
 
 | Saving level | Maximum headroom above target |
