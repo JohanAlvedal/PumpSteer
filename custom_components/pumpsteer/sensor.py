@@ -1351,6 +1351,16 @@ class PumpSteerSensor(RestoreEntity):
                 and self._preheat_enabled(cfg)
                 and headroom_factor > 0.0
             ):
+                # Preheat replaces the brake output, so the old phase is over.
+                # Do not let its hidden ramp revive as a later short-dip hold.
+                self._brake_ramp = 0.0
+                self._brake_last_t = None
+                self._brake_last_expensive_t = None
+                if self._was_braking_last_cycle:
+                    if self._thermal_model.pending_samples >= 20:
+                        self._thermal_model.fit()
+                    self._was_braking_last_cycle = False
+
                 preheat_factor = self._update_preheat_ramp(
                     True,
                     ramp_in=max(ramp_in, 10.0),
