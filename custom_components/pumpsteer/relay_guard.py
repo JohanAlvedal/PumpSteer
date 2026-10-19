@@ -19,7 +19,11 @@ from homeassistant.helpers.event import (
 
 from .const import DOMAIN, OHMIGO_RELAY_ENTITY
 from .settings import OHMIGO_DEFAULT_INTERVAL_MINUTES
-from .utils import safe_float
+from .utils import (
+    TEMPERATURE_SOURCE_BOUNDS,
+    is_usable_temperature_state,
+    safe_float,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,23 +90,32 @@ class OhmigoRelayGuard:
 
     @contextmanager
     def temperature_write(self, check: Callable[[], bool]):
-        """Latch source changes from before number dispatch through ACTIVE."""
+        """Latch source loss from before number dispatch through ACTIVE.
+
+        A fresh, plausible reading from a source does not revoke the grant; a
+        missing, restored, non-numeric or implausible state (even briefly) does.
+        """
         interrupted = False
+
+        cfg = {**self.entry.data, **self.entry.options}
+        bounds = {
+            cfg[key]: TEMPERATURE_SOURCE_BOUNDS[key]
+            for key in ("indoor_temp_entity", "real_outdoor_entity")
+            if cfg.get(key)
+        }
+        sources = list(bounds)
 
         @callback
         def changed(event):
             nonlocal interrupted
-            interrupted = True
+            data = getattr(event, "data", None) or {}
+            min_val, max_val = bounds.get(data.get("entity_id"), (None, None))
+            if not is_usable_temperature_state(data.get("new_state"), min_val, max_val):
+                interrupted = True
 
         def valid():
             return not interrupted and check()
 
-        cfg = {**self.entry.data, **self.entry.options}
-        sources = [
-            cfg[key]
-            for key in ("indoor_temp_entity", "real_outdoor_entity")
-            if cfg.get(key)
-        ]
         unsubscribe = (
             async_track_state_change_event(self.hass, sources, changed)
             if sources

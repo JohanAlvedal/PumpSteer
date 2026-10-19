@@ -38,6 +38,7 @@ safe_mode: No price data from today='sensor.elpris_spot_avgifter', tomorrow='...
 | Indoor or outdoor sensor missing | Check that the entity ID in the options flow still exists and is available |
 | No price data | See [Price sensor not working](#price-sensor-not-working) below |
 | Sensor state is `unknown` or `unavailable` | Wait for HA to fully start; sensors recover automatically |
+| Sensor reports an implausible value (indoor outside 5–35 °C, outdoor outside −50–45 °C) | The reading is treated as missing. Check the sensor's battery, firmware or calibration |
 
 Safe mode resolves itself as soon as valid data is available. No restart needed.
 

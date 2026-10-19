@@ -57,8 +57,8 @@ from .utils import (
     compute_price_slot_index,
     detect_price_interval_minutes,
     get_attr,
+    get_source_temperature,
     get_state,
-    get_temperature,
     get_version,
     safe_float,
 )
@@ -841,7 +841,10 @@ class PumpSteerSensor(RestoreEntity):
         self._was_braking_last_cycle = False
 
         if outdoor is not None:
-            self._state = round(outdoor, 1)
+            # Passthrough keeps real cold temperatures (only the upper limit is
+            # applied) so safe mode never asks the heat pump for less heat.
+            passthrough = min(outdoor, MAX_FAKE_TEMP)
+            self._state = round(passthrough, 1)
             self._attributes = {
                 "mode": MODE_SAFE,
                 "fake_outdoor_temperature": self._state,
@@ -850,7 +853,7 @@ class PumpSteerSensor(RestoreEntity):
                 "outdoor_temperature": outdoor,
             }
             await self._push_validated_temperature(
-                outdoor, self._cfg(), {"real_outdoor_entity": outdoor}
+                passthrough, self._cfg(), {"real_outdoor_entity": outdoor}
             )
         else:
             self._state = None
@@ -862,6 +865,13 @@ class PumpSteerSensor(RestoreEntity):
             }
 
     def _temperature_inputs_match(self, cfg, expected) -> bool:
+        """Return True while the same configured sources still report valid values.
+
+        A fresh, plausible reading from the same entity is not an interruption:
+        the calculation used a measurement that was valid moments ago, and the
+        next cycle uses the new value. Only an unload, a configuration change,
+        or a lost/invalid/implausible source aborts the cycle.
+        """
         current_cfg = self._cfg()
         return (
             not self._temperature_unloaded
@@ -869,10 +879,10 @@ class PumpSteerSensor(RestoreEntity):
             and all(
                 value is not None
                 and current_cfg.get(key) == cfg.get(key)
-                and get_temperature(
-                    self.hass, cfg.get(key), self._temperature_reported_after
+                and get_source_temperature(
+                    self.hass, cfg, key, self._temperature_reported_after
                 )
-                == value
+                is not None
                 for key, value in expected.items()
             )
         )
@@ -1058,11 +1068,11 @@ class PumpSteerSensor(RestoreEntity):
             self._preheat_last_t = now
         cfg = self._cfg()
 
-        indoor = get_temperature(
-            self.hass, cfg.get("indoor_temp_entity"), self._temperature_reported_after
+        indoor = get_source_temperature(
+            self.hass, cfg, "indoor_temp_entity", self._temperature_reported_after
         )
-        outdoor = get_temperature(
-            self.hass, cfg.get("real_outdoor_entity"), self._temperature_reported_after
+        outdoor = get_source_temperature(
+            self.hass, cfg, "real_outdoor_entity", self._temperature_reported_after
         )
         target = self._helper_value_with_fallback(
             helper_key="target_temperature",
@@ -1185,7 +1195,8 @@ class PumpSteerSensor(RestoreEntity):
             self._brake_last_expensive_t = None
             self._was_braking_last_cycle = False
 
-            fake_temp = outdoor
+            # Passthrough, capped like every other output path.
+            fake_temp = min(outdoor, MAX_FAKE_TEMP)
             await self._set_state(
                 fake_temp,
                 MODE_SUMMER,
@@ -2017,8 +2028,8 @@ class PumpSteerSensor(RestoreEntity):
             {
                 key: extra.get(
                     attribute,
-                    get_temperature(
-                        self.hass, cfg.get(key), self._temperature_reported_after
+                    get_source_temperature(
+                        self.hass, cfg, key, self._temperature_reported_after
                     ),
                 )
                 for key, attribute in (

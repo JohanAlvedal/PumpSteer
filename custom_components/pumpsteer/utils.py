@@ -10,9 +10,22 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import StateType
 from homeassistant.util import dt as dt_util
 
-from .settings import MAX_REASONABLE_TEMP, MIN_REASONABLE_TEMP
+from .settings import (
+    INDOOR_TEMP_MAX,
+    INDOOR_TEMP_MIN,
+    MAX_REASONABLE_TEMP,
+    MIN_REASONABLE_TEMP,
+    OUTDOOR_TEMP_MAX,
+    OUTDOOR_TEMP_MIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+# Plausible range per configured temperature source key.
+TEMPERATURE_SOURCE_BOUNDS: dict[str, tuple[float, float]] = {
+    "indoor_temp_entity": (INDOOR_TEMP_MIN, INDOOR_TEMP_MAX),
+    "real_outdoor_entity": (OUTDOOR_TEMP_MIN, OUTDOOR_TEMP_MAX),
+}
 
 
 def get_version() -> str:
@@ -87,9 +100,16 @@ def get_state(
 
 
 def get_temperature(
-    hass: HomeAssistant, entity_id: str, reported_after: Optional[datetime] = None
+    hass: HomeAssistant,
+    entity_id: str,
+    reported_after: Optional[datetime] = None,
+    min_val: Optional[float] = None,
+    max_val: Optional[float] = None,
 ) -> Optional[float]:
-    """Read a numeric, non-restored temperature; HA report time is not measurement time."""
+    """Read a numeric, non-restored temperature; HA report time is not measurement time.
+
+    Values outside [min_val, max_val] are returned as None (implausible reading).
+    """
     if not entity_id:
         return None
     entity = hass.states.get(entity_id)
@@ -106,7 +126,32 @@ def get_temperature(
                 return None
         except TypeError:
             return None
-    return safe_float(entity.state)
+    return safe_float(entity.state, min_val, max_val)
+
+
+def get_source_temperature(
+    hass: HomeAssistant,
+    cfg: dict[str, Any],
+    key: str,
+    reported_after: Optional[datetime] = None,
+) -> Optional[float]:
+    """Read a configured temperature source with its plausibility bounds."""
+    min_val, max_val = TEMPERATURE_SOURCE_BOUNDS.get(key, (None, None))
+    return get_temperature(hass, cfg.get(key), reported_after, min_val, max_val)
+
+
+def is_usable_temperature_state(
+    state: Any,
+    min_val: Optional[float] = None,
+    max_val: Optional[float] = None,
+) -> bool:
+    """Return True if a state object carries a plausible, non-restored reading."""
+    if state is None:
+        return False
+    attributes = getattr(state, "attributes", None) or {}
+    if attributes.get("restored"):
+        return False
+    return safe_float(getattr(state, "state", None), min_val, max_val) is not None
 
 
 def get_attr(

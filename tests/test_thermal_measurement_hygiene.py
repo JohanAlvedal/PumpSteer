@@ -60,11 +60,20 @@ def test_missing_indoor_does_not_record_an_invented_zero(monkeypatch, missing):
     assert not sensor._thermal_model._temp_history
 
 
-def test_real_zero_degree_indoor_observation_is_retained(monkeypatch):
+def test_real_zero_degree_observation_is_retained_by_model():
+    # 0.0 is falsy but a real number: the model must not drop it.
+    model = ThermalModel()
+    model.record_temp(datetime(2026, 10, 11, 8, tzinfo=timezone.utc), 0.0)
+    assert [temp for _, temp in model._temp_history] == [0.0]
+
+
+def test_implausible_zero_degree_indoor_reading_is_not_recorded(monkeypatch):
+    # An indoor reading of 0 °C is outside the plausible indoor range.
     sensor, states = _sensor()
     states["sensor.indoor"].state = "0"
     _cycle(sensor, monkeypatch, 0)
-    assert [temp for _, temp in sensor._thermal_model._temp_history] == [0.0]
+    assert sensor.extra_state_attributes["mode"] == "safe_mode"
+    assert not sensor._thermal_model._temp_history
 
 
 @pytest.mark.parametrize("bad", [None, float("nan"), float("inf"), -float("inf")])

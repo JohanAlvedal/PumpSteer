@@ -166,7 +166,7 @@ def test_before_ha_start_sends_nothing(control):
 
 
 @pytest.mark.parametrize("stage", ["prices", "forecast"])
-@pytest.mark.parametrize("value", ["unavailable", "unknown", "nan", "-10"])
+@pytest.mark.parametrize("value", ["unavailable", "unknown", "nan", "85", "-60"])
 def test_loss_or_changed_input_during_calculation_aborts(
     control, monkeypatch, stage, value
 ):

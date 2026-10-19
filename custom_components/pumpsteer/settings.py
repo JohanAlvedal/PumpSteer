@@ -135,6 +135,14 @@ MAX_REASONABLE_TEMP: Final[float] = 30.0
 MIN_REASONABLE_PRICE: Final[float] = -2.0
 MAX_REASONABLE_PRICE: Final[float] = 15.0
 
+# === TEMPERATURE SOURCE PLAUSIBILITY ===
+# Numeric readings outside these ranges are treated as missing, so a glitching
+# sensor (0, -40, 85, 655.35 ...) enters safe mode instead of driving output.
+INDOOR_TEMP_MIN: Final[float] = 5.0
+INDOOR_TEMP_MAX: Final[float] = 35.0
+OUTDOOR_TEMP_MIN: Final[float] = -50.0
+OUTDOOR_TEMP_MAX: Final[float] = 45.0
+
 # === PUMP LOG ===
 PUMP_LOG_ENABLED: Final[bool] = True
 
@@ -157,6 +165,10 @@ def validate_core_settings() -> None:
         errors.append("BRAKE_DELTA_C must be positive")
     if BRAKE_HOLD_MINUTES < 0:
         errors.append("BRAKE_HOLD_MINUTES must be >= 0")
+    if not INDOOR_TEMP_MIN < INDOOR_TEMP_MAX:
+        errors.append("INDOOR_TEMP_MIN must be less than INDOOR_TEMP_MAX")
+    if not OUTDOOR_TEMP_MIN < OUTDOOR_TEMP_MAX:
+        errors.append("OUTDOOR_TEMP_MIN must be less than OUTDOOR_TEMP_MAX")
     if errors:
         msg = f"Settings validation failed: {'; '.join(errors)}"
         _LOGGER.error(msg)
