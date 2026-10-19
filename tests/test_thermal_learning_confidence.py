@@ -100,7 +100,6 @@ def test_quality_and_sessions_survive_restore():
     assert reloaded.prediction_mae == pytest.approx(0.2)
 
 
-
 def test_refit_resets_old_model_accuracy_and_keeps_learning_history():
     model = ThermalModel()
     model.restore_k(0.05)
@@ -168,6 +167,7 @@ def test_refit_invalidates_restored_accuracy_and_active_old_k_session():
     assert model.prediction_mae is None
     assert model.last_prediction_error is None
     assert not model.validation_session_active
+
 
 def test_one_real_brake_session_is_counted_and_validated():
     model = ThermalModel()
