@@ -100,6 +100,75 @@ def test_quality_and_sessions_survive_restore():
     assert reloaded.prediction_mae == pytest.approx(0.2)
 
 
+
+def test_refit_resets_old_model_accuracy_and_keeps_learning_history():
+    model = ThermalModel()
+    model.restore_k(0.05)
+    _run_session(model, minutes=60, drop=0.8)
+
+    assert model.validated_sessions == 1
+    assert model.prediction_mae == pytest.approx(0.0, abs=1e-6)
+    assert model.last_prediction_error == pytest.approx(0.0, abs=1e-6)
+    assert model.learning_sessions == 1
+
+    _feed_cooling(model, 23)
+    assert model.fit() is True
+    assert model.k != pytest.approx(0.05)
+    assert model.learning_sessions == 1
+    assert model.validated_sessions == 0
+    assert model.prediction_mae is None
+    assert model.last_prediction_error is None
+    assert model.last_session_duration_minutes is None
+    assert model.last_session_actual_drop is None
+    assert model.last_session_predicted_drop is None
+
+    # Only a subsequent session may validate the newly fitted k.
+    _run_session(model, minutes=60, drop=0.6)
+    assert model.validated_sessions == 1
+    assert model.prediction_mae is not None
+    assert model.learning_sessions == 2
+
+
+def test_failed_refit_does_not_discard_valid_current_model_accuracy():
+    model = ThermalModel()
+    model.restore_k(0.05)
+    _run_session(model)
+
+    old_mae = model.prediction_mae
+    old_error = model.last_prediction_error
+    _feed_cooling(model, 22)
+    assert model.pending_samples == 19
+    assert model.fit() is False
+
+    assert model.k == pytest.approx(0.05)
+    assert model.validated_sessions == 1
+    assert model.prediction_mae == old_mae
+    assert model.last_prediction_error == old_error
+    assert model.learning_sessions == 1
+
+
+def test_refit_invalidates_restored_accuracy_and_active_old_k_session():
+    model = ThermalModel()
+    model.restore_k(0.05)
+    model.restore_diagnostics(
+        sample_count=94,
+        fit_rmse=0.1,
+        learning_sessions=4,
+        validated_sessions=3,
+        prediction_mae=0.2,
+    )
+    model.start_validation_session(_START, 21.0, 5.0)
+    _feed_cooling(model, 23)
+
+    assert model.validation_session_active
+    assert model.fit() is True
+
+    assert model.learning_sessions == 4
+    assert model.validated_sessions == 0
+    assert model.prediction_mae is None
+    assert model.last_prediction_error is None
+    assert not model.validation_session_active
+
 def test_one_real_brake_session_is_counted_and_validated():
     model = ThermalModel()
     model.restore_k(0.05)

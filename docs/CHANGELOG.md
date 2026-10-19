@@ -21,6 +21,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.4] — Thermal-learning reliability and control safety
+
+### Fixed
+- Reject invalid or stale temperature inputs at startup, during control updates and before sending outputs.
+- Renew Ohmigo ACTIVE only following a validated temperature write, preserving hardware safety behavior.
+- Preserve electricity-price slot identity across malformed data and daylight-saving transitions.
+- End stale brake state when preheat takes over and use elapsed time for preheat ramp progression.
+- Reset old prediction errors, validation counts and last-session diagnostics after a successful thermal-model refit; retain historical learning-session counts.
+
+### Added
+- Stable-braking Thermal Learning confidence, validation sessions, model-quality diagnostics and restart restoration.
+- Regression tests for successful refits, unsuccessful fits and restored validation metrics.
+
+### Compatibility
+- Thermal Learning remains diagnostic only; PI, pricing and relay decisions are unchanged.
+- Source version 2.2.4 is prepared here; publishing a matching release tag is a separate step.
+
+---
+
 ## [2.2.2] — Price-aware braking notifications
 
 ### Added

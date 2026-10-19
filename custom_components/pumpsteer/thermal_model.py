@@ -360,6 +360,17 @@ class ThermalModel:
             self._valid = True
             self._sample_count = len(samples)
             self._fit_rmse = math.sqrt(residual_sq / len(samples))
+
+            # Prediction metrics describe the previous k and must be revalidated.
+            # Keep the historical learning-session count, not the old accuracy.
+            self.cancel_validation_session()
+            self._validated_sessions = 0
+            self._prediction_mae = None
+            self._last_prediction_error = None
+            self._last_session_duration_minutes = None
+            self._last_session_actual_drop = None
+            self._last_session_predicted_drop = None
+
             _LOGGER.info(
                 "ThermalModel: fitted k=%.4f from %d relevant samples (RMSE=%.3f°C/h)",
                 k,
