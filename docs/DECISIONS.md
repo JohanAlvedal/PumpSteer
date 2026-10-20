@@ -278,6 +278,22 @@ This separation also explains why `safe_mode` alone does not disable Relay Guard
 PumpSteer may still be forwarding the real outdoor temperature through the same physical
 Active path.
 
+### Why short safe-mode outages keep controller memory
+
+**Decision:** Safe mode freezes the PI integral and the brake/preheat ramps for up to
+30 minutes after the last regular output instead of resetting them on entry. The age is
+checked both while safe mode lasts and when regular control resumes. Restored brake state
+after a restart follows the same rule, using the persisted time of the last regular
+output.
+
+**Reasoning:** Safe mode is entered for causes that are usually brief: a sensor that
+drops out for seconds, the wait for fresh reports after a restart, or a price list that
+rolls over a few seconds after midnight. Resetting on each of these restarted an active
+brake from zero (up to an hour of weaker braking) and discarded PI history every night.
+What safe mode sends is unchanged — real outdoor passthrough or nothing — so held memory
+never drives output while inputs are invalid. After a long outage the old state no longer
+describes the house, so the controller starts clean.
+
 ---
 
 ## Summer Mode

@@ -149,7 +149,8 @@ def test_other_modes_do_not_charge_inactive_time(monkeypatch, interruption):
 @pytest.mark.parametrize("reset", ["safe", "summer", "aggressiveness_zero"])
 def test_reset_starts_with_one_nominal_step(monkeypatch, reset):
     sensor, states = _sensor(monkeypatch)
-    for elapsed in (0, 60, 120):
+    # Start early enough that a safe-mode outage can outlast the hold window.
+    for elapsed in (-2000, -1940, -1880):
         _cycle(sensor, monkeypatch, elapsed)
     if reset == "safe":
         states["sensor.indoor"].state = "unavailable"
@@ -157,7 +158,11 @@ def test_reset_starts_with_one_nominal_step(monkeypatch, reset):
         states["sensor.outdoor"].state = "19"
     else:
         sensor._config_entry.options["aggressiveness"] = 0
-    _cycle(sensor, monkeypatch, 180)
+    _cycle(sensor, monkeypatch, -1820)
+    if reset == "safe":
+        # A short outage keeps controller memory; only a long one resets it.
+        assert sensor._preheat_ramp > 0.0
+        _cycle(sensor, monkeypatch, 0)
     assert sensor._preheat_ramp == 0.0
     states["sensor.indoor"].state = "20.5"
     states["sensor.outdoor"].state = "5"

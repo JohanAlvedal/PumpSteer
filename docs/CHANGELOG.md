@@ -23,6 +23,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Treat implausible numeric temperature readings (indoor outside 5–35 °C, outdoor outside −50–45 °C) as missing, so they enter safe mode instead of driving the output.
 - Cap summer-mode and safe-mode passthrough at the maximum fake temperature; real cold outdoor values are still passed through unchanged.
 - A fresh, valid reading from the same sensor during a control cycle or an Ohmigo ACTIVE renewal no longer counts as an interruption. PI integral, brake ramp and sensor availability are kept. Lost, restored, non-numeric or implausible readings still abort the output and revoke ACTIVE.
+- Short safe-mode outages (up to 30 minutes since the last regular output) keep the PI integral and brake/preheat ramps instead of resetting them. A restart during an expensive period now continues the restored brake. Longer outages reset as before; the safe-mode `controller_state` attribute shows `held` or `reset`.
+- Just after midnight, a "tomorrow" price list whose timestamps cover the current day is used as today's prices while the "today" list has not yet rolled over, instead of entering safe mode.
 
 ---
 
