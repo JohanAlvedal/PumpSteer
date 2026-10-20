@@ -13,6 +13,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A restart, integration reload or brief sensor dropout no longer wipes the brake. Short safe-mode outages (up to 30 minutes since the last regular output) now keep the PI integral and brake/preheat ramps instead of resetting them, so a restart during an expensive period continues the restored brake instead of ramping in from zero (the fake outdoor temperature previously dropped from full brake to the plain PI value). The PI clock restarts so the outage is not integrated. Longer outages and large clock jumps reset as before. The safe-mode `controller_state` attribute shows `held` or `reset`.
+
 ---
 
 ## [2.2.8] — Fewer false preheats and inertia-aware short-dip bridge
