@@ -82,7 +82,17 @@ entity_mod = types.ModuleType("homeassistant.helpers.entity")
 
 
 class Entity:
-    pass
+    async def async_added_to_hass(self):
+        pass
+
+    def async_on_remove(self, callback):
+        if not hasattr(self, "_remove_callbacks"):
+            self._remove_callbacks = []
+        self._remove_callbacks.append(callback)
+
+    async def async_will_remove_from_hass(self):
+        for callback in getattr(self, "_remove_callbacks", []):
+            callback()
 
 
 entity_mod.Entity = Entity
@@ -157,9 +167,8 @@ sys.modules["homeassistant.helpers.typing"] = typing_mod
 device_registry = types.ModuleType("homeassistant.helpers.device_registry")
 
 
-class DeviceInfo:
-    def __init__(self, *args, **kwargs):
-        pass
+class DeviceInfo(dict):
+    pass
 
 
 device_registry.DeviceInfo = DeviceInfo
@@ -307,8 +316,12 @@ components_mod.__path__ = []  # Mark as package
 sensor_mod = types.ModuleType("homeassistant.components.sensor")
 
 
-class SensorEntity:  # Minimal stub
+class SensorEntity(Entity):
     """Minimal SensorEntity stub for tests."""
+
+    @property
+    def native_value(self):
+        return getattr(self, "_attr_native_value", None)
 
 
 sensor_mod.SensorEntity = SensorEntity
@@ -327,3 +340,25 @@ sys.modules["homeassistant.components"] = components_mod
 sys.modules["homeassistant.components.sensor"] = sensor_mod
 sys.modules["homeassistant.components.recorder"] = recorder_mod
 sys.modules["homeassistant.components.recorder.history"] = history_mod
+
+
+# ── helpers.dispatcher ─────────────────────────────────────────────────────────
+dispatcher_mod = types.ModuleType("homeassistant.helpers.dispatcher")
+
+
+def async_dispatcher_connect(hass, signal, target):
+    if not hasattr(hass, "_dispatcher"):
+        hass._dispatcher = {}
+    targets = hass._dispatcher.setdefault(signal, [])
+    targets.append(target)
+    return lambda: targets.remove(target)
+
+
+def async_dispatcher_send(hass, signal, *args):
+    for target in list(getattr(hass, "_dispatcher", {}).get(signal, [])):
+        target(*args)
+
+
+dispatcher_mod.async_dispatcher_connect = async_dispatcher_connect
+dispatcher_mod.async_dispatcher_send = async_dispatcher_send
+sys.modules["homeassistant.helpers.dispatcher"] = dispatcher_mod
