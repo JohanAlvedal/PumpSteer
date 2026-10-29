@@ -8,6 +8,7 @@ validation, and a midnight price rollover briefly forced safe mode.
 import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -162,5 +163,52 @@ def test_stale_today_without_matching_tomorrow_still_fails_safe():
         _timestamped_day(two_days_ago + timedelta(days=1)),
     )
     now = datetime(2026, 10, 29, 0, 5, tzinfo=timezone.utc)
+
+    assert asyncio.run(sensor._get_prices(sensor._cfg(), now)) == ([], [], 60, 0)
+
+
+def _dst_end_day_wallclock_sorted():
+    """SE3 2026-10-25: 100 slots, repeated 02:00 hour sorted by wall-clock time."""
+    tz = ZoneInfo("Europe/Stockholm")
+    start = datetime(2026, 10, 24, 22, tzinfo=timezone.utc)  # 00:00 local
+    slots = []
+    for i in range(100):
+        # Compute in UTC; aware local arithmetic is wall-clock based.
+        slot_start = start + timedelta(minutes=15 * i)
+        slot_end = slot_start + timedelta(minutes=15)
+        slots.append(
+            {
+                "start": slot_start.astimezone(tz).isoformat(),
+                "end": slot_end.astimezone(tz).isoformat(),
+                "value": float(i),
+            }
+        )
+    # Nord Pool orders by local wall-clock time, interleaving the repeated hour.
+    slots.sort(
+        key=lambda item: datetime.fromisoformat(item["start"]).replace(tzinfo=None)
+    )
+    return slots
+
+
+def test_dst_end_day_with_wallclock_sorted_slots_is_accepted():
+    raw = _dst_end_day_wallclock_sorted()
+    assert raw[9]["start"] == "2026-10-25T02:00:00+01:00"
+    sensor = _price_sensor(raw, [])
+    now = datetime(2026, 10, 25, 12, tzinfo=ZoneInfo("Europe/Stockholm"))
+
+    prices, _, interval, slot = asyncio.run(sensor._get_prices(sensor._cfg(), now))
+
+    assert prices == [float(i) for i in range(100)]
+    assert interval == 15
+    # 12:00 local on a 25-hour day is 13 h = 52 slots after midnight.
+    assert slot == 52
+    assert sensor._current_price == pytest.approx(52.0)
+
+
+def test_dst_end_day_with_duplicate_slot_still_fails_safe():
+    raw = _dst_end_day_wallclock_sorted()
+    raw[9] = dict(raw[8])
+    sensor = _price_sensor(raw, [])
+    now = datetime(2026, 10, 25, 12, tzinfo=ZoneInfo("Europe/Stockholm"))
 
     assert asyncio.run(sensor._get_prices(sensor._cfg(), now)) == ([], [], 60, 0)

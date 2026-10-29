@@ -1740,6 +1740,12 @@ class PumpSteerSensor(RestoreEntity):
                 fallback_tomorrow_attr, fallback_tomorrow_raw_attr
             )
 
+        # Nord Pool sorts the repeated DST hour by local wall-clock time, which
+        # interleaves +02:00 and +01:00 slots. Order by real (UTC) start so a
+        # correct 25-hour day validates; gaps and duplicates are still rejected.
+        raw_today = self._sort_by_utc_start(raw_today)
+        raw_tomorrow = self._sort_by_utc_start(raw_tomorrow)
+
         prices_raw = [*raw_today, *raw_tomorrow]
 
         if not prices_raw:
@@ -1911,6 +1917,28 @@ class PumpSteerSensor(RestoreEntity):
             self._current_price_unit = unit.strip()
 
         return prices, categories, interval_minutes, current_slot
+
+    @staticmethod
+    def _sort_by_utc_start(items: List[Any]) -> List[Any]:
+        """Sort fully timestamped, timezone-aware slots by their UTC start.
+
+        Anything else is returned unchanged so the slot validator can reject it.
+        Each price keeps its own timestamp, so sorting never moves a price
+        to another slot.
+        """
+        keyed = []
+        for item in items:
+            if not isinstance(item, dict) or "start" not in item:
+                return items
+            try:
+                start = datetime.fromisoformat(str(item["start"]))
+            except (TypeError, ValueError):
+                return items
+            if start.utcoffset() is None:
+                return items
+            keyed.append((start.astimezone(timezone.utc), item))
+        keyed.sort(key=lambda pair: pair[0])
+        return [item for _, item in keyed]
 
     @staticmethod
     def _has_slot_timestamps(items: Any) -> bool:

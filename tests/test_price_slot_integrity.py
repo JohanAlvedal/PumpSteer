@@ -186,7 +186,7 @@ def test_incomplete_or_excess_today_cannot_shift_into_tomorrow(count):
 
 
 @pytest.mark.parametrize(
-    "mutation", ["yesterday", "swapped", "gap", "naive", "malformed", "partial"]
+    "mutation", ["yesterday", "gap", "naive", "malformed", "partial"]
 )
 def test_explicit_timestamps_must_match_day_and_slot(mutation):
     start = datetime(2026, 10, 11, tzinfo=timezone.utc)
@@ -204,8 +204,6 @@ def test_explicit_timestamps_must_match_day_and_slot(mutation):
                 item[key] = (
                     datetime.fromisoformat(item[key]) - timedelta(days=1)
                 ).isoformat()
-    elif mutation == "swapped":
-        today[0], today[1] = today[1], today[0]
     elif mutation == "gap":
         today[1]["start"] = today[2]["start"]
         today[1]["end"] = today[2]["end"]
