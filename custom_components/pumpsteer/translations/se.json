@@ -67,5 +67,18 @@
       "entity_unavailable": "Entiteten är otillgänglig",
       "invalid_notification_setting": "Ogiltig notisinställning"
     }
+  },
+  "entity": {
+    "sensor": {
+      "indoor_temperature": {
+        "name": "Inomhustemperatur"
+      },
+      "outdoor_temperature": {
+        "name": "Utomhustemperatur"
+      },
+      "control_temperature": {
+        "name": "Styrtemperatur"
+      }
+    }
   }
 }
