@@ -13,11 +13,30 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [2.2.5] — Thermal-learning accuracy, price-data robustness and input sensors
+
+### Fixed
+- Thermal Learning no longer biases k upwards: flat and slightly rising rate samples are kept, since rejecting them with a 0.1 °C sensor retained only downward noise. The lower plausible k bound is reduced to 0.001 because braking throttles rather than stops the heat pump.
+- A fitted k is now validated before it is replaced: refitting happens only after 3 validated sessions with a mean absolute error above 0.3 °C. Previously every brake phase refitted and discarded the validation it had just made, so validated sessions could never accumulate.
+- A flat session counts as validation when the model predicted at least 0.3 °C drop.
+- Thermal confidence is capped at 50 % until at least one prediction has been validated.
+- The last prediction error and last-session diagnostics are restored after a restart.
+- On the October DST change, Nord Pool sorts the repeated hour by local wall-clock time. Timestamped prices are now ordered by UTC start before validation, so the 25-hour day no longer forces safe mode all day. Gaps, duplicates and naive timestamps are still rejected.
+- Just after midnight, if the price sensor has not rolled over yet but its timestamped "tomorrow" list already covers today, those slots are used instead of entering safe mode.
+
 ### Added / improved
+- Expose the qualified indoor and outdoor control inputs as read-only temperature sensors on the PumpSteer device, with English and Swedish translations. The main sensor is labelled Control temperature; its unique ID and entity ID are unchanged.
 - Include the actual current-slot electricity price in preheating notifications too, using the same PumpSteer state snapshot introduced in 2.2.2.
 - Correct the preheating message so it does not claim the current price is always cheap.
 - Add opt-in price-notification levels (all, braking only, none) and independent per-mode repeat cooldowns (0, 30, 60 or 120 minutes). The existing Notifications switch remains the master control.
 - Keep legacy defaults (all alerts, no cooldown), leave heat control and Relay Guard untouched, and keep holiday notifications separate.
+
+### Compatibility
+- Thermal Learning remains diagnostic only; PI, pricing and relay decisions are unchanged.
+- Thermal confidence drops to at most 50 % after upgrading until a session has been validated.
+- Thermal model constants changed: a full Home Assistant restart is required, not just a reload.
 
 ---
 
