@@ -28,10 +28,6 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added / improved
 - Expose the qualified indoor and outdoor control inputs as read-only temperature sensors on the PumpSteer device, with English and Swedish translations. The main sensor is labelled Control temperature; its unique ID and entity ID are unchanged.
-- Include the actual current-slot electricity price in preheating notifications too, using the same PumpSteer state snapshot introduced in 2.2.2.
-- Correct the preheating message so it does not claim the current price is always cheap.
-- Add opt-in price-notification levels (all, braking only, none) and independent per-mode repeat cooldowns (0, 30, 60 or 120 minutes). The existing Notifications switch remains the master control.
-- Keep legacy defaults (all alerts, no cooldown), leave heat control and Relay Guard untouched, and keep holiday notifications separate.
 
 ### Compatibility
 - Thermal Learning remains diagnostic only; PI, pricing and relay decisions are unchanged.
@@ -56,6 +52,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ### Compatibility
 - Thermal Learning remains diagnostic only; PI, pricing and relay decisions are unchanged.
 - Source version 2.2.4 is prepared here; publishing a matching release tag is a separate step.
+
+---
+
+## [2.2.3] — Controller reliability and notification settings
+
+### Added / improved
+- Include the actual current-slot electricity price in preheating notifications too, using the same PumpSteer state snapshot introduced in 2.2.2.
+- Correct the preheating message so it does not claim the current price is always cheap.
+- Add opt-in price-notification levels (all, braking only, none) and independent per-mode repeat cooldowns (0, 30, 60 or 120 minutes). The existing Notifications switch remains the master control.
+- Keep legacy defaults (all alerts, no cooldown), leave heat control and Relay Guard untouched, and keep holiday notifications separate.
 
 ---
 
