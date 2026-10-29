@@ -338,6 +338,18 @@ class PumpSteerSensor(RestoreEntity):
                     "thermal_validated_sessions", 0
                 ),
                 prediction_mae=self._attributes.get("thermal_prediction_mae_c"),
+                last_prediction_error=self._attributes.get(
+                    "thermal_last_prediction_error_c"
+                ),
+                last_session_duration_minutes=self._attributes.get(
+                    "thermal_last_session_duration_minutes"
+                ),
+                last_session_actual_drop=self._attributes.get(
+                    "thermal_last_session_actual_drop_c"
+                ),
+                last_session_predicted_drop=self._attributes.get(
+                    "thermal_last_session_predicted_drop_c"
+                ),
             )
 
         # Wait until Home Assistant is fully started before the first real update.
@@ -1395,7 +1407,7 @@ class PumpSteerSensor(RestoreEntity):
                 # Brake phase has ended before this branch. Fit the thermal model only
                 # once, using the samples collected during the completed brake phase.
                 if self._was_braking_last_cycle:
-                    if self._thermal_model.pending_samples >= 20:
+                    if self._thermal_model.should_refit():
                         self._thermal_model.fit()
                     self._was_braking_last_cycle = False
 
@@ -1551,7 +1563,7 @@ class PumpSteerSensor(RestoreEntity):
                 self._brake_last_t = None
                 self._brake_last_expensive_t = None
                 if self._was_braking_last_cycle:
-                    if self._thermal_model.pending_samples >= 20:
+                    if self._thermal_model.should_refit():
                         self._thermal_model.fit()
                     self._was_braking_last_cycle = False
 
@@ -1665,7 +1677,7 @@ class PumpSteerSensor(RestoreEntity):
 
         # Fit the thermal model once after a completed brake phase has fully ramped out.
         if self._was_braking_last_cycle and factor <= 0.0:
-            if self._thermal_model.pending_samples >= 20:
+            if self._thermal_model.should_refit():
                 self._thermal_model.fit()
             self._was_braking_last_cycle = False
 
@@ -1753,6 +1765,12 @@ class PumpSteerSensor(RestoreEntity):
                 fallback_tomorrow_attr, fallback_tomorrow_raw_attr
             )
 
+        # Nord Pool sorts the repeated DST hour by local wall-clock time, which
+        # interleaves +02:00 and +01:00 slots. Order by real (UTC) start so a
+        # correct 25-hour day validates; gaps and duplicates are still rejected.
+        raw_today = self._sort_by_utc_start(raw_today)
+        raw_tomorrow = self._sort_by_utc_start(raw_tomorrow)
+
         prices_raw = [*raw_today, *raw_tomorrow]
 
         if not prices_raw:
@@ -1798,6 +1816,28 @@ class PumpSteerSensor(RestoreEntity):
         # silently move every later price to an earlier time (or even day).
         interval_minutes = detect_price_interval_minutes(raw_today)
         today_prices = self._parse_price_day(raw_today)
+        if (
+            today_prices
+            and self._has_slot_timestamps(raw_today)
+            and self._has_slot_timestamps(raw_tomorrow)
+            and not self._price_day_matches_slots(raw_today, now, interval_minutes)
+        ):
+            # Just after midnight the price sensor may still expose yesterday as
+            # "today" while "tomorrow" already holds today's timestamped slots.
+            # Use those slots instead of entering safe mode until it rolls over.
+            rollover_interval = detect_price_interval_minutes(raw_tomorrow)
+            rollover_prices = self._parse_price_day(raw_tomorrow)
+            if rollover_prices and self._price_day_matches_slots(
+                raw_tomorrow, now, rollover_interval
+            ):
+                _LOGGER.debug(
+                    "Price sensor not rolled over yet; using its 'tomorrow' slots "
+                    "as today (today='%s')",
+                    today_entity_id,
+                )
+                raw_today, raw_tomorrow = raw_tomorrow, []
+                interval_minutes = rollover_interval
+                today_prices = rollover_prices
         if not today_prices or not self._price_day_matches_slots(
             raw_today, now, interval_minutes
         ):
@@ -1902,6 +1942,37 @@ class PumpSteerSensor(RestoreEntity):
             self._current_price_unit = unit.strip()
 
         return prices, categories, interval_minutes, current_slot
+
+    @staticmethod
+    def _sort_by_utc_start(items: List[Any]) -> List[Any]:
+        """Sort fully timestamped, timezone-aware slots by their UTC start.
+
+        Anything else is returned unchanged so the slot validator can reject it.
+        Each price keeps its own timestamp, so sorting never moves a price
+        to another slot.
+        """
+        keyed = []
+        for item in items:
+            if not isinstance(item, dict) or "start" not in item:
+                return items
+            try:
+                start = datetime.fromisoformat(str(item["start"]))
+            except (TypeError, ValueError):
+                return items
+            if start.utcoffset() is None:
+                return items
+            keyed.append((start.astimezone(timezone.utc), item))
+        keyed.sort(key=lambda pair: pair[0])
+        return [item for _, item in keyed]
+
+    @staticmethod
+    def _has_slot_timestamps(items: Any) -> bool:
+        """True when every entry carries an explicit slot start time."""
+        return (
+            isinstance(items, list)
+            and bool(items)
+            and all(isinstance(item, dict) and "start" in item for item in items)
+        )
 
     @staticmethod
     def _prefer_timestamped_prices(values: Any, detailed: Any) -> List[Any]:
