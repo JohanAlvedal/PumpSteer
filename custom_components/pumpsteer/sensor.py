@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import math
 from datetime import datetime, timedelta, timezone
@@ -6,8 +7,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import homeassistant.util.dt as dt_util
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import StateType
@@ -113,11 +118,19 @@ class PumpSteerSensor(RestoreEntity):
         normal       -> PI regulates fake temp toward target
     """
 
+    _attr_has_entity_name = True
+    _attr_translation_key = "control_temperature"
+
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         self.hass = hass
         self._config_entry = config_entry
         self._state: Optional[float] = None
         self._attributes: Dict[str, Any] = {}
+        # Only live, qualified inputs; never populated from restored attributes.
+        self._input_temperatures: Dict[str, Optional[float]] = {}
+        self._input_temperature_signal = (
+            f"{DOMAIN}_{config_entry.entry_id}_input_temperatures"
+        )
         self._ohmigo_last_push = None
         self._temperature_reported_after: Optional[datetime] = None
         self._remove_start_listener = None
@@ -174,6 +187,9 @@ class PumpSteerSensor(RestoreEntity):
         self._remove_update_listener = None
 
         self._attr_unique_id = config_entry.entry_id
+        # Keep the legacy default ID used by notifications before registration.
+        # HA still resolves existing (including user-renamed) entities by unique_id.
+        self.entity_id = "sensor.pumpsteer"
         self._forecast_available_last: Optional[bool] = None
         self._safe_mode_warned: bool = False
         self._helper_fallback_issues: Dict[str, Optional[str]] = {
@@ -195,10 +211,6 @@ class PumpSteerSensor(RestoreEntity):
         )
 
     @property
-    def name(self) -> str:
-        return "PumpSteer"
-
-    @property
     def unique_id(self) -> str:
         return self._attr_unique_id
 
@@ -208,7 +220,7 @@ class PumpSteerSensor(RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {**self._attributes, "friendly_name": "PumpSteer"}
+        return self._attributes
 
     @property
     def unit_of_measurement(self) -> str:
@@ -353,6 +365,8 @@ class PumpSteerSensor(RestoreEntity):
     async def async_will_remove_from_hass(self) -> None:
         """Cancel options update listener on unload."""
         self._temperature_unloaded = True
+        self._input_temperatures = {}
+        async_dispatcher_send(self.hass, self._input_temperature_signal)
         if self._remove_start_listener is not None:
             self._remove_start_listener()
             self._remove_start_listener = None
@@ -890,6 +904,7 @@ class PumpSteerSensor(RestoreEntity):
         )
 
     async def _temperature_interrupted(self, cfg) -> None:
+        self._input_temperatures = {}
         # Options invalidation is retried; it must not reset PI/ramp history.
         if self._cfg() != cfg:
             return
@@ -1030,6 +1045,7 @@ class PumpSteerSensor(RestoreEntity):
         try:
             while True:
                 self._options_update_pending = False
+                self._input_temperatures = {}
                 try:
                     if self._temperature_unloaded or not getattr(
                         self.hass, "is_running", True
@@ -1040,6 +1056,7 @@ class PumpSteerSensor(RestoreEntity):
                         return
                     await self._do_update()
                 except Exception as err:
+                    self._input_temperatures = {}
                     self._thermal_model.cancel_validation_session()
                     self._thermal_learning_active = False
                     self._thermal_learning_reason = "update_error"
@@ -1053,8 +1070,12 @@ class PumpSteerSensor(RestoreEntity):
                     }
                 if not self._options_update_pending:
                     break
+        except asyncio.CancelledError:
+            self._input_temperatures = {}
+            raise
         finally:
             self._update_in_progress = False
+            async_dispatcher_send(self.hass, self._input_temperature_signal)
 
     async def _do_update(self) -> None:
         """Run the main control state machine."""
@@ -1076,6 +1097,10 @@ class PumpSteerSensor(RestoreEntity):
         outdoor = get_temperature(
             self.hass, cfg.get("real_outdoor_entity"), self._temperature_reported_after
         )
+        self._input_temperatures = {
+            "indoor_temperature": indoor,
+            "outdoor_temperature": outdoor,
+        }
         target = self._helper_value_with_fallback(
             helper_key="target_temperature",
             cfg=cfg,
@@ -2100,6 +2125,47 @@ class PumpSteerSensor(RestoreEntity):
         )
 
 
+class PumpSteerInputTemperatureSensor(SensorEntity):
+    """Expose one qualified control input without reading its source again."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_native_unit_of_measurement = "°C"
+    _attr_device_class = "temperature"
+    _attr_state_class = "measurement"
+    _attr_native_value = None
+
+    def __init__(self, controller: PumpSteerSensor, key: str) -> None:
+        self._controller = controller
+        self._key = key
+        self._attr_translation_key = key
+        self._attr_unique_id = f"{controller.unique_id}_{key}"
+        self._attr_device_info = controller._attr_device_info
+
+    @property
+    def available(self) -> bool:
+        return self._attr_native_value is not None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                self._controller._input_temperature_signal,
+                self._async_update_from_controller,
+            )
+        )
+        if not self._controller._update_in_progress:
+            self._async_update_from_controller()
+
+    @callback
+    def _async_update_from_controller(self) -> None:
+        value = self._controller._input_temperatures.get(self._key)
+        if value != self._attr_native_value:
+            self._attr_native_value = value
+            self.async_write_ha_state()
+
+
 class ThermalOutlookSensor(SensorEntity):
     """Exposes ThermalOutlook as a HA sensor for visualization and debugging."""
 
@@ -2201,4 +2267,12 @@ async def async_setup_entry(
     await hass.async_add_executor_job(setup_pump_log)
     sensor = PumpSteerSensor(hass, config_entry)
     outlook_sensor = ThermalOutlookSensor(hass, config_entry)
-    async_add_entities([sensor, outlook_sensor], update_before_add=False)
+    async_add_entities(
+        [
+            sensor,
+            outlook_sensor,
+            PumpSteerInputTemperatureSensor(sensor, "indoor_temperature"),
+            PumpSteerInputTemperatureSensor(sensor, "outdoor_temperature"),
+        ],
+        update_before_add=False,
+    )

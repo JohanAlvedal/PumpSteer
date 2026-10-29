@@ -74,5 +74,18 @@
       "unknown": "An unknown error occurred",
       "invalid_notification_setting": "Invalid notification setting"
     }
+  },
+  "entity": {
+    "sensor": {
+      "indoor_temperature": {
+        "name": "Indoor temperature"
+      },
+      "outdoor_temperature": {
+        "name": "Outdoor temperature"
+      },
+      "control_temperature": {
+        "name": "Control temperature"
+      }
+    }
   }
 }
