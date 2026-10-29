@@ -33,8 +33,10 @@ _MAX_LEARNING_SAMPLES = 240
 # Fallback k if insufficient braking history exists.
 _FALLBACK_K = 0.05
 
-# Physically plausible range for k.
-_K_MIN = 0.005
+# Plausible range for k. During PumpSteer braking the heat pump is throttled,
+# not stopped (fake outdoor = real outdoor + BRAKE_DELTA_C), so the observed
+# effective k can be far below a true passive cooling constant.
+_K_MIN = 0.001
 _K_MAX = 0.5
 
 # Small rolling buffer used only to estimate dT/dt. This is not retained training data.
@@ -52,6 +54,17 @@ _MAX_RATE_C_PER_HOUR = 1.0
 
 # Validation sessions shorter than this are too sensitive to sensor noise.
 _MIN_VALIDATION_SESSION_MINUTES = 10.0
+
+# A flat session still validates the model when the model clearly predicted a drop.
+_MIN_PREDICTED_DROP_FOR_FLAT_VALIDATION_C = 0.3
+
+# Refit an already fitted model only after enough validation shows it is wrong.
+# Refitting after every session would discard each validation before it can count.
+_REFIT_MIN_VALIDATED_SESSIONS = 3
+_REFIT_MAE_THRESHOLD_C = 0.3
+
+# Without real prediction validation the confidence score is capped.
+_UNVALIDATED_CONFIDENCE_CAP = 0.5
 
 
 @dataclass
@@ -191,7 +204,7 @@ class ThermalModel:
             else max(0.0, min(1.0, 1.0 - (self._prediction_mae / 1.0)))
         )
 
-        return max(
+        score = max(
             0.0,
             min(
                 1.0,
@@ -200,6 +213,27 @@ class ThermalModel:
                 + 0.15 * session_score
                 + 0.15 * validation_score,
             ),
+        )
+        # A good in-sample fit does not prove predictive accuracy.
+        if self._validated_sessions == 0:
+            score = min(score, _UNVALIDATED_CONFIDENCE_CAP)
+        return score
+
+    def should_refit(self) -> bool:
+        """Return True when pending samples should replace the current k.
+
+        An unfitted model is fitted as soon as enough samples exist. A fitted
+        model is kept until validation sessions show a consistent error, so
+        each new k actually gets validated before it is replaced.
+        """
+        if len(self._samples) < _MIN_SAMPLES:
+            return False
+        if not self._valid:
+            return True
+        return (
+            self._validated_sessions >= _REFIT_MIN_VALIDATED_SESSIONS
+            and self._prediction_mae is not None
+            and self._prediction_mae > _REFIT_MAE_THRESHOLD_C
         )
 
     # ── Persistence ────────────────────────────────────────────────────────────
@@ -223,6 +257,10 @@ class ThermalModel:
         learning_sessions: int = 0,
         validated_sessions: int = 0,
         prediction_mae: Optional[float] = None,
+        last_prediction_error: Optional[float] = None,
+        last_session_duration_minutes: Optional[float] = None,
+        last_session_actual_drop: Optional[float] = None,
+        last_session_predicted_drop: Optional[float] = None,
     ) -> None:
         """Restore compact model-quality summaries without restoring raw samples."""
         self._sample_count = max(0, int(sample_count))
@@ -230,6 +268,24 @@ class ThermalModel:
         self._learning_sessions = max(0, int(learning_sessions))
         self._validated_sessions = max(0, int(validated_sessions))
         self._prediction_mae = self._finite_or_none(prediction_mae)
+        self._last_prediction_error = self._signed_finite_or_none(last_prediction_error)
+        self._last_session_duration_minutes = self._finite_or_none(
+            last_session_duration_minutes
+        )
+        self._last_session_actual_drop = self._finite_or_none(last_session_actual_drop)
+        self._last_session_predicted_drop = self._finite_or_none(
+            last_session_predicted_drop
+        )
+
+    @staticmethod
+    def _signed_finite_or_none(value: Optional[float]) -> Optional[float]:
+        if value is None:
+            return None
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        return numeric if math.isfinite(numeric) else None
 
     @staticmethod
     def _finite_or_none(value: Optional[float]) -> Optional[float]:
@@ -280,9 +336,10 @@ class ThermalModel:
         if rate is None:
             return False
 
-        if rate >= 0.0:
-            return False
-
+        # Flat and slightly rising rates are kept on purpose. With a 0.1 °C sensor
+        # most short-window rates are 0 or one quantization step; dropping the
+        # non-negative ones keeps only the noise that points downward and biases
+        # k upwards. The bounds below still reject implausible values.
         if rate < _MIN_RATE_C_PER_HOUR or rate > _MAX_RATE_C_PER_HOUR:
             return False
 
@@ -467,8 +524,12 @@ class ThermalModel:
         self._last_session_actual_drop = actual_drop
         self._last_session_predicted_drop = predicted_drop
 
-        # Flat readings do not prove that the passive cooling model is accurate.
-        if session.prediction_valid and actual_drop >= 0.05:
+        # Flat readings alone do not prove the model accurate, but a flat session
+        # where the model predicted a clear drop is real evidence against it.
+        if session.prediction_valid and (
+            actual_drop >= 0.05
+            or predicted_drop >= _MIN_PREDICTED_DROP_FOR_FLAT_VALIDATION_C
+        ):
             error = actual_drop - predicted_drop
             abs_error = abs(error)
             previous_count = self._validated_sessions
