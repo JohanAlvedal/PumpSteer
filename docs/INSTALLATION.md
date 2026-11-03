@@ -31,14 +31,34 @@ Before installing, make sure you have:
 
 ## New Installation
 
-### Step 1 — Install from HACS
-Open HACS in your Home Assistant sidebar.
-Go to Integrations.
-Search for PumpSteer.
-Select PumpSteer and click Download.
+### Step 1 — Install PumpSteer
+
+[![Open your Home Assistant instance and open PumpSteer in HACS / the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=JohanAlvedal&repository=PumpSteer&category=integration)
+
+The button opens PumpSteer in HACS on Home Assistant 2026.10 or older, and in the
+Marketplace on Home Assistant 2026.11 or newer.
+
+**Home Assistant 2026.11 or newer (Marketplace)**
+
+1. Go to **Settings** → **Marketplace**.
+2. Search for **PumpSteer**.
+3. Select PumpSteer and click **Download**.
+
+**Home Assistant 2026.10 or older (HACS)**
+
+1. Open HACS in your Home Assistant sidebar.
+2. Go to **Integrations**.
+3. Search for **PumpSteer**.
+4. Select PumpSteer and click **Download**.
 
 {: .note }
-PumpSteer is available directly in HACS. You no longer need to add it as a custom repository.
+PumpSteer is in the default catalog used by both HACS and the Marketplace. You do not
+need to add it as a custom repository.
+
+{: .note }
+Upgrading Home Assistant to 2026.11 or newer replaces HACS with the built-in
+Marketplace automatically. An existing PumpSteer installation stays installed, keeps
+its configuration and entity IDs, and keeps receiving updates. No action is needed.
 
 ### Step 2 — Restart Home Assistant
 
@@ -75,7 +95,7 @@ required sensors are available.
 
 ## Manual Installation
 
-If you prefer not to use HACS:
+If you prefer not to use HACS or the Marketplace:
 
 1. Download the [latest release](https://github.com/JohanAlvedal/PumpSteer/releases) from GitHub.
 2. Extract and copy the `custom_components/pumpsteer/` folder to your HA
@@ -135,7 +155,7 @@ PumpSteer 2.0 is a **complete rewrite**. Treat this as a new integration, not an
 
 1. Note your current settings (target temp, aggressiveness, etc.)
 2. Remove the old PumpSteer integration
-3. Install 2.x fresh via HACS
+3. Install 2.x fresh via HACS or the Marketplace
 4. Reconfigure with your saved settings
 5. Observe for 24–48 hours before migrating dashboards and automations
 

@@ -28,7 +28,9 @@ automatically and do not need to be changed.
 
 ## Prerequisites
 
-Install these cards via HACS before using the dashboard templates:
+Install these cards via HACS (Home Assistant 2026.10 or older) or the Marketplace
+(**Settings** → **Marketplace**, Home Assistant 2026.11 or newer) before using the
+dashboard templates:
 
 - [**mini-graph-card**](https://github.com/kalkih/mini-graph-card) — for temperature and price charts
 - [**apexcharts-card**](https://github.com/RomRider/apexcharts-card) — for the braking vs price chart

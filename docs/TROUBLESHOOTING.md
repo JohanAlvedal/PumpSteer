@@ -335,7 +335,7 @@ also unavailable. Monitor the system after installation and configuration change
 Temperature inputs marked `restored` are rejected. Startup/reload requires a
 non-restored numeric HA report with `last_reported` later than activation (or
 the HA-start event). An unchanged value can qualify through a new report.
-This requires Home Assistant 2024.4 or later, matching the HACS minimum version.
+This requires Home Assistant 2024.4 or later, matching the minimum version in `hacs.json`.
 Missing timestamp metadata cannot qualify after activation. This is a HA-report
 barrier, **not proof of a fresh physical measurement**; a source may republish cache.
 

@@ -15,6 +15,11 @@ It reduces energy costs during peak price hours while maintaining indoor comfort
 Full documentation is available at **[johanalvedal.github.io/PumpSteer](https://johanalvedal.github.io/PumpSteer/)**
 
 ### 🚀 Getting Started
+
+[![Open your Home Assistant instance and open PumpSteer in HACS / the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=JohanAlvedal&repository=PumpSteer&category=integration)
+
+PumpSteer installs from HACS (Home Assistant 2026.10 or older) or the built-in Marketplace (**Settings** → **Marketplace**, Home Assistant 2026.11 or newer).
+
 * **[Installation Guide](https://johanalvedal.github.io/PumpSteer/INSTALLATION)** – Step-by-step setup and upgrade notes.
 * **[Configuration](https://johanalvedal.github.io/PumpSteer/Configuration)** – Detailed explanation of all integration settings.
 * **[Dashboard Setup](https://johanalvedal.github.io/PumpSteer/DASHBOARD)** – How to use the provided Lovelace templates.
