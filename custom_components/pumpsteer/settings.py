@@ -3,7 +3,7 @@ from typing import Final, List
 
 _LOGGER = logging.getLogger(__name__)
 
-PUMPSTEER_VERSION: Final[str] = "2.2.5"
+PUMPSTEER_VERSION: Final[str] = "2.2.6"
 
 # === FAKE TEMPERATURE LIMITS ===
 MIN_FAKE_TEMP: Final[float] = -20.0

@@ -15,6 +15,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.6] — Correct version metadata and Marketplace readiness
+
+### Fixed
+- The 2.2.5 release was tagged before its version bump, so it reported itself as 2.2.4 (device software version and manifest), its changelog entry was missing and no release ZIP was attached. 2.2.6 contains the same code as 2.2.5 with correct version metadata. If you run 2.2.5, update to get the correct version shown.
+
+### Added / improved
+- Installation and dashboard docs cover the Home Assistant Marketplace, which replaces HACS from Home Assistant 2026.11. Existing installations move over automatically; no action is needed.
+- Release validation now also checks the changelog, the version format and `hacs.json`, and a release that fails validation is reverted to draft automatically.
+
+### Compatibility
+- No control-logic, configuration or entity changes. Restart Home Assistant after updating, as for any PumpSteer update.
+
+---
+
 ## [2.2.5] — Thermal-learning accuracy, price-data robustness and input sensors
 
 ### Fixed
