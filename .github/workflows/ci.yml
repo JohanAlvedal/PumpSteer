@@ -169,3 +169,15 @@ jobs:
           
       - name: Clean up
         run: rm -f pumpsteer.zip
+
+      - name: Revert release to draft on failure
+        # The release is already public when this job runs. If any check fails,
+        # pull it back to draft so HACS / the Marketplace never offer a release
+        # whose tag, manifest, settings or changelog disagree.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=true
+          echo "::error::Release $RELEASE_TAG failed validation and was reverted to draft. Fix the versions, move the tag and publish again."
