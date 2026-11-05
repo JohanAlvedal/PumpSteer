@@ -130,6 +130,11 @@ def _rising_temps() -> list:
     return [_point(h, float(5 + h * 2)) for h in range(6)]
 
 
+def _falling_cold(start: float, end: float, hours: int = 24) -> list:
+    """Linear drop from start to end over the given hours (all below threshold)."""
+    return [_point(h, start + (end - start) * h / (hours - 1)) for h in range(hours)]
+
+
 def _falling_temps() -> list:
     return [_point(h, float(20 - h * 2)) for h in range(6)]
 
@@ -307,9 +312,30 @@ class TestPrecoolRisk:
 
 
 class TestPreheatWorthwhile:
-    def test_cold_throughout_is_worthwhile(self):
+    def test_steady_cold_is_not_worthwhile(self):
+        """Steady cold alone is not a reason to preheat."""
         o = analyze_thermal_outlook(_cold_night_cold_day(), THRESHOLD)
+        assert o.expected_drop_c == pytest.approx(0.0)
+        assert o.preheat_worthwhile is False
+
+    def test_coming_drop_is_worthwhile(self):
+        o = analyze_thermal_outlook(_falling_cold(4.0, -6.0), THRESHOLD)
+        assert o.expected_drop_c >= 2.0
         assert o.preheat_worthwhile is True
+
+    def test_small_drop_is_not_worthwhile(self):
+        o = analyze_thermal_outlook(_falling_cold(4.0, 3.0), THRESHOLD)
+        assert o.expected_drop_c < 2.0
+        assert o.preheat_worthwhile is False
+
+    def test_drop_beyond_window_is_ignored(self):
+        """A drop that only happens after drop_hours does not count."""
+        points = [_point(h, 4.0) for h in range(14)] + [
+            _point(h, -6.0) for h in range(14, 24)
+        ]
+        o = analyze_thermal_outlook(points, THRESHOLD, drop_hours=12)
+        assert o.expected_drop_c == pytest.approx(0.0)
+        assert o.preheat_worthwhile is False
 
     def test_warm_day_suppresses_preheat(self):
         o = analyze_thermal_outlook(_cold_night_warm_day(), THRESHOLD)
@@ -331,7 +357,7 @@ class TestPreheatWorthwhile:
         assert o.preheat_worthwhile is False
 
     def test_3_or_more_cold_hours_can_enable_preheat(self):
-        o = analyze_thermal_outlook([_point(h, 5.0) for h in range(24)], THRESHOLD)
+        o = analyze_thermal_outlook(_falling_cold(5.0, -5.0), THRESHOLD)
         assert o.hours_below_threshold >= 3
         assert o.preheat_worthwhile is True
 
@@ -346,10 +372,14 @@ class TestPreheatStrength:
         o = analyze_thermal_outlook(_cold_night_warm_day(), THRESHOLD)
         assert o.preheat_strength == 0.0
 
-    def test_scales_with_coldness(self):
-        cold = analyze_thermal_outlook([_point(h, 2.0) for h in range(24)], THRESHOLD)
-        mild = analyze_thermal_outlook([_point(h, 12.0) for h in range(24)], THRESHOLD)
-        assert cold.preheat_strength > mild.preheat_strength
+    def test_scales_with_drop(self):
+        big = analyze_thermal_outlook(_falling_cold(4.0, -8.0), THRESHOLD)
+        small = analyze_thermal_outlook(_falling_cold(4.0, 0.0), THRESHOLD)
+        assert big.preheat_strength > small.preheat_strength
+
+    def test_steady_cold_gives_zero_strength(self):
+        o = analyze_thermal_outlook([_point(h, -10.0) for h in range(24)], THRESHOLD)
+        assert o.preheat_strength == 0.0
 
     def test_clamped_to_1(self):
         o = analyze_thermal_outlook([_point(h, -20.0) for h in range(24)], THRESHOLD)
@@ -402,8 +432,15 @@ class TestScenarios:
         assert o.day_max_temp == pytest.approx(21.0)
 
     def test_autumn_cold_throughout(self):
-        """Cold throughout: preheat worthwhile, no precool risk."""
+        """Steady autumn cold: no preheat, no precool risk."""
         o = analyze_thermal_outlook([_point(h, 5.0) for h in range(24)], THRESHOLD)
+        assert o.preheat_worthwhile is False
+        assert o.precool_risk is False
+        assert o.preheat_strength == 0.0
+
+    def test_autumn_cold_front(self):
+        """Cold front arriving: preheat worthwhile with positive strength."""
+        o = analyze_thermal_outlook(_falling_cold(5.0, -3.0), THRESHOLD)
         assert o.preheat_worthwhile is True
         assert o.precool_risk is False
         assert o.preheat_strength > 0.0
