@@ -60,7 +60,7 @@ COMFORT_FLOOR_BY_AGGRESSIVENESS: Final[List[float]] = [
 # Higher value = stronger braking, because the heat pump sees a warmer outdoor temperature.
 # Typical: 10–15°C. 10°C is conservative, while 15°C gives very strong braking
 # for many heating systems.
-BRAKE_DELTA_C: Final[float] = 10.0
+BRAKE_DELTA_C: Final[float] = 15.0
 
 # === RAMP TIMING ===
 # Ramp duration scales with house inertia and is clamped between
