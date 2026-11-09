@@ -3,7 +3,15 @@ from typing import Final, List
 
 _LOGGER = logging.getLogger(__name__)
 
-PUMPSTEER_VERSION: Final[str] = "2.2.6"
+PUMPSTEER_VERSION: Final[str] = "2.2.7"
+
+# === TEMPERATURE INPUT QUALIFICATION ===
+# After a Home Assistant start, temperature inputs must report after the start
+# event so that unmarked cached values (e.g. RestoreSensor) are not trusted.
+# Change-only sensors may stay silent for hours, so the requirement is released
+# after this grace period and the current non-restored value is used.
+# Not applied on integration reload while HA is running (sources are live).
+STARTUP_REPORT_GRACE_MINUTES: Final[int] = 5
 
 # === FAKE TEMPERATURE LIMITS ===
 MIN_FAKE_TEMP: Final[float] = -20.0

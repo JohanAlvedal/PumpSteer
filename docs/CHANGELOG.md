@@ -15,6 +15,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.2.7] — Change-only temperature sensors no longer stuck in safe mode
+
+### Fixed
+- Safe mode with "Missing sensors" although both temperature sensors had valid values ([#290](https://github.com/JohanAlvedal/PumpSteer/issues/290)). Since 2.2.4 (#279) a temperature was only accepted if it was reported after PumpSteer started. Sensors that only report when the value changes (many BLE and some Zigbee thermometers) could keep PumpSteer in safe mode for hours after every restart or reload.
+  - Reloading the integration while Home Assistant is running now uses the current sensor values directly.
+  - After a Home Assistant restart, the requirement for a new report is released after 5 minutes (`STARTUP_REPORT_GRACE_MINUTES`). Sensors that report earlier are accepted immediately, as before.
+  - Values marked `restored`, invalid values and reports dated in the future (clock moved backwards) are still rejected.
+
+### Compatibility
+- No configuration or entity changes. Restart Home Assistant after updating, as for any PumpSteer update. If you patched `sensor.py` locally for this problem, the update replaces that patch.
+
+---
+
 ## [2.2.6] — Correct version metadata and Marketplace readiness
 
 ### Fixed

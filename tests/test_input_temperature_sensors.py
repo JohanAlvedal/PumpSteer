@@ -66,7 +66,7 @@ def test_loss_is_per_input_and_recovers(temperatures, index, key, value):
     assert entities[index].native_value == 0.0
 
 
-def test_start_restore_reload_and_fresh_report(temperatures, monkeypatch):
+def test_start_restore_then_reload_uses_live_values(temperatures, monkeypatch):
     controller, states, clock, entities, _ = temperatures
     controller.hass.is_running = False
     controller.hass.bus = SimpleNamespace(async_listen_once=lambda *args: lambda: None)
@@ -110,14 +110,18 @@ def test_start_restore_reload_and_fresh_report(temperatures, monkeypatch):
         entity.hass = controller.hass
         entity.async_write_ha_state = lambda: None
         asyncio.run(entity.async_added_to_hass())
-    assert [e.available for e in replacements] == [False, False]
     assert [e._attr_unique_id for e in replacements] == [
         e._attr_unique_id for e in entities
     ]
-    clock[0] += timedelta(seconds=1)
-    _report(states, clock)
+    # Reload while HA runs: the unchanged live sources qualify without a new
+    # report (#290); the replacements show them after the next control cycle.
     asyncio.run(reloaded.async_update())
     assert [e.native_value for e in replacements] == [21.0, -3.3]
+    assert [e.available for e in replacements] == [True, True]
+    # Restored sources are still rejected after reload.
+    _report(states, clock, restored=True)
+    asyncio.run(reloaded.async_update())
+    assert [e.available for e in replacements] == [False, False]
 
 
 def test_interrupted_cycle_and_exception_clear_values(temperatures, monkeypatch):

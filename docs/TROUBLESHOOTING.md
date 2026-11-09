@@ -38,8 +38,16 @@ safe_mode: No price data from today='sensor.elpris_spot_avgifter', tomorrow='...
 | Indoor or outdoor sensor missing | Check that the entity ID in the options flow still exists and is available |
 | No price data | See [Price sensor not working](#price-sensor-not-working) below |
 | Sensor state is `unknown` or `unavailable` | Wait for HA to fully start; sensors recover automatically |
+| Sensors missing right after a Home Assistant restart, although they show valid values | Expected for up to 5 minutes; see below |
 
 Safe mode resolves itself as soon as valid data is available. No restart needed.
+
+**Right after a Home Assistant restart**, PumpSteer only trusts temperatures reported
+after HA has started, so cached values from before the restart are not used. A sensor
+that reports again within the window is accepted immediately. Sensors that only report
+when the value changes (many BLE and some Zigbee thermometers) may stay silent; after
+5 minutes PumpSteer uses their current value anyway. Values marked `restored` are never
+used. Reloading the integration while HA is running uses the current values directly.
 
 ---
 
@@ -332,12 +340,19 @@ also unavailable. Monitor the system after installation and configuration change
 
 ### Offline temperature-validation candidate — not approved for active operation
 
-Temperature inputs marked `restored` are rejected. Startup/reload requires a
-non-restored numeric HA report with `last_reported` later than activation (or
-the HA-start event). An unchanged value can qualify through a new report.
+Temperature inputs marked `restored` are rejected. After a Home Assistant start,
+an input requires a non-restored numeric HA report with `last_reported` later than
+the HA-start event. An unchanged value can qualify through a new report.
+This requirement is released `STARTUP_REPORT_GRACE_MINUTES` (5) after the start
+event, so change-only sensors are then accepted with their current non-restored
+value. An integration reload while HA is running applies no report-time
+requirement: the source entities are already live.
+A report dated after the current time (clock moved backwards) is always rejected
+until the clock passes it.
 This requires Home Assistant 2024.4 or later, matching the minimum version in `hacs.json`.
-Missing timestamp metadata cannot qualify after activation. This is a HA-report
-barrier, **not proof of a fresh physical measurement**; a source may republish cache.
+Missing timestamp metadata cannot qualify during the startup window. This is a
+HA-report barrier, **not proof of a fresh physical measurement**; a source may
+republish cache, and after the window an unmarked cached value is accepted.
 
 Inputs and configured source identities are rechecked after asynchronous data
 retrieval and immediately before each output service call. Changed or invalid
