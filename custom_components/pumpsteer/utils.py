@@ -95,8 +95,8 @@ def get_temperature(
     entity = hass.states.get(entity_id)
     if entity is None or entity.attributes.get("restored"):
         return None
+    reported = getattr(entity, "last_reported", None)
     if reported_after is not None:
-        reported = getattr(entity, "last_reported", None)
         try:
             if (
                 not isinstance(reported, datetime)
@@ -106,6 +106,14 @@ def get_temperature(
                 return None
         except TypeError:
             return None
+    elif isinstance(reported, datetime):
+        # Without a cutoff, still refuse reports dated after "now" (clock moved
+        # backwards). Self-healing once the clock passes the report time.
+        try:
+            if reported > dt_util.now():
+                return None
+        except TypeError:
+            pass  # Naive metadata: no cutoff to enforce, keep previous behavior.
     return safe_float(entity.state)
 
 

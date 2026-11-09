@@ -57,6 +57,7 @@ from .settings import (
     RAMP_MAX_MINUTES,
     RAMP_MIN_MINUTES,
     RAMP_SCALE,
+    STARTUP_REPORT_GRACE_MINUTES,
 )
 from .utils import (
     compute_price_slot_index,
@@ -278,7 +279,12 @@ class PumpSteerSensor(RestoreEntity):
         )
 
     async def async_added_to_hass(self) -> None:
-        self._temperature_reported_after = dt_util.now()
+        # On reload while HA is running, source entities are live: their current
+        # (non-restored) value is valid even if it has not changed since. A
+        # change-only sensor must not hold PumpSteer in safe mode (#290).
+        self._temperature_reported_after = (
+            None if self.hass.is_running else dt_util.now()
+        )
         self._temperature_unloaded = False
         await super().async_added_to_hass()
 
@@ -400,6 +406,33 @@ class PumpSteerSensor(RestoreEntity):
         )
         await self.async_update()
         self.async_write_ha_state()
+
+    def _temperature_cutoff(self) -> Optional[datetime]:
+        """Return the report-time cutoff for temperature inputs, if still active.
+
+        After HA start, inputs must report after the start event. The cutoff is
+        released after STARTUP_REPORT_GRACE_MINUTES so change-only sensors are
+        accepted with their current non-restored value (#290).
+        """
+        cutoff = self._temperature_reported_after
+        if cutoff is None:
+            return None
+        try:
+            expired = dt_util.now() - cutoff >= timedelta(
+                minutes=STARTUP_REPORT_GRACE_MINUTES
+            )
+        except TypeError:
+            # Naive/aware mismatch: keep the conservative cutoff.
+            return cutoff
+        if not expired:
+            return cutoff
+        self._temperature_reported_after = None
+        _LOGGER.info(
+            "PumpSteer: startup report window (%d min) elapsed; "
+            "using current non-restored temperature values",
+            STARTUP_REPORT_GRACE_MINUTES,
+        )
+        return None
 
     def _cfg(self) -> Dict[str, Any]:
         return {**self._config_entry.data, **self._config_entry.options}
@@ -895,9 +928,7 @@ class PumpSteerSensor(RestoreEntity):
             and all(
                 value is not None
                 and current_cfg.get(key) == cfg.get(key)
-                and get_temperature(
-                    self.hass, cfg.get(key), self._temperature_reported_after
-                )
+                and get_temperature(self.hass, cfg.get(key), self._temperature_cutoff())
                 == value
                 for key, value in expected.items()
             )
@@ -1092,10 +1123,10 @@ class PumpSteerSensor(RestoreEntity):
         cfg = self._cfg()
 
         indoor = get_temperature(
-            self.hass, cfg.get("indoor_temp_entity"), self._temperature_reported_after
+            self.hass, cfg.get("indoor_temp_entity"), self._temperature_cutoff()
         )
         outdoor = get_temperature(
-            self.hass, cfg.get("real_outdoor_entity"), self._temperature_reported_after
+            self.hass, cfg.get("real_outdoor_entity"), self._temperature_cutoff()
         )
         self._input_temperatures = {
             "indoor_temperature": indoor,
@@ -2114,7 +2145,7 @@ class PumpSteerSensor(RestoreEntity):
                 key: extra.get(
                     attribute,
                     get_temperature(
-                        self.hass, cfg.get(key), self._temperature_reported_after
+                        self.hass, cfg.get(key), self._temperature_cutoff()
                     ),
                 )
                 for key, attribute in (

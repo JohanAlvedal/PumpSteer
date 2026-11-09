@@ -522,7 +522,8 @@ def test_unload_while_number_handler_waits_cannot_activate(rig):
     asyncio.run(scenario())
 
 
-def test_clock_backwards_then_reload_requires_new_reports(rig, monkeypatch):
+@pytest.mark.parametrize("recovery", ["new_report", "clock_catches_up"])
+def test_clock_backwards_then_reload_rejects_future_reports(rig, monkeypatch, recovery):
     sensor, states, clock, manager, receiver = rig
     before_clock_change = clock[0]
     for key in ("sensor.indoor", "sensor.outdoor"):
@@ -545,9 +546,16 @@ def test_clock_backwards_then_reload_requires_new_reports(rig, monkeypatch):
         await manager.async_check("reload")
         assert receiver.calls == []
         assert not receiver.active
-        clock[0] += timedelta(seconds=1)
-        for key in ("sensor.indoor", "sensor.outdoor"):
-            states[key].last_reported = clock[0]
+        if recovery == "new_report":
+            clock[0] += timedelta(seconds=1)
+            for key in ("sensor.indoor", "sensor.outdoor"):
+                states[key].last_reported = clock[0]
+        else:
+            # Change-only sensors (#290): no new report, the clock passes it.
+            clock[0] = before_clock_change - timedelta(seconds=1)
+            await update(sensor, manager)
+            assert receiver.calls == []  # Report still one second in the future.
+            clock[0] = before_clock_change  # Clock has caught up.
         await update(sensor, manager)
         assert [call[0] for call in receiver.calls] == ["number", "switch"]
         assert receiver.active

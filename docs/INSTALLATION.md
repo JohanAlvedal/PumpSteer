@@ -89,7 +89,8 @@ After setup, check that:
 {: .note }
 It can take a few minutes after HA startup before all entities report valid states.
 PumpSteer falls back to **safe mode** (passing through real outdoor temp) until all
-required sensors are available.
+required sensors are available. Temperature sensors that only report when their value
+changes are accepted at the latest 5 minutes after HA has started.
 
 ---
 

@@ -7,7 +7,8 @@ from types import SimpleNamespace
 import pytest
 from test_safe_mode_output import setup_sensor  # noqa: F401 -- shared HA boundary
 
-from custom_components.pumpsteer.sensor import MODE_PI
+from custom_components.pumpsteer.sensor import MODE_PI, MODE_SAFE
+from custom_components.pumpsteer.settings import STARTUP_REPORT_GRACE_MINUTES
 
 
 @pytest.fixture
@@ -134,9 +135,7 @@ def test_start_invalid_event_time_uses_conservative_now(control, event_time):
     assert len(sensor.hass.services.calls) == 2
 
 
-def test_reload_waits_for_new_reports(control, monkeypatch):
-    sensor, states, clock = control
-    _report(states, clock)
+def _prepare_reload(sensor, monkeypatch):
     sensor.hass.is_running = True
     subscriptions = []
     sensor.hass.bus = SimpleNamespace(
@@ -148,14 +147,100 @@ def test_reload_waits_for_new_reports(control, monkeypatch):
         return None
 
     monkeypatch.setattr(sensor, "async_get_last_extra_data", no_extra, raising=False)
+    return subscriptions
+
+
+@pytest.mark.parametrize("report_age", [timedelta(0), timedelta(hours=3)])
+def test_reload_uses_live_unchanged_values(control, monkeypatch, report_age):
+    """#290: change-only sensors must not hold a reload in safe mode."""
+    sensor, states, clock = control
+    _report(states, clock)
+    for key in ("sensor.indoor", "sensor.outdoor"):
+        states[key].last_reported = clock[0] - report_age
+    subscriptions = _prepare_reload(sensor, monkeypatch)
     asyncio.run(sensor.async_added_to_hass())
-    assert sensor.hass.services.calls == []
     assert subscriptions == []  # HA is already running
+    assert sensor.extra_state_attributes["mode"] == MODE_PI
+    assert len(sensor.hass.services.calls) == 2
+
+
+def test_reload_still_rejects_restored_values(control, monkeypatch):
+    sensor, states, clock = control
+    _report(states, clock, restored=True)
+    _prepare_reload(sensor, monkeypatch)
+    asyncio.run(sensor.async_added_to_hass())
+    assert sensor.state is None
+    assert sensor.hass.services.calls == []
     clock[0] += timedelta(seconds=1)
     _report(states, clock)
     asyncio.run(sensor.async_update())
     assert sensor.extra_state_attributes["mode"] == MODE_PI
     assert len(sensor.hass.services.calls) == 2
+
+
+def _grace():
+    return timedelta(minutes=STARTUP_REPORT_GRACE_MINUTES)
+
+
+def test_start_grace_releases_change_only_sensor(control):
+    """#290: a silent sensor is accepted once the startup window has elapsed."""
+    sensor, states, clock = control
+    _report(states, clock)  # Last report before HA start, never repeated.
+    event = SimpleNamespace(time_fired=clock[0])
+    asyncio.run(sensor._handle_ha_started(event))
+    assert sensor.hass.services.calls == []
+    clock[0] += _grace() - timedelta(seconds=1)
+    asyncio.run(sensor.async_update())
+    assert sensor.hass.services.calls == []
+    assert sensor.extra_state_attributes["mode"] != MODE_PI
+    clock[0] += timedelta(seconds=1)
+    asyncio.run(sensor.async_update())
+    assert sensor.extra_state_attributes["mode"] == MODE_PI
+    assert len(sensor.hass.services.calls) == 2
+    assert sensor._temperature_reported_after is None
+
+
+def test_start_grace_is_measured_from_start_event(control):
+    sensor, states, clock = control
+    _report(states, clock)
+    event = SimpleNamespace(time_fired=clock[0])
+    clock[0] += timedelta(minutes=1)  # Handler runs after the event.
+    asyncio.run(sensor._handle_ha_started(event))
+    clock[0] = event.time_fired + _grace()
+    asyncio.run(sensor.async_update())
+    assert len(sensor.hass.services.calls) == 2
+
+
+@pytest.mark.parametrize("value", ["unavailable", "unknown", "nan"])
+def test_start_grace_does_not_accept_restored_or_invalid(control, value):
+    sensor, states, clock = control
+    _report(states, clock, restored=True)
+    asyncio.run(sensor._handle_ha_started(SimpleNamespace(time_fired=clock[0])))
+    clock[0] += _grace()
+    asyncio.run(sensor.async_update())
+    assert sensor.hass.services.calls == []
+    _report(states, clock)
+    states["sensor.indoor"].state = value
+    asyncio.run(sensor.async_update())
+    # Safe mode may pass through the real outdoor value, never a PI output.
+    assert sensor.extra_state_attributes["mode"] == MODE_SAFE
+    assert "indoor sensor" in sensor.extra_state_attributes["status"]
+    states["sensor.indoor"].state = "21"
+    clock[0] += timedelta(minutes=1)
+    asyncio.run(sensor.async_update())
+    assert sensor.extra_state_attributes["mode"] == MODE_PI
+
+
+def test_fresh_report_within_grace_still_qualifies_immediately(control):
+    sensor, states, clock = control
+    _report(states, clock)
+    asyncio.run(sensor._handle_ha_started(SimpleNamespace(time_fired=clock[0])))
+    clock[0] += timedelta(seconds=30)
+    _report(states, clock)
+    asyncio.run(sensor.async_update())
+    assert len(sensor.hass.services.calls) == 2
+    # Cutoff stays active until the window ends; only the elapsed window clears it.
+    assert sensor._temperature_reported_after is not None
 
 
 def test_before_ha_start_sends_nothing(control):
