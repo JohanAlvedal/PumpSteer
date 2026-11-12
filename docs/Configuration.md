@@ -175,6 +175,12 @@ This slider also controls **pre-brake lead time**. A higher value means PumpStee
 starts the brake ramp earlier before an expensive slot, so the brake is fully engaged
 the moment the slot begins. A thermally heavy house needs more lead time.
 
+{: .important }
+It also sets the **short-dip bridge window**: a cheap gap between expensive periods is
+bridged (brake held) when the next expensive period starts within
+`max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)`. Values up to 2.5 keep the 30-minute
+default; 5.0 bridges 45 minutes; 6.0 bridges 54 minutes; 10.0 bridges 90 minutes.
+
 ---
 
 ## Switches
@@ -395,7 +401,9 @@ output. At 15 °C, the effect is very strong.
 BRAKE_HOLD_MINUTES: Final[float] = 30.0
 ```
 
-This is the maximum non-expensive gap PumpSteer may bridge between expensive periods.
+This is the minimum bridge window. The effective window is
+`max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)`, so heavier houses (higher Brake Ramp Time)
+bridge longer gaps.
 A gap is held only when the next expensive period starts within this window; otherwise
 the brake begins ramping out immediately. During a bridge the existing brake factor is
 held flat rather than ramped higher.

@@ -13,6 +13,9 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The short-dip bridge window now scales with Brake Ramp Time (house inertia): `max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)`. Heavy houses no longer drop the brake (or let preheat take over) during a cheap gap shorter than one full ramp-out + ramp-in. No change at the default value 2.0 (window stays 30 min). The `bridge_limit_minutes` attribute shows the effective window.
+
 ---
 
 ## [2.2.7] — Change-only temperature sensors no longer stuck in safe mode

@@ -1494,7 +1494,13 @@ class PumpSteerSensor(RestoreEntity):
         #     Only makes sense when it is actually cold outside — boosting in
         #     warm weather wastes energy without benefit.
 
-        brake_hold = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
+        # Bridge window scales with house inertia: if the next expensive period
+        # starts before a full ramp-out + ramp-in could complete, releasing the
+        # brake only causes oscillation. brake_hold_minutes acts as the floor.
+        brake_hold = max(
+            float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES)),
+            ramp_in + ramp_out,
+        )
         minutes_until_expensive = (
             self._minutes_until_expensive(
                 categories,

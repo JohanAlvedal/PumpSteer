@@ -127,6 +127,15 @@ the cheap dip and then immediately ramp in again — causing oscillation and ext
 dips without allowing a distant expensive period, for example several hours away, to
 keep the system unnecessarily braked.
 
+**Bridge window scales with house inertia:**
+The effective window is `max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)`. If the next
+expensive period starts before the brake could ramp fully out and back in, releasing
+gains almost nothing. Example with inertia 6 (ramp_in 36, ramp_out 18) and a 45-minute
+dip under a fixed 30-minute window: the brake released (and preheat could wipe it
+instantly), then pre-brake started ramping in again 36 minutes before the next
+expensive slot — only ~9 minutes of real release, paid for with a full brake rebuild.
+At default inertia (2.0) the window stays 30 minutes, so behaviour is unchanged.
+
 **Factor behavior during a bridge:**
 The current brake factor is held constant. A bridge is not treated as a new brake
 request, because doing so would continue ramping the brake upward during a cheap/normal
