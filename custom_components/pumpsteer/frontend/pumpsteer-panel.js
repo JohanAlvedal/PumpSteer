@@ -49,6 +49,28 @@ const TEXT = {
     holiday: "Semesterläge",
     holidaySub: "Lägre måltemperatur",
     targetTemp: "Måltemperatur",
+    summer: "Sommargräns",
+    summerSub: "Ute över detta = ingen styrning",
+    helpLabel: "Förklaring",
+    help: {
+      aggressiveness: (n) =>
+        n === 0
+          ? "Nivå 0 stänger av all prisstyrning. PumpSteer håller bara innetemperaturen mot målet med PI-reglering."
+          : `Hur hårt PumpSteer får spara. På nivå ${n} bromsar den vid dyr el men släpper bromsen om inne går under målet −${COMFORT_DROP[n].toLocaleString("sv")}°. Vid förvärmning får inne bli högst +${PREHEAT_HEADROOM[n].toLocaleString("sv")}° över målet. Högre nivå = större besparing men större temperatursvängningar.`,
+      target_temperature: () =>
+        "Innetemperaturen PumpSteer styr mot. PI-regulatorn justerar signalen till värmepumpen så att inne hamnar här, och både bromsens komfortgräns och förvärmningens tak räknas från detta värde.",
+      preheat: () =>
+        "När en dyr period närmar sig och väderprognosen visar kyla värmer PumpSteer huset lite extra medan elen är billigare. Huset lagrar värmen och klarar sedan bromsen bättre. Stängs av automatiskt om inne redan når taket för vald aggressivitet.",
+      holiday: () =>
+        `Sänker måltemperaturen till ${HOLIDAY_TEMP}° under semesterperioden (start och slut ställs in med PumpSteers datum-entiteter). Prislogiken fungerar som vanligt.`,
+      house_inertia: (v) => {
+        const rin = Math.max(RAMP.min, Math.min(RAMP.max, (v ?? 2) * RAMP.scale));
+        const rout = Math.max(RAMP.min, rin * RAMP.outFactor);
+        return `Hur mjukt bromsen går in och ut. Värde × ${RAMP.scale} = minuter för inrampning (${RAMP.min}–${RAMP.max} min). Nu: in på ${Math.round(rin)} min, ut på ${Math.round(rout)} min. Bromsen börjar också rampa in så långt före en dyr period. Tyngre hus (betong, golvvärme) tål ett högre värde.`;
+      },
+      summer_threshold: () =>
+        "När den riktiga utetemperaturen är på eller över gränsen går PumpSteer i sommarläge och skickar den riktiga utetemperaturen vidare oförändrad. Ingen bromsning eller förvärmning sker.",
+    },
     ramp: "Brake Ramp Time",
     rampSub: "Hur mjukt bromsen går in",
     status: "Status",
@@ -115,6 +137,28 @@ const TEXT = {
     holiday: "Holiday mode",
     holidaySub: "Lower target temperature",
     targetTemp: "Target temperature",
+    summer: "Summer threshold",
+    summerSub: "Outdoor above this = no control",
+    helpLabel: "Explanation",
+    help: {
+      aggressiveness: (n) =>
+        n === 0
+          ? "Level 0 turns off all price control. PumpSteer only holds the indoor temperature at target with PI control."
+          : `How hard PumpSteer may save. At level ${n} it brakes on expensive power but releases the brake if indoor drops below target −${COMFORT_DROP[n]}°. When preheating, indoor may rise at most +${PREHEAT_HEADROOM[n]}° above target. Higher level = more saving but larger temperature swings.`,
+      target_temperature: () =>
+        "The indoor temperature PumpSteer steers towards. The PI controller adjusts the signal to the heat pump so indoor ends up here; the brake's comfort floor and the preheat ceiling are both counted from this value.",
+      preheat: () =>
+        "When an expensive period is approaching and the forecast is cold, PumpSteer heats the house a little extra while power is cheaper. The house stores the heat and handles the brake better. Stops automatically when indoor reaches the ceiling for the chosen aggressiveness.",
+      holiday: () =>
+        `Lowers the target to ${HOLIDAY_TEMP}° during the holiday period (start and end are set with PumpSteer's date entities). Price logic works as usual.`,
+      house_inertia: (v) => {
+        const rin = Math.max(RAMP.min, Math.min(RAMP.max, (v ?? 2) * RAMP.scale));
+        const rout = Math.max(RAMP.min, rin * RAMP.outFactor);
+        return `How softly the brake engages and releases. Value × ${RAMP.scale} = ramp-in minutes (${RAMP.min}–${RAMP.max} min). Now: in over ${Math.round(rin)} min, out over ${Math.round(rout)} min. The brake also starts ramping in this long before an expensive period. Heavier houses (concrete, underfloor heating) tolerate a higher value.`;
+      },
+      summer_threshold: () =>
+        "When the real outdoor temperature is at or above this threshold, PumpSteer enters summer mode and passes the real outdoor temperature through unchanged. No braking or preheating.",
+    },
     ramp: "Brake Ramp Time",
     rampSub: "How softly the brake engages",
     status: "Status",
@@ -148,6 +192,13 @@ const MODE_COLOR = {
   summer_mode: "#8a929c", safe_mode: "#ef5350", error: "#ef5350",
 };
 const SAVE_COLOR = "#3ecf8e";
+// Mirrors settings.py (COMFORT_FLOOR_BY_AGGRESSIVENESS, PREHEAT_HEADROOM_BY_AGGRESSIVENESS,
+// RAMP_SCALE, RAMP_MIN/MAX_MINUTES, RAMP_OUT_FACTOR, HOLIDAY_TEMP). Help text only.
+const COMFORT_DROP = [0, 0.5, 1.0, 1.5, 2.0, 3.0];
+const PREHEAT_HEADROOM = [0, 0.3, 0.5, 0.7, 1.0, 1.5];
+const RAMP = { scale: 6, min: 15, max: 60, outFactor: 0.5 };
+const HOLIDAY_TEMP = 17;
+
 const PHASE = { braking: "braked", pre_braking: "braked", brake_hold: "braked", preheating: "preheated" };
 const PHASE_COLOR = { braked: "rgba(255, 159, 67, 0.22)", preheated: "rgba(79, 163, 255, 0.22)" };
 
@@ -172,6 +223,7 @@ class PumpSteerPanel extends HTMLElement {
     this._lastSig = null;
     this._raf = null;
     this._histHours = 24;
+    this._helpOpen = new Set();
     this._hist = null;
     this._histKey = null;
     this._histLoading = false;
@@ -253,7 +305,7 @@ class PumpSteerPanel extends HTMLElement {
   _signature() {
     // Re-render only when one of our entities changed (hass updates are frequent).
     const parts = Object.values(this._ids).map((id) => this._hass.states[id]?.last_updated || "");
-    return [parts.join("|"), this._range, this._entryIndex, this._statsKey, this._narrow, !!this._stats, this._histHours, this._histKey].join("#");
+    return [parts.join("|"), this._range, this._entryIndex, this._statsKey, this._narrow, !!this._stats, this._histHours, this._histKey, [...this._helpOpen].join(",")].join("#");
   }
 
   async _loadStats() {
@@ -337,6 +389,11 @@ class PumpSteerPanel extends HTMLElement {
         this._range = Number(el.dataset.value);
         this._stats = null;
         this._statsKey = null;
+        this._scheduleRender();
+      } else if (a === "help") {
+        const k = el.dataset.key;
+        if (this._helpOpen.has(k)) this._helpOpen.delete(k);
+        else this._helpOpen.add(k);
         this._scheduleRender();
       } else if (a === "hist") {
         this._histHours = Number(el.dataset.value);
@@ -740,45 +797,66 @@ class PumpSteerPanel extends HTMLElement {
       <div>${t.priceNow} ${this._fmt(a.current_price, 2)}</div>`;
   }
 
+  _helpBtn(key) {
+    const open = this._helpOpen.has(key);
+    return `<button class="help-btn ${open ? "on" : ""}" data-action="help" data-key="${key}" aria-expanded="${open}" aria-label="${this._t.helpLabel}">?</button>`;
+  }
+
+  _helpText(key, arg) {
+    if (!this._helpOpen.has(key)) return "";
+    const fn = this._t.help[key];
+    return fn ? `<div class="help-text">${esc(fn(arg))}</div>` : "";
+  }
+
   _settings() {
     const t = this._t;
     const aggr = num(this._state("aggressiveness")?.state);
     const aggrBtns = [0, 1, 2, 3, 4, 5]
       .map((n) => `<button class="seg-btn big-btn ${aggr === n ? "on accent" : ""}" data-action="aggr" data-value="${n}" aria-label="${t.aggressiveness} ${n}">${n}</button>`)
       .join("");
-    const sw = (key, label, sub) => {
+    const label = (key, main, sub) => `
+      <div class="lbl-wrap">
+        <div class="lbl-line"><span class="lbl-main">${main}</span>${this._helpBtn(key)}</div>
+        ${sub ? `<div class="small muted">${sub}</div>` : ""}
+      </div>`;
+    const sw = (key, main, sub) => {
       const st = this._state(key);
       if (!st) return "";
       const on = st.state === "on";
-      return `<div class="set-row">
-          <div><div class="lbl-main">${label}</div><div class="small muted">${sub}</div></div>
-          <button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" aria-label="${label}" data-action="toggle" data-key="${key}"><span></span></button>
-        </div>`;
+      return `<div class="set-item"><div class="set-row">
+          ${label(key, main, sub)}
+          <button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}" aria-label="${main}" data-action="toggle" data-key="${key}"><span></span></button>
+        </div>${this._helpText(key)}</div>`;
     };
-    const stepper = (key, label, sub, digits) => {
+    const stepper = (key, main, sub, digits, unit = "") => {
       const st = this._state(key);
       if (!st) return "";
-      return `<div class="set-row">
-          <div><div class="lbl-main">${label}</div><div class="small muted">${sub}</div></div>
+      return `<div class="set-item"><div class="set-row">
+          ${label(key, main, sub)}
           <div class="stepper">
-            <button data-action="step" data-key="${key}" data-dir="-1" aria-label="−">−</button>
-            <span>${this._fmt(st.state, digits)}</span>
-            <button data-action="step" data-key="${key}" data-dir="1" aria-label="+">+</button>
+            <button data-action="step" data-key="${key}" data-dir="-1" aria-label="${main} −">−</button>
+            <span>${this._fmt(st.state, digits)}${unit}</span>
+            <button data-action="step" data-key="${key}" data-dir="1" aria-label="${main} +">+</button>
           </div>
-        </div>`;
+        </div>${this._helpText(key, num(st.state))}</div>`;
     };
     return `
       <section class="card">
         <h2>${t.settings}</h2>
         ${this._state("aggressiveness") ? `
         <div class="set-block">
-          <div class="row-head"><span class="lbl-main">${t.aggressiveness}</span><span class="small muted">${aggr !== null ? t.aggrNames[aggr] || "" : ""}</span></div>
+          <div class="row-head" style="margin-bottom:10px">
+            <div class="lbl-line"><span class="lbl-main">${t.aggressiveness}</span>${this._helpBtn("aggressiveness")}</div>
+            <span class="small muted">${aggr !== null ? t.aggrNames[aggr] || "" : ""}</span>
+          </div>
           <div class="segs full">${aggrBtns}</div>
+          ${this._helpText("aggressiveness", aggr ?? 0)}
         </div>` : ""}
-        ${stepper("target_temperature", t.targetTemp, t.indoor, 1)}
+        ${stepper("target_temperature", t.targetTemp, t.indoor, 1, "°")}
         ${sw("preheat", t.preheat, t.preheatSub)}
         ${sw("holiday", t.holiday, t.holidaySub)}
         ${stepper("house_inertia", t.ramp, t.rampSub, 1)}
+        ${stepper("summer_threshold", t.summer, t.summerSub, 1, "°")}
       </section>`;
   }
 
@@ -955,7 +1033,14 @@ class PumpSteerPanel extends HTMLElement {
       .ends { display: flex; justify-content: space-between; margin-top: 6px; }
       .note { margin-top: 12px; }
       .set-block { margin-bottom: 8px; }
-      .set-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 56px; border-top: 1px solid var(--divider-color); padding: 6px 0; }
+      .set-item { border-top: 1px solid var(--divider-color); }
+      .set-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 56px; padding: 6px 0; }
+      .lbl-line { display: flex; align-items: center; gap: 6px; }
+      .help-btn { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--divider-color); background: transparent; color: var(--secondary-text-color); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; padding: 0; line-height: 1; position: relative; }
+      .help-btn::after { content: ""; position: absolute; inset: -11px; }
+      .help-btn.on { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
+      .help-text { font-size: 13px; line-height: 1.5; color: var(--secondary-text-color); background: var(--ps-track); border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; }
+      .set-block .help-text { margin-top: 10px; }
       .lbl-main { font-size: 14px; font-weight: 500; }
       .switch { flex: none; width: 52px; height: 30px; border-radius: 999px; border: none; padding: 3px; cursor: pointer; display: flex; justify-content: flex-start; background: var(--ps-track); }
       .switch.on { justify-content: flex-end; background: var(--primary-color); }

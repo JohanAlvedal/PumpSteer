@@ -36,6 +36,7 @@ _ENTITY_MAP: dict[str, tuple[str, str]] = {
     "target_temperature": ("number", "_target_temperature"),
     "aggressiveness": ("number", "_aggressiveness"),
     "house_inertia": ("number", "_house_inertia"),
+    "summer_threshold": ("number", "_summer_threshold"),
     "preheat": ("switch", "_preheat_enabled"),
     "holiday": ("switch", "_holiday_mode"),
 }
