@@ -57,26 +57,16 @@ const TEXT = {
     notFound: "Hittar inga PumpSteer-entiteter. Är integrationen laddad?",
     loading: "Laddar…",
     now: "Nu",
-    debug: "Debug",
-    debugSub: "Historik från recordern: PI-regulator, avvikelse från målet och när PumpSteer bromsar",
-    tempChart: "Signal till pumpen",
-    indoorChart: "Inne mot mål",
-    piChart: "PI-regulator",
-    priceCtl: "Prisstyrning",
-    modeBand: "Läge",
+    history: "Komfort och styrning",
+    historySub: "Innetemperatur mot mål – bakgrunden visar när PumpSteer bromsade eller förvärmde",
+    braked: "Bromsade",
+    preheated: "Förvärmde",
+    lowestIndoor: "Lägsta inne",
     sIndoor: "Inne",
     sTarget: "Mål",
     sFake: "Till pumpen",
     sOutdoor: "Ute",
-    sError: "Fel (mål − inne)",
-    sP: "P-term",
-    sI: "I-term",
-    sBrake: "Bromsfaktor",
-    sPreheat: "Förvärmning",
-    sOffset: "Prisförskjutning",
     noHist: "Ingen historik hittades för perioden.",
-    show: "Visa",
-    hide: "Dölj",
     modes: {
       normal: "Normal", braking: "Bromsar", pre_braking: "Förbromsar", brake_hold: "Håller broms",
       preheating: "Förvärmer", precool: "Förkyler", summer_mode: "Sommarläge", holiday: "Semester",
@@ -133,26 +123,16 @@ const TEXT = {
     notFound: "No PumpSteer entities found. Is the integration loaded?",
     loading: "Loading…",
     now: "Now",
-    debug: "Debug",
-    debugSub: "Recorder history: PI controller, deviation from target and when PumpSteer brakes",
-    tempChart: "Signal to heat pump",
-    indoorChart: "Indoor vs target",
-    piChart: "PI controller",
-    priceCtl: "Price control",
-    modeBand: "Mode",
+    history: "Comfort and control",
+    historySub: "Indoor vs target – the background shows when PumpSteer braked or preheated",
+    braked: "Braked",
+    preheated: "Preheated",
+    lowestIndoor: "Lowest indoor",
     sIndoor: "Indoor",
     sTarget: "Target",
     sFake: "Sent to pump",
     sOutdoor: "Outdoor",
-    sError: "Error (target − indoor)",
-    sP: "P term",
-    sI: "I term",
-    sBrake: "Brake factor",
-    sPreheat: "Preheat",
-    sOffset: "Price offset",
     noHist: "No history found for this period.",
-    show: "Show",
-    hide: "Hide",
     modes: {
       normal: "Normal", braking: "Braking", pre_braking: "Pre-braking", brake_hold: "Holding brake",
       preheating: "Preheating", precool: "Precooling", summer_mode: "Summer mode", holiday: "Holiday",
@@ -168,6 +148,8 @@ const MODE_COLOR = {
   summer_mode: "#8a929c", safe_mode: "#ef5350", error: "#ef5350",
 };
 const SAVE_COLOR = "#3ecf8e";
+const PHASE = { braking: "braked", pre_braking: "braked", brake_hold: "braked", preheating: "preheated" };
+const PHASE_COLOR = { braked: "rgba(255, 159, 67, 0.22)", preheated: "rgba(79, 163, 255, 0.22)" };
 
 const esc = (v) =>
   String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -189,12 +171,6 @@ class PumpSteerPanel extends HTMLElement {
     this._statsLoading = false;
     this._lastSig = null;
     this._raf = null;
-    this._debugOpen = false;
-    try {
-      this._debugOpen = localStorage.getItem("pumpsteer.debug") === "1";
-    } catch (_e) {
-      /* storage unavailable */
-    }
     this._histHours = 24;
     this._hist = null;
     this._histKey = null;
@@ -277,7 +253,7 @@ class PumpSteerPanel extends HTMLElement {
   _signature() {
     // Re-render only when one of our entities changed (hass updates are frequent).
     const parts = Object.values(this._ids).map((id) => this._hass.states[id]?.last_updated || "");
-    return [parts.join("|"), this._range, this._entryIndex, this._statsKey, this._narrow, !!this._stats, this._debugOpen, this._histHours, this._histKey].join("#");
+    return [parts.join("|"), this._range, this._entryIndex, this._statsKey, this._narrow, !!this._stats, this._histHours, this._histKey].join("#");
   }
 
   async _loadStats() {
@@ -318,8 +294,9 @@ class PumpSteerPanel extends HTMLElement {
   }
 
   _fmt(v, digits = 1) {
-    const n = num(v);
+    let n = num(v);
     if (n === null) return "–";
+    if (Math.abs(n) < 0.5 * 10 ** -digits) n = 0; // avoid "−0,0"
     return n.toLocaleString(this._lang, { minimumFractionDigits: digits, maximumFractionDigits: digits });
   }
 
@@ -360,14 +337,6 @@ class PumpSteerPanel extends HTMLElement {
         this._range = Number(el.dataset.value);
         this._stats = null;
         this._statsKey = null;
-        this._scheduleRender();
-      } else if (a === "debug") {
-        this._debugOpen = !this._debugOpen;
-        try {
-          localStorage.setItem("pumpsteer.debug", this._debugOpen ? "1" : "0");
-        } catch (_e) {
-          /* storage unavailable */
-        }
         this._scheduleRender();
       } else if (a === "hist") {
         this._histHours = Number(el.dataset.value);
@@ -561,7 +530,7 @@ class PumpSteerPanel extends HTMLElement {
 
   async _loadHistory() {
     const id = this._ids.control;
-    if (!id || !this._debugOpen || this._histLoading) return;
+    if (!id || this._histLoading) return;
     const key = `${id}:${this._histHours}`;
     if (this._histKey === key) return;
     this._histLoading = true;
@@ -618,7 +587,7 @@ class PumpSteerPanel extends HTMLElement {
     return out;
   }
 
-  _lineChart(series, { t0, t1, height = 150, fixed = null, unit = "", digits = 1 }) {
+  _lineChart(series, { t0, t1, height = 150, fixed = null, unit = "", digits = 1, bands = "" }) {
     const vals = series.flatMap((s) => s.points.map((p) => p[1]).filter((v) => v !== null));
     if (!vals.length) return "";
     let lo = fixed ? fixed[0] : Math.min(...vals);
@@ -658,100 +627,76 @@ class PumpSteerPanel extends HTMLElement {
     const legend = series.map((s) => `<span><i class="${s.dash ? "dash" : ""}" style="${s.dash ? `border-color:${s.color}` : `background:${s.color}`}"></i>${s.name}</span>`).join("");
     return `
       <div class="lc" style="height:${height}px">
+        ${bands}
         ${gridHtml}
         <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">${paths}</svg>
       </div>
       <div class="legend compact">${legend}</div>`;
   }
 
-  _debugSection() {
+  _historySection() {
     const t = this._t;
-    const toggle = `<button class="seg-btn" data-action="debug" aria-expanded="${this._debugOpen}">${this._debugOpen ? t.hide : t.show}</button>`;
-    let body = "";
-    if (this._debugOpen) {
-      const hh = [6, 24, 48]
-        .map((h) => `<button class="seg-btn ${h === this._histHours ? "on" : ""}" data-action="hist" data-value="${h}">${h} h</button>`)
+    const hh = [24, 48]
+      .map((h) => `<button class="seg-btn ${h === this._histHours ? "on" : ""}" data-action="hist" data-value="${h}">${h} h</button>`)
+      .join("");
+    const h = this._hist;
+    let body;
+    if (!h) {
+      body = `<div class="muted">${t.loading}</div>`;
+    } else if (!h.rows.length) {
+      body = `<div class="muted">${t.noHist}</div>`;
+    } else {
+      const R = h.rows;
+      const span = h.t1 - h.t0;
+      // Group consecutive rows into control phases (braking, preheating, ...).
+      const runs = [];
+      R.forEach((r) => {
+        const g = PHASE[r.a.mode] || null;
+        const last = runs[runs.length - 1];
+        if (last && last.g === g) return;
+        if (last) last.end = r.t;
+        runs.push({ g, start: r.t, end: h.t1 });
+      });
+      const hours = (g) => runs.filter((r) => r.g === g).reduce((acc, r) => acc + (r.end - r.start), 0) / 3600000;
+      const bands = runs
+        .filter((r) => r.g)
+        .map((r) => {
+          const left = ((r.start - h.t0) / span) * 100;
+          const w = ((r.end - r.start) / span) * 100;
+          const label = `${t[r.g]} ${this._time(r.start)}–${this._time(r.end)}`;
+          return `<div class="phase" style="left:${left.toFixed(3)}%;width:${w.toFixed(3)}%;background:${PHASE_COLOR[r.g]}" title="${esc(label)}"></div>`;
+        })
         .join("");
-      const h = this._hist;
-      let charts;
-      if (!h) {
-        charts = `<div class="muted">${t.loading}</div>`;
-      } else if (!h.rows.length) {
-        charts = `<div class="muted">${t.noHist}</div>`;
-      } else {
-        const R = h.rows;
-        const pick = (fn) => R.map((r) => [r.t, num(fn(r))]);
-        const opt = { t0: h.t0, t1: h.t1 };
-        const indoorChart = this._lineChart(
-          [
-            { name: t.sIndoor, color: "var(--primary-text-color)", points: pick((r) => r.a.indoor_temperature), width: 2.5 },
-            { name: t.sTarget, color: "#3ecf8e", points: pick((r) => r.a.target_temperature), dash: true },
-          ],
-          { ...opt, height: 130, unit: "°" }
-        );
-        const temp = this._lineChart(
-          [
-            { name: t.sFake, color: "#ff9f43", points: R.map((r) => [r.t, r.s]), width: 2.5 },
-            { name: t.sOutdoor, color: "#8a929c", points: pick((r) => r.a.outdoor_temperature) },
-          ],
-          { ...opt, height: 150, unit: "°" }
-        );
-        const pi = this._lineChart(
-          [
-            { name: t.sError, color: "#ef5350", points: pick((r) => r.a.pi_error_c), width: 2.5 },
-            { name: t.sP, color: "#4fa3ff", points: pick((r) => r.a.pi_p_term) },
-            { name: t.sI, color: "#a78bfa", points: pick((r) => r.a.pi_i_term) },
-          ],
-          { ...opt, height: 150, unit: "°", digits: 2 }
-        );
-        const ctl = this._lineChart(
-          [
-            { name: t.sBrake, color: "#ff9f43", points: pick((r) => (r.a.brake_factor ?? 0) * 100) },
-            { name: t.sPreheat, color: "#4fa3ff", points: pick((r) => (r.a.mode === "preheating" ? (r.a.preheat_factor ?? 0) * 100 : 0)) },
-          ],
-          { ...opt, height: 110, fixed: [0, 100], unit: " %", digits: 0 }
-        );
-        const span = h.t1 - h.t0;
-        const runs = [];
-        R.forEach((r) => {
-          const m = r.a.mode || "normal";
-          const last = runs[runs.length - 1];
-          if (last && last.m === m) return;
-          if (last) last.end = r.t;
-          runs.push({ m, start: r.t, end: h.t1 });
-        });
-        const bands = runs
-          .map((run) => {
-            const left = ((run.start - h.t0) / span) * 100;
-            const w = ((run.end - run.start) / span) * 100;
-            const label = `${t.modes[run.m] || run.m} ${this._time(run.start)}–${this._time(run.end)}`;
-            return `<div style="left:${left.toFixed(3)}%;width:${(w + 0.05).toFixed(3)}%;background:${MODE_COLOR[run.m] || MODE_COLOR.normal}" title="${esc(label)}"></div>`;
-          })
-          .join("");
-        const seen = [...new Set(R.map((r) => r.a.mode || "normal"))];
-        const modeLegend = seen.map((m) => `<span><i style="background:${MODE_COLOR[m] || MODE_COLOR.normal}"></i>${esc(t.modes[m] || m)}</span>`).join("");
-        const ticks = this._ticks(h.t0, h.t1)
-          .map((k) => `<span style="left:${k.left.toFixed(2)}%">${k.label}</span>`)
-          .join("");
-        charts = `
-          <div class="hov">
-            <div class="dbg-title">${t.indoorChart}</div>${indoorChart}
-            <div class="dbg-title">${t.tempChart}</div>${temp}
-            <div class="dbg-title">${t.piChart}</div>${pi}
-            <div class="dbg-title">${t.priceCtl}</div>${ctl}
-            <div class="dbg-title">${t.modeBand}</div>
-            <div class="band">${bands}</div>
-            <div class="ticks">${ticks}</div>
-            <div class="legend compact">${modeLegend}</div>
-            <div class="cursor" hidden></div>
-            <div class="readout" hidden></div>
-          </div>`;
-      }
-      body = `<div class="row-head" style="margin-top:4px"><div class="small muted">${t.debugSub}</div><div class="segs">${hh}</div></div>${charts}`;
+      const indoorVals = R.map((r) => num(r.a.indoor_temperature)).filter((v) => v !== null);
+      const minIn = indoorVals.length ? Math.min(...indoorVals) : null;
+      const chart = this._lineChart(
+        [
+          { name: t.sIndoor, color: "var(--primary-text-color)", points: R.map((r) => [r.t, num(r.a.indoor_temperature)]), width: 2.5 },
+          { name: t.sTarget, color: "#3ecf8e", points: R.map((r) => [r.t, num(r.a.target_temperature)]), dash: true },
+        ],
+        { t0: h.t0, t1: h.t1, height: 220, unit: "°", bands }
+      );
+      const ticks = this._ticks(h.t0, h.t1)
+        .map((k) => `<span style="left:${k.left.toFixed(2)}%">${k.label}</span>`)
+        .join("");
+      body = `
+        <div class="hist-sum">
+          <div><span class="dot" style="background:${MODE_COLOR.braking}"></span>${t.braked} <b>${this._fmt(hours("braked"), 1)} h</b></div>
+          <div><span class="dot" style="background:${MODE_COLOR.preheating}"></span>${t.preheated} <b>${this._fmt(hours("preheated"), 1)} h</b></div>
+          <div>${t.lowestIndoor} <b>${this._fmt(minIn)}°</b></div>
+        </div>
+        <div class="hov">
+          ${chart.replace('<div class="legend compact">', `<div class="ticks">${ticks}</div><div class="legend compact">`)}
+          <div class="cursor" hidden></div>
+          <div class="readout" hidden></div>
+        </div>`;
     }
     return `
       <section class="card">
-        <div class="row-head" style="margin-bottom:${this._debugOpen ? 8 : 0}px"><h2 style="margin:0">${t.debug}</h2>${toggle}</div>
+        <div class="row-head">
+          <div><h2>${t.history}</h2><div class="small muted">${t.historySub}</div></div>
+          <div class="segs">${hh}</div>
+        </div>
         ${body}
       </section>`;
   }
@@ -790,10 +735,9 @@ class PumpSteerPanel extends HTMLElement {
     out.style.right = f > 0.55 ? `${(rect.width - x + 10).toFixed(1)}px` : "auto";
     out.innerHTML = `
       <b>${this._time(tt)} · ${esc(t.modes[a.mode] || a.mode || "")}</b>
-      <div>${t.sIndoor} ${this._fmt(a.indoor_temperature)}° / ${t.sTarget} ${this._fmt(a.target_temperature)}°</div>
+      <div>${t.sIndoor} ${this._fmt(a.indoor_temperature)}° · ${t.sTarget} ${this._fmt(a.target_temperature)}°</div>
       <div>${t.sFake} ${this._fmt(r.s)}° · ${t.sOutdoor} ${this._fmt(a.outdoor_temperature)}°</div>
-      <div>${t.sError} ${this._fmt(a.pi_error_c, 2)}° · P ${this._fmt(a.pi_p_term, 2)} · I ${this._fmt(a.pi_i_term, 2)}</div>
-      <div>${t.sBrake} ${this._fmt((a.brake_factor ?? 0) * 100, 0)} % · ${t.sOffset} ${this._fmt(a.price_offset_c, 1)}°</div>`;
+      <div>${t.priceNow} ${this._fmt(a.current_price, 2)}</div>`;
   }
 
   _settings() {
@@ -914,8 +858,8 @@ class PumpSteerPanel extends HTMLElement {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5"></path><path d="M12 16h.01"></path></svg>
               <div><h2>${t.why}</h2><p>${this._explain(mode, a)}</p></div>
             </section>
+            ${this._historySection()}
             ${this._savingsSection()}
-            ${this._debugSection()}
           </main>
           <aside>
             ${this._settings()}
@@ -1028,19 +972,20 @@ class PumpSteerPanel extends HTMLElement {
       .nowline span { position: absolute; top: 0; left: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--ps-card); padding: 0 4px; border-radius: 4px; }
       section.card > .chart-wrap { margin-top: 22px; }
       .hov { position: relative; touch-action: pan-y; }
-      .dbg-title { font-size: 12px; font-weight: 600; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 6px; }
       .lc { position: relative; margin-left: 40px; }
       .lc svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .phase { position: absolute; top: 0; bottom: 0; }
+      .hist-sum { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--secondary-text-color); margin-bottom: 14px; }
+      .hist-sum b { color: var(--primary-text-color); font-weight: 600; margin-left: 4px; }
+      .hist-sum .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
       .gl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--divider-color); }
       .gl.zero { border-top: 1px solid var(--secondary-text-color); }
       .gl span { position: absolute; right: calc(100% + 6px); top: -8px; font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; }
       .legend.compact { margin: 8px 0 0 40px; gap: 12px; }
-      .band { position: relative; height: 16px; margin-left: 40px; border-radius: 4px; overflow: hidden; background: var(--ps-track); }
-      .band div { position: absolute; top: 0; bottom: 0; }
       .ticks { position: relative; height: 16px; margin: 6px 0 0 40px; }
       .ticks span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--secondary-text-color); }
-      .cursor { position: absolute; top: 24px; bottom: 40px; width: 0; border-left: 1px dashed var(--primary-text-color); pointer-events: none; }
-      .readout { position: absolute; top: 28px; z-index: 2; pointer-events: none; background: var(--ps-card); border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,.25); white-space: nowrap; }
+      .cursor { position: absolute; top: 0; bottom: 52px; width: 0; border-left: 1px dashed var(--primary-text-color); pointer-events: none; }
+      .readout { position: absolute; top: 8px; z-index: 2; pointer-events: none; background: var(--ps-card); border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,.25); white-space: nowrap; }
       button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
     </style>`;
   }
