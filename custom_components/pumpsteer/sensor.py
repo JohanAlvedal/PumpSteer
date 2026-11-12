@@ -2259,6 +2259,7 @@ class ThermalOutlookSensor(SensorEntity):
             "precool_risk": o.precool_risk,
             "preheat_worthwhile": o.preheat_worthwhile,
             "preheat_strength": round(o.preheat_strength, 2),
+            "expected_drop_c": o.expected_drop_c,
         }
 
     async def async_update(self) -> None:

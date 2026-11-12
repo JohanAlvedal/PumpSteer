@@ -13,6 +13,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- `sensor.pumpsteer_thermal_outlook` no longer reports `preheat` through most of the heating season. `preheat_worthwhile` now also requires the forecast to drop at least 2 °C below the current temperature within 12 hours; steady cold alone gives `idle`. `preheat_strength` scales with the size of that drop (full strength at 6 °C) instead of the distance to the summer threshold, which saturated at 1.0 on every winter night.
+- New attribute `expected_drop_c` on `sensor.pumpsteer_thermal_outlook`.
+
+### Compatibility
+- Affects preheat-boost (block 5b) only when `switch.pumpsteer_preheat_boost` is on: boost now fires only before expensive periods with a coming temperature drop. Braking and pre-brake are unchanged.
+
 ---
 
 ## [2.2.7] — Change-only temperature sensors no longer stuck in safe mode

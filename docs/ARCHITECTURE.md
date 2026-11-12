@@ -345,8 +345,9 @@ ThermalOutlook determines:
 
 | Attribute | Description |
 |---|---|
-| `preheat_worthwhile` | True if cold enough, long enough, and no warm day incoming |
-| `preheat_strength` | 0.0–1.0, scales with how cold the forecast is |
+| `preheat_worthwhile` | True if cold enough, no warm day incoming, and the forecast drops at least `PREHEAT_MIN_DROP_C` (2 °C) below now within `PREHEAT_DROP_HOURS` (12 h). Steady cold alone is not enough |
+| `preheat_strength` | 0.0–1.0, `expected_drop_c / PREHEAT_FULL_DROP_C` (6 °C) |
+| `expected_drop_c` | Drop from now to the coldest forecast point within `PREHEAT_DROP_HOURS` |
 | `warming_trend` | Temperature rising in the next 6 hours |
 | `cooling_trend` | Temperature falling in the next 6 hours |
 | `precool_risk` | Warm period coming that will heat the house naturally |

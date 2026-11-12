@@ -42,6 +42,14 @@ class ForecastPoint:
     source_weather: str = "unknown"
 
 
+# Preheat is only worthwhile if it is about to get colder than it is now.
+# Steady cold alone is not a reason to preheat (the heat pump curve already
+# handles it); a coming drop means higher demand / lower COP later.
+PREHEAT_DROP_HOURS = 12  # Look-ahead window for the expected drop
+PREHEAT_MIN_DROP_C = 2.0  # Minimum drop (now -> coldest point) to enable preheat
+PREHEAT_FULL_DROP_C = 6.0  # Drop that gives preheat_strength = 1.0
+
+
 @dataclass
 class ThermalOutlook:
     """
@@ -77,6 +85,7 @@ class ThermalOutlook:
     # Diagnostic summary outputs
     preheat_worthwhile: bool  # Gates preheat boost in block 5b
     preheat_strength: float  # Scales preheat boost magnitude (0.0–1.0)
+    expected_drop_c: float = 0.0  # Now -> coldest point within PREHEAT_DROP_HOURS
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -337,6 +346,9 @@ def analyze_thermal_outlook(
     now_hour: int = 0,  # accepted for API compatibility, not used in logic
     precool_margin: float = 3.0,
     trend_hours: int = 6,
+    drop_hours: int = PREHEAT_DROP_HOURS,
+    min_drop_c: float = PREHEAT_MIN_DROP_C,
+    full_drop_c: float = PREHEAT_FULL_DROP_C,
 ) -> ThermalOutlook:
     """
     Analyze a ForecastPoint list and return a ThermalOutlook.
@@ -409,19 +421,36 @@ def analyze_thermal_outlook(
     # Warm daytime period ahead may reduce the value of preheating.
     precool_risk = day_max is not None and day_max >= summer_threshold + precool_margin
 
-    # Diagnostic estimate only in 2.1.0.
+    # Expected drop from now to the coldest point within drop_hours.
+    # Preheating only pays off if it is about to get colder than it is now.
+    now_temp = next(
+        (point.outdoor_temp for point in points[:2] if point.outdoor_temp is not None),
+        None,
+    )
+    drop_window = [
+        point.outdoor_temp
+        for point in points[:drop_hours]
+        if point.outdoor_temp is not None
+    ]
+    expected_drop = (
+        max(0.0, now_temp - min(drop_window))
+        if now_temp is not None and drop_window
+        else 0.0
+    )
+
     preheat_worthwhile = (
         hours_cold >= 3
         and not warming
         and not precool_risk
         and (day_max is None or day_max < summer_threshold - 2.0)
+        and expected_drop >= min_drop_c
     )
 
-    # Diagnostic estimate only in 2.1.0.
+    # Strength scales with how much colder it gets, not with distance to the
+    # summer threshold (which saturates at 1.0 every winter night).
     preheat_strength = 0.0
-    if preheat_worthwhile and night_min is not None:
-        delta = summer_threshold - night_min
-        preheat_strength = min(1.0, max(0.0, delta / 15.0))
+    if preheat_worthwhile and full_drop_c > 0:
+        preheat_strength = min(1.0, expected_drop / full_drop_c)
 
     # NOTE:
     # preheat_worthwhile and preheat_strength feed into block 5b in sensor.py.
@@ -437,4 +466,5 @@ def analyze_thermal_outlook(
         precool_risk=precool_risk,
         preheat_worthwhile=preheat_worthwhile,
         preheat_strength=preheat_strength,
+        expected_drop_c=round(expected_drop, 1),
     )
