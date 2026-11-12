@@ -26,6 +26,55 @@ automatically and do not need to be changed.
 
 ---
 
+## Built-in sidebar panel (experimental)
+
+PumpSteer can add its own page to the Home Assistant sidebar. No custom cards
+or HACS frontend plugins are needed, and it works fully locally.
+
+**Enable it:** Settings → Devices & services → PumpSteer → Configure →
+**Show PumpSteer panel in the sidebar**. Turning the option off removes the page.
+The panel is display only: settings changed there use the normal PumpSteer
+number and switch entities.
+
+The page shows:
+
+- the signal sent to the heat pump next to the real outdoor temperature
+- indoor vs target temperature, current price and P30/P80 class
+- price bars for the next 24 hours (from the `price_plan` attribute on
+  `sensor.pumpsteer`) with the expected action per slot
+- a plain-language explanation of the current mode
+- the **Estimated Savings** chart (7 days, 30 days, year)
+- aggressiveness, target temperature, preheat, holiday mode and Brake Ramp Time
+
+### How Estimated Savings is calculated
+
+`sensor.pumpsteer_estimated_savings` is an **estimate, not a measurement**. Nobody
+can observe the same day without PumpSteer. The sensor never affects control.
+
+For every control cycle:
+
+```
+offset_c  = signal sent − signal PI would send without price logic
+            (positive while braking, negative while preheating)
+kWh       = savings_kwh_per_c_hour × offset_c × hours
+value     = kWh × (price now − today's mean price)
+```
+
+Only the *shift* of energy in time is valued: every braked kWh is assumed to be
+bought back later at today's mean price, and every preheated kWh replaces one
+that would have been bought at that price. Precool, summer mode and pure PI
+regulation are not counted.
+
+`savings_kwh_per_c_hour` (options, default 0.07) is the assumed electricity use
+per °C of signal offset per hour. 0.07 roughly matches a house losing ~200 W/K
+with a COP of ~3. Tune it to your house; it only changes the estimate.
+
+The sensor uses `state_class: total`, so Home Assistant keeps long-term
+statistics. The chart reads those statistics, which are compiled once per hour,
+so a fresh install shows no bars for the first hour.
+
+---
+
 ## Prerequisites
 
 Install these cards via HACS (Home Assistant 2026.10 or older) or the Marketplace

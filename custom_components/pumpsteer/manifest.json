@@ -9,7 +9,11 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "recorder"
+    "frontend",
+    "http",
+    "panel_custom",
+    "recorder",
+    "websocket_api"
   ],
   "documentation": "https://github.com/JohanAlvedal/pumpsteer",
   "integration_type": "hub",

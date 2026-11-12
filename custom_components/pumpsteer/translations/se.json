@@ -40,7 +40,9 @@
           "modbus_interval_minutes": "Intervall för generisk utgång",
           "ohmigo_relay_entity": "Ohmigo Active/Bypass-relä (valfritt)",
           "notification_level": "Prisnotiser",
-          "notification_cooldown_minutes": "Spärrtid för upprepade prisnotiser"
+          "notification_cooldown_minutes": "Spärrtid för upprepade prisnotiser",
+          "savings_kwh_per_c_hour": "Uppskattad besparing: kWh per °C och timme",
+          "show_panel": "Visa PumpSteer-panel i sidomenyn"
         },
         "data_description": {
           "pid_kp": "Hur kraftigt PumpSteer reagerar på aktuell temperaturdifferens. Typiskt intervall: 2,0 till 5,0.",
@@ -57,7 +59,9 @@
           "modbus_interval_minutes": "Minsta tid mellan anrop från Generic Output System.",
           "ohmigo_relay_entity": "Valfri switch-entitet för Ohmigos Active/Bypass-relä. När den är konfigurerad skapar PumpSteer en separat Relay Guard-brytare. Skyddet återställer bara ett uttryckligt OFF-läge när Ohmigo Push är på; unknown eller unavailable skickar aldrig något reläkommando.",
           "notification_level": "Välj alla prisnotiser, endast bromsning eller inga. Den befintliga notisbrytaren är fortfarande huvudbrytare.",
-          "notification_cooldown_minutes": "Minsta tid mellan två notiser av samma typ. Välj 0 för ingen spärr; 60 minuter rekommenderas. Bromsning och förvärmning har separata spärrtider."
+          "notification_cooldown_minutes": "Minsta tid mellan två notiser av samma typ. Välj 0 för ingen spärr; 60 minuter rekommenderas. Bromsning och förvärmning har separata spärrtider.",
+          "savings_kwh_per_c_hour": "Antagen elförbrukning per °C signalförskjutning och timme. Används bara för sensorn Estimated Savings. 0,07 är en grov standard för ett hus som förlorar ~200 W/K med COP ~3. Påverkar inte styrningen.",
+          "show_panel": "Lägger till en PumpSteer-sida i Home Assistants sidomeny. Endast visning; stäng av för att ta bort sidan."
         }
       }
     },

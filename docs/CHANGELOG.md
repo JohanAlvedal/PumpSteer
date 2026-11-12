@@ -13,6 +13,14 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Optional sidebar panel (`show_panel` option, off by default) with live status,
+  24 h price plan, mode explanation, settings and savings chart.
+- `sensor.pumpsteer_estimated_savings`: observational estimate of the value of
+  shifting heat between price periods (`savings_kwh_per_c_hour` option).
+- `price_offset_c`, `price_reference` and `price_plan` attributes on
+  `sensor.pumpsteer` (`price_plan` is excluded from the recorder).
+
 ---
 
 ## [2.2.7] — Change-only temperature sensors no longer stuck in safe mode

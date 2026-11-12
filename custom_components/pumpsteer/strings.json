@@ -45,7 +45,9 @@
           "modbus_interval_minutes": "Generic output push interval",
           "ohmigo_relay_entity": "Ohmigo Active/Bypass relay (optional)",
           "notification_level": "Price notification level",
-          "notification_cooldown_minutes": "Repeat notification cooldown"
+          "notification_cooldown_minutes": "Repeat notification cooldown",
+          "savings_kwh_per_c_hour": "Estimated savings: kWh per °C and hour",
+          "show_panel": "Show PumpSteer panel in the sidebar"
         },
         "data_description": {
           "pid_kp": "How strongly PumpSteer reacts to current temperature error. Typical range: 2.0 to 5.0.",
@@ -62,7 +64,9 @@
           "modbus_interval_minutes": "Minimum time between Generic Output System service calls.",
           "ohmigo_relay_entity": "Optional switch entity for the Ohmigo Active/Bypass relay. When configured, PumpSteer exposes a separate Relay Guard switch that can recover an unexpected OFF state while Ohmigo Push is ON.",
           "notification_level": "Choose all price alerts, braking only, or none. The existing Notifications switch remains the master on/off control.",
-          "notification_cooldown_minutes": "Minimum time between repeated alerts of the same type. Choose 0 for no limit; 60 minutes is recommended. Braking and preheating have independent timers."
+          "notification_cooldown_minutes": "Minimum time between repeated alerts of the same type. Choose 0 for no limit; 60 minutes is recommended. Braking and preheating have independent timers.",
+          "savings_kwh_per_c_hour": "Assumed electricity use per °C of signal offset per hour, used only for the Estimated Savings sensor. 0.07 is a rough default for a house losing ~200 W/K with COP ~3. Has no effect on control.",
+          "show_panel": "Adds a PumpSteer page to the Home Assistant sidebar. Display only; turning it off removes the page."
         }
       }
     },

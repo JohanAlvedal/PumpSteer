@@ -19,6 +19,7 @@ from homeassistant.helpers.typing import StateType
 
 from .thermal_model import ThermalModel
 
+from .const import SAVINGS_KWH_OPTION
 from .control import PIController
 from .electricity_price import (
     PRICE_EXPENSIVE,
@@ -30,6 +31,12 @@ from .electricity_price import (
 from .holiday import async_update_holiday
 from .ohmigo import async_push_ohmigo
 from .pump_log import log_event, log_mode_change
+from .savings import (
+    DEFAULT_KWH_PER_C_HOUR,
+    SavingsSample,
+    price_scale_to_currency,
+    savings_signal,
+)
 from .settings import (
     BRAKE_DELTA_C,
     BRAKE_HOLD_MINUTES,
@@ -121,6 +128,8 @@ class PumpSteerSensor(RestoreEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "control_temperature"
+    # Display-only forecast list; keep it out of the recorder database.
+    _unrecorded_attributes = frozenset({"price_plan"})
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry):
         self.hass = hass
@@ -165,6 +174,9 @@ class PumpSteerSensor(RestoreEntity):
         self._p80: float = 0.0
         self._current_price: Optional[float] = None
         self._current_price_unit: Optional[str] = None
+        # Display/estimation only; never read by control decisions.
+        self._price_reference: Optional[float] = None
+        self._price_plan: List[Dict[str, Any]] = []
 
         # Cache price thresholds once per calendar day per entity.
         # Recomputing every hour caused mid-slot reclassification: P80 could
@@ -1174,6 +1186,9 @@ class PumpSteerSensor(RestoreEntity):
             cfg,
             now,
         )
+        self._price_plan = self._build_price_plan(
+            prices, categories, interval_minutes, current_slot, now
+        )
 
         expected = {"indoor_temp_entity": indoor, "real_outdoor_entity": outdoor}
         if not self._temperature_inputs_match(cfg, expected):
@@ -1447,6 +1462,7 @@ class PumpSteerSensor(RestoreEntity):
                 mode = MODE_PI
 
             fake_temp = max(MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, fake_temp))
+            price_offset_c = fake_temp - pi_fake if mode == MODE_BRAKING else 0.0
 
             await self._set_state(
                 fake_temp,
@@ -1459,6 +1475,7 @@ class PumpSteerSensor(RestoreEntity):
                         current_cat,
                         aggressiveness,
                     ),
+                    "price_offset_c": round(price_offset_c, 2),
                     "brake_factor": round(factor, 3),
                     "comfort_floor_c": round(comfort_floor, 2),
                     "ramp_in_minutes": round(ramp_in, 1),
@@ -1550,6 +1567,7 @@ class PumpSteerSensor(RestoreEntity):
                             current_cat,
                             aggressiveness,
                         ),
+                        "price_offset_c": round(fake_temp - pi_fake, 2),
                         "brake_factor": round(factor, 3),
                         "ramp_in_minutes": round(ramp_in, 1),
                         "minutes_until_expensive": round(minutes_until_expensive, 0),
@@ -1617,6 +1635,9 @@ class PumpSteerSensor(RestoreEntity):
                     MIN_FAKE_TEMP,
                     min(MAX_FAKE_TEMP, outdoor - boosted_demand),
                 )
+                base_fake = max(
+                    MIN_FAKE_TEMP, min(MAX_FAKE_TEMP, outdoor - base_demand)
+                )
 
                 await self._set_state(
                     fake_temp,
@@ -1630,6 +1651,7 @@ class PumpSteerSensor(RestoreEntity):
                             aggressiveness,
                             boosted_demand,
                         ),
+                        "price_offset_c": round(fake_temp - base_fake, 2),
                         "preheat_enabled": self._preheat_enabled(cfg),
                         "preheat_boost_c": round(boost, 2),
                         "preheat_factor": round(preheat_factor, 3),
@@ -1738,6 +1760,7 @@ class PumpSteerSensor(RestoreEntity):
                     aggressiveness,
                     pi_demand,
                 ),
+                "price_offset_c": round(fake_temp - pi_fake, 2),
                 "preheat_enabled": self._preheat_enabled(cfg),
                 "brake_factor": round(factor, 3),
                 "ramp_in_minutes": round(ramp_in, 1),
@@ -1757,6 +1780,60 @@ class PumpSteerSensor(RestoreEntity):
             now,
         )
 
+    def _send_savings_sample(
+        self, now: datetime, offset_c: Any, cfg: Dict[str, Any]
+    ) -> None:
+        """Feed the observational savings estimate. Never affects control."""
+        try:
+            scale = price_scale_to_currency(self._current_price_unit)
+            price = self._current_price
+            reference = self._price_reference
+            k = safe_float(cfg.get(SAVINGS_KWH_OPTION))
+            async_dispatcher_send(
+                self.hass,
+                savings_signal(self._config_entry.entry_id),
+                SavingsSample(
+                    now=now,
+                    offset_c=safe_float(offset_c) or 0.0,
+                    price=price * scale if price is not None else None,
+                    reference_price=(
+                        reference * scale if reference is not None else None
+                    ),
+                    kwh_per_c_hour=k if k is not None else DEFAULT_KWH_PER_C_HOUR,
+                ),
+            )
+        except Exception as err:
+            _LOGGER.debug("Savings sample not sent: %s", err)
+
+    @staticmethod
+    def _build_price_plan(
+        prices: List[float],
+        categories: List[str],
+        interval_minutes: int,
+        current_slot: int,
+        now: datetime,
+        hours: int = 24,
+    ) -> List[Dict[str, Any]]:
+        """Upcoming price slots for display. Not used by control logic."""
+        if not prices or len(categories) != len(prices):
+            return []
+        interval = max(1, interval_minutes)
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = min(len(prices), current_slot + math.ceil(hours * 60 / interval))
+        plan = []
+        for i in range(max(0, current_slot), end):
+            start = datetime.fromtimestamp(
+                midnight.timestamp() + i * interval * 60, tz=timezone.utc
+            )
+            plan.append(
+                {
+                    "start": start.isoformat(),
+                    "price": round(prices[i], 4),
+                    "category": categories[i],
+                }
+            )
+        return plan
+
     async def _get_prices(
         self,
         cfg: Dict[str, Any],
@@ -1764,6 +1841,7 @@ class PumpSteerSensor(RestoreEntity):
     ) -> Tuple[List[float], List[str], int, int]:
         self._current_price = None
         self._current_price_unit = None
+        self._price_reference = None
 
         today_entity_id = cfg.get("electricity_price_entity")
         tomorrow_entity_id = cfg.get("price_tomorrow_entity") or today_entity_id
@@ -1900,6 +1978,7 @@ class PumpSteerSensor(RestoreEntity):
             self._clear_price_issue(today_entity_id, tomorrow_entity_id)
 
         prices = today_prices + (tomorrow_prices or [])
+        self._price_reference = sum(today_prices) / len(today_prices)
 
         # Cache price thresholds once per calendar day per entity.
         # Recomputing hourly caused mid-slot reclassification: P80 could shift
@@ -2135,9 +2214,16 @@ class PumpSteerSensor(RestoreEntity):
             "status": "ok",
             "last_updated": now.isoformat(),
             **extra,
+            "price_reference": (
+                round(self._price_reference, 4)
+                if self._price_reference is not None
+                else None
+            ),
+            "price_plan": self._price_plan,
         }
 
         cfg = self._cfg()
+        self._send_savings_sample(now, extra.get("price_offset_c", 0.0), cfg)
         await self._push_validated_temperature(
             fake_temp,
             cfg,
@@ -2296,6 +2382,8 @@ async def async_setup_entry(
     from .pump_log import setup_pump_log
 
     await hass.async_add_executor_job(setup_pump_log)
+    from .savings_sensor import PumpSteerSavingsSensor
+
     sensor = PumpSteerSensor(hass, config_entry)
     outlook_sensor = ThermalOutlookSensor(hass, config_entry)
     async_add_entities(
@@ -2304,6 +2392,10 @@ async def async_setup_entry(
             outlook_sensor,
             PumpSteerInputTemperatureSensor(sensor, "indoor_temperature"),
             PumpSteerInputTemperatureSensor(sensor, "outdoor_temperature"),
+            # Created before the first control cycle can emit a sample.
+            PumpSteerSavingsSensor(
+                hass, config_entry.entry_id, sensor._attr_device_info
+            ),
         ],
         update_before_add=False,
     )
