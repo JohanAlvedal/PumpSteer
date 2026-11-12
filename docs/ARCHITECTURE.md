@@ -74,7 +74,7 @@ Rules:
 - Always smooth — ramped in and out, never a hard step
 - `dt` per ramp step is capped at 60 seconds (prevents jumps after HA restarts)
 - Released immediately if indoor temperature falls below the comfort floor
-- A short non-expensive gap is bridged only when the next expensive period starts within `BRAKE_HOLD_MINUTES` (default 30 min)
+- A short non-expensive gap is bridged only when the next expensive period starts within `max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)` (30 min at default inertia)
 - PI integral is **frozen** while brake is active
 
 ### 4. No Double Influence
@@ -218,8 +218,8 @@ At `factor = 1.0`: full brake (PI frozen, brake temp dominates).
 
 During a valid `bridge_short_dip`, the existing brake factor is held flat. The bridge
 does not count as a new brake request and therefore does not continue ramping the factor
-upward. If the next expensive period is farther away than `BRAKE_HOLD_MINUTES`, the
-brake ramps out normally.
+upward. If the next expensive period is farther away than the bridge window
+(`max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)`), the brake ramps out normally.
 
 Ramp timing from house inertia slider:
 
@@ -345,8 +345,9 @@ ThermalOutlook determines:
 
 | Attribute | Description |
 |---|---|
-| `preheat_worthwhile` | True if cold enough, long enough, and no warm day incoming |
-| `preheat_strength` | 0.0–1.0, scales with how cold the forecast is |
+| `preheat_worthwhile` | True if cold enough, no warm day incoming, and the forecast drops at least `PREHEAT_MIN_DROP_C` (2 °C) below now within `PREHEAT_DROP_HOURS` (12 h). Steady cold alone is not enough |
+| `preheat_strength` | 0.0–1.0, `expected_drop_c / PREHEAT_FULL_DROP_C` (6 °C) |
+| `expected_drop_c` | Drop from now to the coldest forecast point within `PREHEAT_DROP_HOURS` |
 | `warming_trend` | Temperature rising in the next 6 hours |
 | `cooling_trend` | Temperature falling in the next 6 hours |
 | `precool_risk` | Warm period coming that will heat the house naturally |

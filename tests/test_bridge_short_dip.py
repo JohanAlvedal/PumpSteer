@@ -44,7 +44,7 @@ class _DummyHass:
         )
 
 
-def _make_sensor(brake_hold_minutes=30.0):
+def _make_sensor(brake_hold_minutes=30.0, house_inertia=2.0, preheat=False):
     entry = SimpleNamespace(
         entry_id="test-entry",
         data={},
@@ -56,8 +56,8 @@ def _make_sensor(brake_hold_minutes=30.0):
             "target_temperature": 21.0,
             "summer_threshold": 18.0,
             "aggressiveness": 3.0,
-            "house_inertia": 2.0,
-            "preheat_boost_enabled": False,
+            "house_inertia": house_inertia,
+            "preheat_boost_enabled": preheat,
             "brake_hold_minutes": brake_hold_minutes,
         },
     )
@@ -230,3 +230,81 @@ def test_bridge_logs_end_when_normal_control_resumes(monkeypatch):
     assert captured["mode"] == MODE_PI
     assert [event for event, _ in events].count("BRIDGE_SHORT_DIP_START") == 1
     assert [event for event, _ in events].count("BRIDGE_SHORT_DIP_END") == 1
+
+
+def test_default_inertia_keeps_configured_bridge_limit(monkeypatch):
+    # Inertia 2 -> ramp_in 15 + ramp_out 15 = 30, same as BRAKE_HOLD_MINUTES.
+    sensor = _make_sensor(brake_hold_minutes=30.0, house_inertia=2.0)
+    now = datetime(2026, 9, 20, 8, 0, tzinfo=timezone.utc)
+    sensor._brake_ramp = 0.5
+    sensor._brake_last_t = now - timedelta(minutes=1)
+
+    captured = _run_cycle(
+        sensor,
+        monkeypatch,
+        now,
+        [PRICE_NORMAL, PRICE_NORMAL, PRICE_NORMAL, PRICE_EXPENSIVE],
+    )
+
+    assert captured["extra"]["bridge_limit_minutes"] == 30.0
+    assert captured["extra"]["bridge_short_dip"] is False
+    assert captured["mode"] == MODE_PI
+
+
+def test_heavy_house_bridges_three_slot_dip(monkeypatch):
+    # Inertia 6 -> ramp_in 36 + ramp_out 18 = 54 minute bridge window.
+    sensor = _make_sensor(brake_hold_minutes=30.0, house_inertia=6.0)
+    now = datetime(2026, 9, 20, 8, 0, tzinfo=timezone.utc)
+    sensor._brake_ramp = 0.8
+    sensor._brake_last_t = now - timedelta(minutes=1)
+
+    captured = _run_cycle(
+        sensor,
+        monkeypatch,
+        now,
+        [PRICE_NORMAL, PRICE_NORMAL, PRICE_NORMAL, PRICE_EXPENSIVE],
+    )
+
+    assert captured["extra"]["bridge_limit_minutes"] == 54.0
+    assert captured["extra"]["minutes_until_expensive"] == 45.0
+    assert captured["mode"] == MODE_BRAKE_HOLD
+    assert sensor._brake_ramp == 0.8
+
+
+def test_heavy_house_bridge_blocks_preheat_takeover(monkeypatch):
+    # A cold forecast must not let preheat wipe the brake inside the window.
+    sensor = _make_sensor(brake_hold_minutes=30.0, house_inertia=6.0, preheat=True)
+    now = datetime(2026, 9, 20, 8, 0, tzinfo=timezone.utc)
+    sensor._brake_ramp = 0.8
+    sensor._brake_last_t = now - timedelta(minutes=1)
+
+    captured = _run_cycle(
+        sensor,
+        monkeypatch,
+        now,
+        [PRICE_NORMAL, PRICE_NORMAL, PRICE_NORMAL, PRICE_EXPENSIVE],
+        forecast_temps=[0.0] * 6,
+    )
+
+    assert captured["mode"] == MODE_BRAKE_HOLD
+    assert sensor._brake_ramp == 0.8
+    assert sensor._was_braking_last_cycle is True
+
+
+def test_heavy_house_still_releases_beyond_bridge_window(monkeypatch):
+    sensor = _make_sensor(brake_hold_minutes=30.0, house_inertia=6.0)
+    now = datetime(2026, 9, 20, 8, 0, tzinfo=timezone.utc)
+    sensor._brake_ramp = 0.8
+    sensor._brake_last_t = now - timedelta(minutes=1)
+
+    captured = _run_cycle(
+        sensor,
+        monkeypatch,
+        now,
+        [PRICE_NORMAL] * 4 + [PRICE_EXPENSIVE],
+    )
+
+    assert captured["extra"]["minutes_until_expensive"] == 60.0
+    assert captured["extra"]["bridge_short_dip"] is False
+    assert captured["mode"] == MODE_PI
+    assert sensor._brake_ramp < 0.8
