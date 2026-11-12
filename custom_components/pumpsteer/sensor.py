@@ -90,6 +90,13 @@ _RESTORE_BRAKE_RAMP = "brake_ramp"
 _RESTORE_BRAKE_LAST_T = "brake_last_t"
 _RESTORE_BRAKE_LAST_EXPENSIVE_T = "brake_last_expensive_t"
 _RESTORE_WAS_BRAKING = "was_braking_last_cycle"
+_RESTORE_LAST_CONTROL_T = "last_control_t"
+
+# Safe mode keeps controller memory (PI integral, brake/preheat ramps) through
+# short outages: a brief sensor dropout, a restart, or the price-list rollover
+# at midnight. After a longer outage the controller starts clean, as before.
+# Output during safe mode is unchanged (real outdoor passthrough or nothing).
+_SAFE_MODE_STATE_HOLD_SECONDS: float = 1800.0
 
 # Maximum dt_seconds allowed in _update_brake_ramp.
 # Caps the step size so a long gap between mode transitions (e.g. normal →
@@ -157,6 +164,10 @@ class PumpSteerSensor(RestoreEntity):
         # Track whether the previous control cycle had active braking.
         # Used to trigger a thermal-model fit only when a brake phase has ended.
         self._was_braking_last_cycle: bool = False
+        # Time of the last cycle that produced a regular (non-safe) output.
+        self._last_control_t: Optional[datetime] = None
+        # True while controller memory is kept across an outage (or restored).
+        self._controller_held: bool = False
         self._ramp_in_minutes: float = 15.0
         self._ramp_out_minutes: float = 15.0
 
@@ -250,12 +261,18 @@ class PumpSteerSensor(RestoreEntity):
 
         class _BrakeData(ExtraStoredData):
             def __init__(
-                self, brake_ramp, brake_last_t, brake_last_expensive_t, was_braking
+                self,
+                brake_ramp,
+                brake_last_t,
+                brake_last_expensive_t,
+                was_braking,
+                last_control_t,
             ):
                 self.brake_ramp = brake_ramp
                 self.brake_last_t = brake_last_t
                 self.brake_last_expensive_t = brake_last_expensive_t
                 self.was_braking = was_braking
+                self.last_control_t = last_control_t
 
             def as_dict(self):
                 return {
@@ -269,6 +286,9 @@ class PumpSteerSensor(RestoreEntity):
                         if self.brake_last_expensive_t
                         else None
                     ),
+                    _RESTORE_LAST_CONTROL_T: (
+                        self.last_control_t.isoformat() if self.last_control_t else None
+                    ),
                 }
 
         return _BrakeData(
@@ -276,6 +296,7 @@ class PumpSteerSensor(RestoreEntity):
             self._brake_last_t,
             self._brake_last_expensive_t,
             self._was_braking_last_cycle,
+            self._last_control_t,
         )
 
     async def async_added_to_hass(self) -> None:
@@ -326,6 +347,21 @@ class PumpSteerSensor(RestoreEntity):
                 )
             except (ValueError, TypeError):
                 self._brake_last_expensive_t = None
+            raw_last_control = data.get(_RESTORE_LAST_CONTROL_T)
+            try:
+                self._last_control_t = (
+                    datetime.fromisoformat(raw_last_control)
+                    if raw_last_control
+                    else None
+                )
+            except (ValueError, TypeError):
+                self._last_control_t = None
+            # Older stored data has no control timestamp; the brake clock is the
+            # closest record of when PumpSteer last produced regular output.
+            if self._last_control_t is None:
+                self._last_control_t = self._brake_last_t
+            # Restored memory is only reused if the outage proves to be short.
+            self._controller_held = True
         _LOGGER.debug(
             "PumpSteer restored brake state: ramp=%.3f last_t=%s last_exp=%s",
             self._brake_ramp,
@@ -889,15 +925,17 @@ class PumpSteerSensor(RestoreEntity):
         else:
             _LOGGER.debug("PumpSteer safe mode still active: %s", reason)
 
-        self._pi.reset(now)
-        self._pi_precool_paused = False
+        if self._controller_state_expired(now):
+            self._reset_controller_state(now)
+            controller_state = "reset"
+        else:
+            # Short outage: freeze controller memory without integrating the
+            # paused interval. Ramps keep their factor; their own dt caps keep
+            # the first step after recovery small.
+            self._pi.restart_clock(now)
+            self._controller_held = True
+            controller_state = "held"
         self._last_pi_result = None
-        self._brake_ramp = 0.0
-        self._preheat_ramp = 0.0
-        self._preheat_last_t = None
-        self._brake_last_t = None
-        self._brake_last_expensive_t = None
-        self._was_braking_last_cycle = False
 
         if outdoor is not None:
             self._state = round(outdoor, 1)
@@ -907,6 +945,7 @@ class PumpSteerSensor(RestoreEntity):
                 "status": f"safe_mode: {reason}",
                 "last_updated": now.isoformat(),
                 "outdoor_temperature": outdoor,
+                "controller_state": controller_state,
             }
             await self._push_validated_temperature(
                 outdoor, self._cfg(), {"real_outdoor_entity": outdoor}
@@ -918,7 +957,31 @@ class PumpSteerSensor(RestoreEntity):
                 "status": f"safe_mode (no data): {reason}",
                 "last_updated": now.isoformat(),
                 "receiver_state": "unverified",
+                "controller_state": controller_state,
             }
+
+    def _reset_controller_state(self, now: datetime) -> None:
+        """Clear PI memory and brake/preheat ramps (clean controller start)."""
+        self._pi.reset(now)
+        self._pi_precool_paused = False
+        self._brake_ramp = 0.0
+        self._preheat_ramp = 0.0
+        self._preheat_last_t = None
+        self._brake_last_t = None
+        self._brake_last_expensive_t = None
+        self._was_braking_last_cycle = False
+        self._controller_held = False
+
+    def _controller_state_expired(self, now: datetime) -> bool:
+        """Return True when safe mode has lasted too long to keep controller memory."""
+        if self._last_control_t is None:
+            return True
+        try:
+            elapsed = now.timestamp() - self._last_control_t.timestamp()
+        except (AttributeError, OverflowError, OSError, ValueError):
+            return True
+        # A large clock jump in either direction cannot prove a short outage.
+        return abs(elapsed) > _SAFE_MODE_STATE_HOLD_SECONDS
 
     def _temperature_inputs_match(self, cfg, expected) -> bool:
         current_cfg = self._cfg()
@@ -1111,6 +1174,10 @@ class PumpSteerSensor(RestoreEntity):
     async def _do_update(self) -> None:
         """Run the main control state machine."""
         now = dt_util.now()
+        # Memory held through an outage (or restored after a restart) is reused
+        # only if regular control resumes within the hold window.
+        if self._controller_held and self._controller_state_expired(now):
+            self._reset_controller_state(now)
         # Advance the clock on every control cycle, including branches that
         # pause the preheat ramp. Never count a backwards clock interval twice.
         preheat_dt_seconds = 60.0
@@ -2118,6 +2185,8 @@ class PumpSteerSensor(RestoreEntity):
             )
             log_event("SAFE_MODE_EXIT", new_mode=mode)
             self._safe_mode_warned = False
+        self._last_control_t = now
+        self._controller_held = False
         self._state = round(fake_temp, 1)
         log_mode_change(
             old_mode=self._prev_mode,

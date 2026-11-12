@@ -327,7 +327,11 @@ When required control input is missing or invalid:
 - Missing or unusable price-list data also currently enters safe mode
 - If real outdoor temperature is available, it is passed through unchanged
 - If the outdoor sensor itself is unavailable, the PumpSteer sensor becomes unavailable
-- PI and both brake/preheat ramps are reset
+- Controller memory (PI integral, brake and preheat ramps) is held for up to 30 minutes
+  since the last regular output, so a brief sensor dropout, a restart or the price-list
+  rollover at midnight does not restart braking from zero. The PI clock restarts so the
+  outage is never integrated. After a longer outage, or a large clock jump, PI and both
+  ramps are reset as before. The `controller_state` attribute shows `held` or `reset`
 - `status` contains the specific failure reason
 - Safe mode resolves automatically when valid data returns
 
