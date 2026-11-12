@@ -37,9 +37,7 @@ const TEXT = {
     year: "År",
     rangeName: { 7: "senaste 7 dagarna", 30: "senaste 30 dagarna", 365: "senaste året" },
     noStats: "Ingen statistik ännu. Home Assistant sammanställer den en gång i timmen.",
-    perDayBar: "Per dag",
-    perMonthBar: "Per månad",
-    cumulative: "Ackumulerat",
+    collecting: "Samlar data – staplarna fylls på dag för dag. Besparing uppstår bara när PumpSteer bromsar eller förvärmer.",
     estimateNote: "Uppskattning, inte mätning. Justera kWh per °C och timme under integrationens alternativ.",
     settings: "Inställningar",
     aggressiveness: "Aggressivitet",
@@ -125,9 +123,7 @@ const TEXT = {
     year: "Year",
     rangeName: { 7: "last 7 days", 30: "last 30 days", 365: "last year" },
     noStats: "No statistics yet. Home Assistant compiles them once per hour.",
-    perDayBar: "Per day",
-    perMonthBar: "Per month",
-    cumulative: "Cumulative",
+    collecting: "Collecting data – bars fill in day by day. Savings only accrue while PumpSteer brakes or preheats.",
     estimateNote: "An estimate, not a measurement. Tune kWh per °C and hour in the integration options.",
     settings: "Settings",
     aggressiveness: "Aggressiveness",
@@ -519,59 +515,107 @@ class PumpSteerPanel extends HTMLElement {
       </div>`;
   }
 
+  _savingsSlots() {
+    // One slot per day (or month) in the selected range, so a fresh install
+    // shows a single thin bar at the right instead of one huge block.
+    const year = this._range === 365;
+    const key = (d) => (year ? `${d.getFullYear()}-${d.getMonth()}` : `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+    const byKey = new Map();
+    (this._stats || []).forEach((r) => {
+      const k = key(r.start);
+      byKey.set(k, (byKey.get(k) ?? 0) + r.change);
+    });
+    const slots = [];
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    if (year) d.setDate(1);
+    const n = year ? 12 : this._range;
+    for (let i = n - 1; i >= 0; i--) {
+      const s = new Date(d);
+      if (year) s.setMonth(s.getMonth() - i);
+      else s.setDate(s.getDate() - i);
+      slots.push({ start: s, value: byKey.has(key(s)) ? byKey.get(key(s)) : null });
+    }
+    return slots;
+  }
+
+  _moneyAuto(v) {
+    const n = Math.abs(num(v) ?? 0);
+    return this._money(v, n < 10 ? 2 : n < 100 ? 1 : 0);
+  }
+
   _savingsSection() {
     const t = this._t;
     const sav = this._state("savings");
     if (!sav) return "";
     const attrs = sav.attributes || {};
+    const cur = esc(attrs.unit_of_measurement || "");
     const ranges = [7, 30, 365]
       .map((r) => `<button class="seg-btn ${r === this._range ? "on" : ""}" data-action="range" data-value="${r}">${r === 7 ? t.d7 : r === 30 ? t.d30 : t.year}</button>`)
       .join("");
+    const tiles = (sum, perDay) => `
+      <div class="tiles">
+        <div class="tile"><div class="cap">${t.savedIn}, ${t.rangeName[this._range]}</div><div class="big" style="color:${SAVE_COLOR}">${sum}</div></div>
+        <div class="tile"><div class="cap">${t.perDay}</div><div class="big">${perDay}</div></div>
+        <div class="tile"><div class="cap">${t.total}</div><div class="big">${this._moneyAuto(sav.state)}</div></div>
+        <div class="tile"><div class="cap">${t.shifted}</div><div class="big">${this._fmt(attrs.reduced_kwh, num(attrs.reduced_kwh) < 10 ? 1 : 0)} kWh</div></div>
+      </div>`;
     let body;
-    const stats = this._stats;
-    if (!stats) {
+    if (!this._stats) {
       body = `<div class="muted">${t.loading}</div>`;
-    } else if (!stats.length) {
-      body = `<div class="muted">${t.noStats}</div>`;
     } else {
-      const vals = stats.map((s) => s.change);
-      const sum = vals.reduce((a, b) => a + b, 0);
-      const days = this._range === 365 ? Math.max(1, Math.round((Date.now() - stats[0].start) / 86400000)) : Math.max(1, stats.length);
-      const maxAbs = Math.max(...vals.map(Math.abs), 0.0001);
-      const n = vals.length;
-      let acc = 0;
-      const cum = vals.map((v) => (acc += v));
-      const cMax = Math.max(...cum, 0);
-      const cMin = Math.min(...cum, 0);
-      const cSpan = cMax - cMin || 1;
-      const w = 1000 / n;
-      const pts = cum.map((c, i) => `${(i * w + w / 2).toFixed(1)},${(100 - ((c - cMin) / cSpan) * 100).toFixed(1)}`).join(" ");
-      const bars = vals
-        .map((v, i) => {
-          const h = Math.max(2, Math.round((Math.abs(v) / maxAbs) * 75));
-          const label = stats[i].start.toLocaleDateString(this._lang, this._range === 365 ? { month: "short", year: "2-digit" } : { day: "numeric", month: "short" });
-          return `<div class="bar" title="${esc(label)} · ${this._money(v, 2)}" style="height:${h}%;background:${v >= 0 ? SAVE_COLOR : "#ef5350"};opacity:.85"></div>`;
+      const year = this._range === 365;
+      const slots = this._savingsSlots();
+      const have = slots.filter((s) => s.value !== null);
+      const sum = have.reduce((a, s) => a + s.value, 0);
+      const days = year ? Math.max(1, have.length * 30.4) : Math.max(1, have.length);
+      // Fixed minimum scale so near-zero days stay near zero instead of filling the chart.
+      const minScale = year ? 10 : 1;
+      const hi = Math.max(minScale, ...have.map((s) => s.value));
+      const lo = Math.min(0, ...have.map((s) => s.value));
+      const span = hi - lo;
+      const Y = (v) => ((hi - v) / span) * 100; // % from top
+      const zero = Y(0);
+      const bars = slots
+        .map((s) => {
+          const label = s.start.toLocaleDateString(this._lang, year ? { month: "long", year: "numeric" } : { weekday: "short", day: "numeric", month: "short" });
+          if (s.value === null) return `<div class="sb empty" title="${esc(label)}"></div>`;
+          const top = Math.min(Y(s.value), zero);
+          const h = Math.max(0.8, Math.abs(Y(s.value) - zero));
+          const color = s.value >= 0 ? SAVE_COLOR : "#ef5350";
+          return `<div class="sb" title="${esc(label)} · ${this._moneyAuto(s.value)}"><div style="top:${top.toFixed(2)}%;height:${h.toFixed(2)}%;background:${color}"></div></div>`;
         })
         .join("");
-      const gap = n > 60 ? 0 : 3;
-      const first = stats[0].start.toLocaleDateString(this._lang, this._range === 365 ? { month: "short", year: "numeric" } : { day: "numeric", month: "short" });
+      const grid = [hi, hi / 2, 0];
+      if (lo < 0) grid.push(lo);
+      const gridHtml = grid
+        .map((g) => `<div class="gl${g === 0 ? " zero" : ""}" style="top:${Y(g).toFixed(2)}%"><span>${this._fmt(g, hi < 10 ? 1 : 0)}</span></div>`)
+        .join("");
+      const step = year ? 1 : this._range <= 7 ? 1 : 5;
+      const labels = slots
+        .map((s, i) => {
+          const isLast = i === slots.length - 1;
+          const show = year || this._range <= 7 || isLast || (slots.length - 1 - i) % step === 0;
+          const txt = year
+            ? s.start.toLocaleDateString(this._lang, { month: "narrow" })
+            : this._range <= 7
+              ? s.start.toLocaleDateString(this._lang, { weekday: "short" })
+              : String(s.start.getDate());
+          return `<div>${show ? esc(txt) : ""}</div>`;
+        })
+        .join("");
+      const cols = `grid-template-columns:repeat(${slots.length},minmax(0,1fr))`;
+      const collecting = have.length < 2 ? `<div class="small muted collecting">${t.collecting}</div>` : "";
       body = `
-        <div class="tiles">
-          <div class="tile"><div class="cap">${t.savedIn}, ${t.rangeName[this._range]}</div><div class="big" style="color:${SAVE_COLOR}">${this._money(sum)}</div></div>
-          <div class="tile"><div class="cap">${t.perDay}</div><div class="big">${this._money(sum / days, 1)}</div></div>
-          <div class="tile"><div class="cap">${t.total}</div><div class="big">${this._money(sav.state)}</div></div>
-          <div class="tile"><div class="cap">${t.shifted}</div><div class="big">${this._fmt(attrs.reduced_kwh, 0)} kWh</div></div>
-        </div>
-        <div class="chart-wrap">
-          <div class="chart" style="grid-template-columns:repeat(${n},minmax(0,1fr));gap:${gap}px;height:180px">${bars}</div>
-          <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
-            <polyline points="${pts}" fill="none" stroke="var(--primary-text-color)" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></polyline>
-          </svg>
-        </div>
-        <div class="ends small muted"><span>${esc(first)}</span><span>${this._range === 365 ? "" : esc(new Date().toLocaleDateString(this._lang, { day: "numeric", month: "short" }))}</span></div>
-        <div class="legend">
-          <span><i style="background:${SAVE_COLOR}"></i>${this._range === 365 ? t.perMonthBar : t.perDayBar}</span>
-          <span><i class="dash"></i>${t.cumulative}</span>
+        ${tiles(this._moneyAuto(sum), this._moneyAuto(sum / days))}
+        ${collecting}
+        <div class="sv-chart">
+          <div class="sv-axis-unit small muted">${cur}</div>
+          <div class="lc" style="height:180px">
+            ${gridHtml}
+            <div class="sv-bars" style="${cols}">${bars}</div>
+          </div>
+          <div class="sv-labels" style="${cols}">${labels}</div>
         </div>`;
     }
     return `
@@ -1029,8 +1073,15 @@ class PumpSteerPanel extends HTMLElement {
       .seg-btn.on.accent { background: var(--primary-color); color: var(--text-primary-color, #fff); }
       .big-btn { height: 44px; font-size: 15px; min-width: 0; }
       .chart-wrap { position: relative; }
+      .collecting { margin: 4px 0 10px; }
+      .sv-chart { position: relative; margin-top: 30px; }
+      .sv-axis-unit { position: absolute; top: -22px; left: 0; font-size: 11px; }
+      .sv-bars { position: absolute; inset: 0; display: grid; gap: 3px; }
+      .sb { position: relative; min-width: 0; max-width: 36px; width: 100%; justify-self: center; }
+      .sb > div { position: absolute; left: 0; right: 0; border-radius: 3px; opacity: .9; }
+      .sb:hover > div { opacity: 1; }
+      .sv-labels { display: grid; gap: 3px; margin: 6px 0 0 40px; font-size: 11px; color: var(--secondary-text-color); text-align: center; white-space: nowrap; }
       .chart-wrap svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-      .ends { display: flex; justify-content: space-between; margin-top: 6px; }
       .note { margin-top: 12px; }
       .set-block { margin-bottom: 8px; }
       .set-item { border-top: 1px solid var(--divider-color); }
