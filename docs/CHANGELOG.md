@@ -14,7 +14,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- `sensor.pumpsteer_thermal_outlook` no longer reports `preheat` through most of the heating season. `preheat_worthwhile` now also requires the forecast to drop at least 2 °C below the current temperature within 12 hours; steady cold alone gives `idle`. `preheat_strength` scales with the size of that drop (full strength at 6 °C) instead of the distance to the summer threshold, which saturated at 1.0 on every winter night.
+- New attribute `expected_drop_c` on `sensor.pumpsteer_thermal_outlook`.
 - The short-dip bridge window now scales with Brake Ramp Time (house inertia): `max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)`. Heavy houses no longer drop the brake (or let preheat take over) during a cheap gap shorter than one full ramp-out + ramp-in. No change at the default value 2.0 (window stays 30 min). The `bridge_limit_minutes` attribute shows the effective window.
+
+### Compatibility
+- Affects preheat-boost (block 5b) only when `switch.pumpsteer_preheat_boost` is on: boost now fires only before expensive periods with a coming temperature drop. Braking and pre-brake are unchanged.
+- Bridge window: no change at Brake Ramp Time ≤ 2.5. Higher values hold the brake across longer cheap gaps (e.g. 54 min at 6.0). No configuration or entity changes.
 
 ---
 
