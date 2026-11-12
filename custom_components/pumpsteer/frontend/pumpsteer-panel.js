@@ -56,6 +56,27 @@ const TEXT = {
     learning: "Termisk inlärning",
     notFound: "Hittar inga PumpSteer-entiteter. Är integrationen laddad?",
     loading: "Laddar…",
+    now: "Nu",
+    debug: "Debug",
+    debugSub: "Historik från recordern: PI-regulator, avvikelse från målet och när PumpSteer bromsar",
+    tempChart: "Signal till pumpen",
+    indoorChart: "Inne mot mål",
+    piChart: "PI-regulator",
+    priceCtl: "Prisstyrning",
+    modeBand: "Läge",
+    sIndoor: "Inne",
+    sTarget: "Mål",
+    sFake: "Till pumpen",
+    sOutdoor: "Ute",
+    sError: "Fel (mål − inne)",
+    sP: "P-term",
+    sI: "I-term",
+    sBrake: "Bromsfaktor",
+    sPreheat: "Förvärmning",
+    sOffset: "Prisförskjutning",
+    noHist: "Ingen historik hittades för perioden.",
+    show: "Visa",
+    hide: "Dölj",
     modes: {
       normal: "Normal", braking: "Bromsar", pre_braking: "Förbromsar", brake_hold: "Håller broms",
       preheating: "Förvärmer", precool: "Förkyler", summer_mode: "Sommarläge", holiday: "Semester",
@@ -111,6 +132,27 @@ const TEXT = {
     learning: "Thermal learning",
     notFound: "No PumpSteer entities found. Is the integration loaded?",
     loading: "Loading…",
+    now: "Now",
+    debug: "Debug",
+    debugSub: "Recorder history: PI controller, deviation from target and when PumpSteer brakes",
+    tempChart: "Signal to heat pump",
+    indoorChart: "Indoor vs target",
+    piChart: "PI controller",
+    priceCtl: "Price control",
+    modeBand: "Mode",
+    sIndoor: "Indoor",
+    sTarget: "Target",
+    sFake: "Sent to pump",
+    sOutdoor: "Outdoor",
+    sError: "Error (target − indoor)",
+    sP: "P term",
+    sI: "I term",
+    sBrake: "Brake factor",
+    sPreheat: "Preheat",
+    sOffset: "Price offset",
+    noHist: "No history found for this period.",
+    show: "Show",
+    hide: "Hide",
     modes: {
       normal: "Normal", braking: "Braking", pre_braking: "Pre-braking", brake_hold: "Holding brake",
       preheating: "Preheating", precool: "Precooling", summer_mode: "Summer mode", holiday: "Holiday",
@@ -147,7 +189,19 @@ class PumpSteerPanel extends HTMLElement {
     this._statsLoading = false;
     this._lastSig = null;
     this._raf = null;
+    this._debugOpen = false;
+    try {
+      this._debugOpen = localStorage.getItem("pumpsteer.debug") === "1";
+    } catch (_e) {
+      /* storage unavailable */
+    }
+    this._histHours = 24;
+    this._hist = null;
+    this._histKey = null;
+    this._histLoading = false;
     this.shadowRoot.addEventListener("click", (ev) => this._onClick(ev));
+    this.shadowRoot.addEventListener("pointermove", (ev) => this._onHover(ev));
+    this.addEventListener("pointerleave", () => this._onHover(null));
   }
 
   set hass(hass) {
@@ -174,8 +228,9 @@ class PumpSteerPanel extends HTMLElement {
   connectedCallback() {
     this._statsTimer = setInterval(() => {
       this._statsKey = null;
+      this._histKey = null;
       this._scheduleRender();
-    }, 10 * 60 * 1000);
+    }, 5 * 60 * 1000);
   }
 
   disconnectedCallback() {
@@ -222,7 +277,7 @@ class PumpSteerPanel extends HTMLElement {
   _signature() {
     // Re-render only when one of our entities changed (hass updates are frequent).
     const parts = Object.values(this._ids).map((id) => this._hass.states[id]?.last_updated || "");
-    return [parts.join("|"), this._range, this._entryIndex, this._statsKey, this._narrow, !!this._stats].join("#");
+    return [parts.join("|"), this._range, this._entryIndex, this._statsKey, this._narrow, !!this._stats, this._debugOpen, this._histHours, this._histKey].join("#");
   }
 
   async _loadStats() {
@@ -275,6 +330,12 @@ class PumpSteerPanel extends HTMLElement {
     return `${n.toLocaleString(this._lang, { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${esc(cur)}`.trim();
   }
 
+  _time(d) {
+    // 24 h clock unless the user explicitly chose 12 h in their HA profile.
+    const h12 = this._hass?.locale?.time_format === "12";
+    return new Date(d).toLocaleTimeString(this._lang, { hour: "2-digit", minute: "2-digit", hour12: h12 });
+  }
+
   async _onClick(ev) {
     const el = ev.composedPath().find((n) => n.dataset && n.dataset.action);
     if (!el) return;
@@ -300,10 +361,25 @@ class PumpSteerPanel extends HTMLElement {
         this._stats = null;
         this._statsKey = null;
         this._scheduleRender();
+      } else if (a === "debug") {
+        this._debugOpen = !this._debugOpen;
+        try {
+          localStorage.setItem("pumpsteer.debug", this._debugOpen ? "1" : "0");
+        } catch (_e) {
+          /* storage unavailable */
+        }
+        this._scheduleRender();
+      } else if (a === "hist") {
+        this._histHours = Number(el.dataset.value);
+        this._hist = null;
+        this._histKey = null;
+        this._scheduleRender();
       } else if (a === "entry") {
         this._entryIndex = Number(el.dataset.value);
         this._stats = null;
         this._statsKey = null;
+        this._hist = null;
+        this._histKey = null;
         this._lastSig = null;
         this._scheduleRender();
       }
@@ -377,8 +453,8 @@ class PumpSteerPanel extends HTMLElement {
       .map((p, i) => {
         const v = num(p.price) ?? 0;
         const h = Math.max(3, Math.round(((v - Math.min(min, 0)) / span) * 100));
-        const tip = `${new Date(p.start).toLocaleTimeString(this._lang, { hour: "2-digit", minute: "2-digit" })} · ${this._fmt(v, 2)}`;
-        return `<div class="bar" title="${esc(tip)}" style="height:${h}%;background:${CAT_COLOR[p.category] || CAT_COLOR.normal};opacity:${i === 0 ? 1 : 0.75}"></div>`;
+        const tip = `${this._time(p.start)} · ${this._fmt(v, 2)}`;
+        return `<div class="bar${i === 0 ? " now" : ""}" title="${esc(tip)}" style="height:${h}%;background:${CAT_COLOR[p.category] || CAT_COLOR.normal};opacity:${i === 0 ? 1 : 0.6}"></div>`;
       })
       .join("");
     const planRow = plan
@@ -395,8 +471,15 @@ class PumpSteerPanel extends HTMLElement {
       })
       .join("");
     const cols = `grid-template-columns:repeat(${plan.length},minmax(0,1fr))`;
+    const t0 = new Date(plan[0].start).getTime();
+    const slotMs = plan.length > 1 ? new Date(plan[1].start).getTime() - t0 : 3600000;
+    const frac = Math.min(1, Math.max(0, (Date.now() - t0) / slotMs));
+    const nowLeft = ((frac / plan.length) * 100).toFixed(3);
     return `
-      <div class="chart" style="${cols}">${bars}</div>
+      <div class="chart-wrap">
+        <div class="chart" style="${cols}">${bars}</div>
+        <div class="nowline" style="left:${nowLeft}%"><span>${t.now} ${this._time(Date.now())}</span></div>
+      </div>
       <div class="labels" style="${cols}">${labels}</div>
       <div class="small muted" style="margin:14px 0 6px">${t.plan}</div>
       <div class="planrow" style="${cols}">${planRow}</div>
@@ -476,6 +559,243 @@ class PumpSteerPanel extends HTMLElement {
       </section>`;
   }
 
+  async _loadHistory() {
+    const id = this._ids.control;
+    if (!id || !this._debugOpen || this._histLoading) return;
+    const key = `${id}:${this._histHours}`;
+    if (this._histKey === key) return;
+    this._histLoading = true;
+    const t1 = Date.now();
+    const t0 = t1 - this._histHours * 3600000;
+    try {
+      const res = await this._hass.callWS({
+        type: "history/history_during_period",
+        start_time: new Date(t0).toISOString(),
+        entity_ids: [id],
+        minimal_response: false,
+        no_attributes: false,
+        significant_changes_only: false,
+      });
+      let lastA = {};
+      let rows = (res?.[id] || [])
+        .map((r) => {
+          const a = r.a || lastA;
+          lastA = a;
+          const ts = r.lu ?? r.lc ?? r.last_updated;
+          const t = typeof ts === "number" ? ts * 1000 : Date.parse(ts);
+          return { t: Math.max(t, t0), s: num(r.s ?? r.state), a };
+        })
+        .filter((r) => Number.isFinite(r.t));
+      // Keep the browser responsive: thin out dense data but keep every mode change.
+      const maxRows = 1500;
+      if (rows.length > maxRows) {
+        const stride = Math.ceil(rows.length / maxRows);
+        rows = rows.filter((r, i) => i % stride === 0 || i === rows.length - 1 || r.a.mode !== rows[i - 1]?.a.mode);
+      }
+      this._hist = { t0, t1, rows };
+    } catch (err) {
+      console.error("PumpSteer: history failed", err);
+      this._hist = { t0, t1, rows: [] };
+    }
+    this._histKey = key;
+    this._histLoading = false;
+    this._lastSig = null;
+    this._scheduleRender();
+  }
+
+  _ticks(t0, t1) {
+    const hours = (t1 - t0) / 3600000;
+    const step = hours <= 6 ? 1 : hours <= 24 ? 3 : 6;
+    const out = [];
+    const d = new Date(t0);
+    d.setMinutes(0, 0, 0);
+    d.setHours(d.getHours() + 1);
+    for (; d.getTime() < t1; d.setHours(d.getHours() + 1)) {
+      if (d.getHours() % step === 0) {
+        out.push({ left: ((d.getTime() - t0) / (t1 - t0)) * 100, label: String(d.getHours()).padStart(2, "0") });
+      }
+    }
+    return out;
+  }
+
+  _lineChart(series, { t0, t1, height = 150, fixed = null, unit = "", digits = 1 }) {
+    const vals = series.flatMap((s) => s.points.map((p) => p[1]).filter((v) => v !== null));
+    if (!vals.length) return "";
+    let lo = fixed ? fixed[0] : Math.min(...vals);
+    let hi = fixed ? fixed[1] : Math.max(...vals);
+    if (!fixed) {
+      const pad = (hi - lo) * 0.08 || 0.5;
+      lo -= pad;
+      hi += pad;
+    }
+    const X = (t) => (((t - t0) / (t1 - t0)) * 1000).toFixed(1);
+    const Y = (v) => (100 - ((v - lo) / (hi - lo)) * 100).toFixed(2);
+    const paths = series
+      .map((s) => {
+        let d = "";
+        let open = false;
+        s.points.forEach(([t, v]) => {
+          if (v === null) {
+            open = false;
+            return;
+          }
+          d += open ? ` H${X(t)} V${Y(v)}` : ` M${X(t)} ${Y(v)}`;
+          open = true;
+        });
+        if (open) d += ` H1000`;
+        return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}" ${s.dash ? 'stroke-dasharray="6 4"' : ""} vector-effect="non-scaling-stroke"></path>`;
+      })
+      .join("");
+    const grid = [hi, (hi + lo) / 2, lo];
+    if (lo < 0 && hi > 0) {
+      const near = (g) => Math.abs(g) / (hi - lo) < 0.12;
+      for (let k = grid.length - 1; k >= 0; k--) if (near(grid[k])) grid.splice(k, 1);
+      grid.push(0);
+    }
+    const gridHtml = grid
+      .map((g) => `<div class="gl${g === 0 ? " zero" : ""}" style="top:${Y(g)}%"><span>${this._fmt(g, digits)}${unit}</span></div>`)
+      .join("");
+    const legend = series.map((s) => `<span><i class="${s.dash ? "dash" : ""}" style="${s.dash ? `border-color:${s.color}` : `background:${s.color}`}"></i>${s.name}</span>`).join("");
+    return `
+      <div class="lc" style="height:${height}px">
+        ${gridHtml}
+        <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">${paths}</svg>
+      </div>
+      <div class="legend compact">${legend}</div>`;
+  }
+
+  _debugSection() {
+    const t = this._t;
+    const toggle = `<button class="seg-btn" data-action="debug" aria-expanded="${this._debugOpen}">${this._debugOpen ? t.hide : t.show}</button>`;
+    let body = "";
+    if (this._debugOpen) {
+      const hh = [6, 24, 48]
+        .map((h) => `<button class="seg-btn ${h === this._histHours ? "on" : ""}" data-action="hist" data-value="${h}">${h} h</button>`)
+        .join("");
+      const h = this._hist;
+      let charts;
+      if (!h) {
+        charts = `<div class="muted">${t.loading}</div>`;
+      } else if (!h.rows.length) {
+        charts = `<div class="muted">${t.noHist}</div>`;
+      } else {
+        const R = h.rows;
+        const pick = (fn) => R.map((r) => [r.t, num(fn(r))]);
+        const opt = { t0: h.t0, t1: h.t1 };
+        const indoorChart = this._lineChart(
+          [
+            { name: t.sIndoor, color: "var(--primary-text-color)", points: pick((r) => r.a.indoor_temperature), width: 2.5 },
+            { name: t.sTarget, color: "#3ecf8e", points: pick((r) => r.a.target_temperature), dash: true },
+          ],
+          { ...opt, height: 130, unit: "°" }
+        );
+        const temp = this._lineChart(
+          [
+            { name: t.sFake, color: "#ff9f43", points: R.map((r) => [r.t, r.s]), width: 2.5 },
+            { name: t.sOutdoor, color: "#8a929c", points: pick((r) => r.a.outdoor_temperature) },
+          ],
+          { ...opt, height: 150, unit: "°" }
+        );
+        const pi = this._lineChart(
+          [
+            { name: t.sError, color: "#ef5350", points: pick((r) => r.a.pi_error_c), width: 2.5 },
+            { name: t.sP, color: "#4fa3ff", points: pick((r) => r.a.pi_p_term) },
+            { name: t.sI, color: "#a78bfa", points: pick((r) => r.a.pi_i_term) },
+          ],
+          { ...opt, height: 150, unit: "°", digits: 2 }
+        );
+        const ctl = this._lineChart(
+          [
+            { name: t.sBrake, color: "#ff9f43", points: pick((r) => (r.a.brake_factor ?? 0) * 100) },
+            { name: t.sPreheat, color: "#4fa3ff", points: pick((r) => (r.a.mode === "preheating" ? (r.a.preheat_factor ?? 0) * 100 : 0)) },
+          ],
+          { ...opt, height: 110, fixed: [0, 100], unit: " %", digits: 0 }
+        );
+        const span = h.t1 - h.t0;
+        const runs = [];
+        R.forEach((r) => {
+          const m = r.a.mode || "normal";
+          const last = runs[runs.length - 1];
+          if (last && last.m === m) return;
+          if (last) last.end = r.t;
+          runs.push({ m, start: r.t, end: h.t1 });
+        });
+        const bands = runs
+          .map((run) => {
+            const left = ((run.start - h.t0) / span) * 100;
+            const w = ((run.end - run.start) / span) * 100;
+            const label = `${t.modes[run.m] || run.m} ${this._time(run.start)}–${this._time(run.end)}`;
+            return `<div style="left:${left.toFixed(3)}%;width:${(w + 0.05).toFixed(3)}%;background:${MODE_COLOR[run.m] || MODE_COLOR.normal}" title="${esc(label)}"></div>`;
+          })
+          .join("");
+        const seen = [...new Set(R.map((r) => r.a.mode || "normal"))];
+        const modeLegend = seen.map((m) => `<span><i style="background:${MODE_COLOR[m] || MODE_COLOR.normal}"></i>${esc(t.modes[m] || m)}</span>`).join("");
+        const ticks = this._ticks(h.t0, h.t1)
+          .map((k) => `<span style="left:${k.left.toFixed(2)}%">${k.label}</span>`)
+          .join("");
+        charts = `
+          <div class="hov">
+            <div class="dbg-title">${t.indoorChart}</div>${indoorChart}
+            <div class="dbg-title">${t.tempChart}</div>${temp}
+            <div class="dbg-title">${t.piChart}</div>${pi}
+            <div class="dbg-title">${t.priceCtl}</div>${ctl}
+            <div class="dbg-title">${t.modeBand}</div>
+            <div class="band">${bands}</div>
+            <div class="ticks">${ticks}</div>
+            <div class="legend compact">${modeLegend}</div>
+            <div class="cursor" hidden></div>
+            <div class="readout" hidden></div>
+          </div>`;
+      }
+      body = `<div class="row-head" style="margin-top:4px"><div class="small muted">${t.debugSub}</div><div class="segs">${hh}</div></div>${charts}`;
+    }
+    return `
+      <section class="card">
+        <div class="row-head" style="margin-bottom:${this._debugOpen ? 8 : 0}px"><h2 style="margin:0">${t.debug}</h2>${toggle}</div>
+        ${body}
+      </section>`;
+  }
+
+  _onHover(ev) {
+    const box = ev && ev.composedPath().find((n) => n.classList && n.classList.contains("hov"));
+    const root = this.shadowRoot.querySelector(".hov");
+    if (!root) return;
+    const cur = root.querySelector(".cursor");
+    const out = root.querySelector(".readout");
+    if (!box || !this._hist?.rows.length) {
+      cur.hidden = true;
+      out.hidden = true;
+      return;
+    }
+    const rect = root.getBoundingClientRect();
+    const AXIS = 40; // px reserved for the y-axis labels
+    const f = Math.min(1, Math.max(0, (ev.clientX - rect.left - AXIS) / Math.max(1, rect.width - AXIS)));
+    const { t0, t1, rows } = this._hist;
+    const tt = t0 + f * (t1 - t0);
+    let lo = 0;
+    let hi = rows.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (rows[mid].t <= tt) lo = mid;
+      else hi = mid - 1;
+    }
+    const r = rows[lo];
+    const t = this._t;
+    const a = r.a;
+    cur.hidden = false;
+    const x = AXIS + f * (rect.width - AXIS);
+    cur.style.left = `${x.toFixed(1)}px`;
+    out.hidden = false;
+    out.style.left = f > 0.55 ? "auto" : `${(x + 10).toFixed(1)}px`;
+    out.style.right = f > 0.55 ? `${(rect.width - x + 10).toFixed(1)}px` : "auto";
+    out.innerHTML = `
+      <b>${this._time(tt)} · ${esc(t.modes[a.mode] || a.mode || "")}</b>
+      <div>${t.sIndoor} ${this._fmt(a.indoor_temperature)}° / ${t.sTarget} ${this._fmt(a.target_temperature)}°</div>
+      <div>${t.sFake} ${this._fmt(r.s)}° · ${t.sOutdoor} ${this._fmt(a.outdoor_temperature)}°</div>
+      <div>${t.sError} ${this._fmt(a.pi_error_c, 2)}° · P ${this._fmt(a.pi_p_term, 2)} · I ${this._fmt(a.pi_i_term, 2)}</div>
+      <div>${t.sBrake} ${this._fmt((a.brake_factor ?? 0) * 100, 0)} % · ${t.sOffset} ${this._fmt(a.price_offset_c, 1)}°</div>`;
+  }
+
   _settings() {
     const t = this._t;
     const aggr = num(this._state("aggressiveness")?.state);
@@ -531,6 +851,7 @@ class PumpSteerPanel extends HTMLElement {
       return;
     }
     this._loadStats();
+    this._loadHistory();
     const sig = this._signature();
     if (sig === this._lastSig) return;
     this._lastSig = sig;
@@ -547,7 +868,7 @@ class PumpSteerPanel extends HTMLElement {
     const priceUnit = esc(a.current_price_unit || "");
     const catTxt = t[a.price_category] || "";
     const diff = (x, y) => (x !== null && y !== null ? `${x - y >= 0 ? "+" : "−"}${this._fmt(Math.abs(x - y))}°` : "");
-    const updated = a.last_updated ? new Date(a.last_updated).toLocaleTimeString(this._lang, { hour: "2-digit", minute: "2-digit" }) : "–";
+    const updated = a.last_updated ? this._time(a.last_updated) : "–";
 
     const entryTabs =
       (this._entries || []).length > 1
@@ -594,6 +915,7 @@ class PumpSteerPanel extends HTMLElement {
               <div><h2>${t.why}</h2><p>${this._explain(mode, a)}</p></div>
             </section>
             ${this._savingsSection()}
+            ${this._debugSection()}
           </main>
           <aside>
             ${this._settings()}
@@ -650,10 +972,10 @@ class PumpSteerPanel extends HTMLElement {
       .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; border: 1px solid; font-weight: 600; font-size: 14px; }
       .dot { width: 8px; height: 8px; border-radius: 50%; }
       .card { background: var(--ps-card); border-radius: var(--ps-radius); padding: 18px; border: 1px solid var(--divider-color, transparent); box-shadow: var(--ha-card-box-shadow, none); }
-      .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-      .kpis { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+      .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+      .kpis { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
       .tile .cap, .cap { font-size: 12px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: .05em; }
-      .huge { font-size: 36px; font-weight: 700; margin: 4px 0 2px; }
+      .huge { font-size: clamp(28px, 6vw, 36px); font-weight: 700; margin: 4px 0 2px; }
       .big { font-size: 26px; font-weight: 700; margin-top: 4px; }
       .unit { font-size: 15px; font-weight: 500; color: var(--secondary-text-color); }
       .small { font-size: 13px; }
@@ -699,6 +1021,26 @@ class PumpSteerPanel extends HTMLElement {
       .stepper span { min-width: 48px; text-align: center; font-weight: 600; }
       .stat-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--divider-color); font-size: 14px; }
       .stat-row span:last-child { color: var(--secondary-text-color); text-align: right; overflow-wrap: anywhere; }
+      .chart .bar.now { opacity: 1; animation: ps-pulse 1.6s ease-in-out infinite; box-shadow: 0 0 0 2px var(--primary-text-color); }
+      @keyframes ps-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.6); } }
+      @media (prefers-reduced-motion: reduce) { .chart .bar.now { animation: none; } }
+      .nowline { position: absolute; top: -18px; bottom: 0; width: 0; border-left: 2px solid var(--primary-text-color); pointer-events: none; }
+      .nowline span { position: absolute; top: 0; left: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--ps-card); padding: 0 4px; border-radius: 4px; }
+      section.card > .chart-wrap { margin-top: 22px; }
+      .hov { position: relative; touch-action: pan-y; }
+      .dbg-title { font-size: 12px; font-weight: 600; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 6px; }
+      .lc { position: relative; margin-left: 40px; }
+      .lc svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .gl { position: absolute; left: 0; right: 0; border-top: 1px solid var(--divider-color); }
+      .gl.zero { border-top: 1px solid var(--secondary-text-color); }
+      .gl span { position: absolute; right: calc(100% + 6px); top: -8px; font-size: 11px; color: var(--secondary-text-color); white-space: nowrap; }
+      .legend.compact { margin: 8px 0 0 40px; gap: 12px; }
+      .band { position: relative; height: 16px; margin-left: 40px; border-radius: 4px; overflow: hidden; background: var(--ps-track); }
+      .band div { position: absolute; top: 0; bottom: 0; }
+      .ticks { position: relative; height: 16px; margin: 6px 0 0 40px; }
+      .ticks span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--secondary-text-color); }
+      .cursor { position: absolute; top: 24px; bottom: 40px; width: 0; border-left: 1px dashed var(--primary-text-color); pointer-events: none; }
+      .readout { position: absolute; top: 28px; z-index: 2; pointer-events: none; background: var(--ps-card); border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,.25); white-space: nowrap; }
       button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
     </style>`;
   }
