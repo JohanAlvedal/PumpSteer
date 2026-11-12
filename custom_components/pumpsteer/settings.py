@@ -3,7 +3,7 @@ from typing import Final, List
 
 _LOGGER = logging.getLogger(__name__)
 
-PUMPSTEER_VERSION: Final[str] = "2.2.7"
+PUMPSTEER_VERSION: Final[str] = "2.2.8"
 
 # === TEMPERATURE INPUT QUALIFICATION ===
 # After a Home Assistant start, temperature inputs must report after the start
