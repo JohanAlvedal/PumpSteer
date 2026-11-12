@@ -1401,17 +1401,16 @@ class PumpSteerSensor(RestoreEntity):
                     and outdoor <= summer_threshold - 2.0
                     and indoor - outdoor >= 2.0
                 )
-                learning_reason = (
-                    "active"
-                    if learning_active
-                    else "comfort_floor"
-                    if not brake_requested
-                    else "brake_ramp_not_stable"
-                    if factor < 0.75
-                    else "outdoor_too_warm"
-                    if outdoor > summer_threshold - 2.0
-                    else "small_indoor_outdoor_difference"
-                )
+                if learning_active:
+                    learning_reason = "active"
+                elif not brake_requested:
+                    learning_reason = "comfort_floor"
+                elif factor < 0.75:
+                    learning_reason = "brake_ramp_not_stable"
+                elif outdoor > summer_threshold - 2.0:
+                    learning_reason = "outdoor_too_warm"
+                else:
+                    learning_reason = "small_indoor_outdoor_difference"
                 self._update_thermal_learning(
                     active=learning_active,
                     reason=learning_reason,
@@ -1494,7 +1493,13 @@ class PumpSteerSensor(RestoreEntity):
         #     Only makes sense when it is actually cold outside — boosting in
         #     warm weather wastes energy without benefit.
 
-        brake_hold = float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES))
+        # Bridge window scales with house inertia: if the next expensive period
+        # starts before a full ramp-out + ramp-in could complete, releasing the
+        # brake only causes oscillation. brake_hold_minutes acts as the floor.
+        brake_hold = max(
+            float(cfg.get("brake_hold_minutes", BRAKE_HOLD_MINUTES)),
+            ramp_in + ramp_out,
+        )
         minutes_until_expensive = (
             self._minutes_until_expensive(
                 categories,
@@ -1719,13 +1724,12 @@ class PumpSteerSensor(RestoreEntity):
         else:
             fake_temp = pi_fake
 
-        mode = (
-            MODE_HOLIDAY
-            if holiday
-            else MODE_BRAKE_HOLD
-            if brake_should_hold
-            else MODE_PI
-        )
+        if holiday:
+            mode = MODE_HOLIDAY
+        elif brake_should_hold:
+            mode = MODE_BRAKE_HOLD
+        else:
+            mode = MODE_PI
         await self._set_state(
             fake_temp,
             mode,
