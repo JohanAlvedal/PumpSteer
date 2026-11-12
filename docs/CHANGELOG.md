@@ -13,8 +13,15 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [2.2.9] — Brake survives restarts and short sensor dropouts
+
 ### Fixed
 - A restart, integration reload or brief sensor dropout no longer wipes the brake. Short safe-mode outages (up to 30 minutes since the last regular output) now keep the PI integral and brake/preheat ramps instead of resetting them, so a restart during an expensive period continues the restored brake instead of ramping in from zero (the fake outdoor temperature previously dropped from full brake to the plain PI value). The PI clock restarts so the outage is not integrated. Longer outages and large clock jumps reset as before. The safe-mode `controller_state` attribute shows `held` or `reset`.
+
+### Compatibility
+- No configuration or entity changes. Restart Home Assistant after updating. The first restart after updating uses the brake timestamp from 2.2.8 as a fallback; from then on the time of the last regular output is stored.
 
 ---
 
