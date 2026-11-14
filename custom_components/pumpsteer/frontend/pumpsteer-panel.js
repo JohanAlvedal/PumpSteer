@@ -64,7 +64,15 @@ const TEXT = {
     holidayOnManual: "Inga datum är satta, så semesterläget gäller tills du stänger av det.",
     holidayOffText: "PumpSteer går tillbaka till din vanliga måltemperatur och värmer upp huset igen.",
     holidayPeriod: "Semesterperiod",
-    holidayReactivate: "Obs: perioden pågår fortfarande, så semesterläget slås på igen automatiskt vid nästa uppdatering. Rensa datumen för att avsluta det helt.",
+    holidayClears: "Semesterdatumen rensas också, så att läget inte slås på igen automatiskt.",
+    holidayUntilOff: "Tills jag stänger av",
+    holidayWithDates: "Välj datum",
+    holidayStart: "Start",
+    holidayEnd: "Slut",
+    holidaySave: "Spara",
+    holidayFuture: "Semesterläget slås på automatiskt vid start och av vid slut. Du får en notis båda gångerna.",
+    errEnd: "Slutet måste vara efter starten och i framtiden.",
+    errMissing: "Fyll i både start och slut.",
     summerSub: "Ute över detta = ingen styrning",
     helpLabel: "Förklaring",
     help: {
@@ -160,7 +168,15 @@ const TEXT = {
     holidayOnManual: "No dates are set, so holiday mode stays on until you turn it off.",
     holidayOffText: "PumpSteer returns to your normal target temperature and heats the house up again.",
     holidayPeriod: "Holiday period",
-    holidayReactivate: "Note: the period is still running, so holiday mode turns back on automatically at the next update. Clear the dates to end it for good.",
+    holidayClears: "The holiday dates are cleared too, so the mode does not turn itself back on.",
+    holidayUntilOff: "Until I turn it off",
+    holidayWithDates: "Choose dates",
+    holidayStart: "Start",
+    holidayEnd: "End",
+    holidaySave: "Save",
+    holidayFuture: "Holiday mode turns on automatically at the start and off at the end. You get a notification both times.",
+    errEnd: "The end must be after the start and in the future.",
+    errMissing: "Fill in both start and end.",
     summerSub: "Outdoor above this = no control",
     helpLabel: "Explanation",
     help: {
@@ -219,6 +235,11 @@ const SAVE_COLOR = "#3ecf8e";
 const PHASE = { braking: "braked", pre_braking: "braked", brake_hold: "braked", preheating: "preheated" };
 const PHASE_COLOR = { braked: "rgba(255, 159, 67, 0.22)", preheated: "rgba(79, 163, 255, 0.22)" };
 
+const toLocalInput = (d) => {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
 const esc = (v) =>
   String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -253,6 +274,8 @@ class PumpSteerPanel extends HTMLElement {
     this._histLoading = false;
     this.shadowRoot.addEventListener("click", (ev) => this._onClick(ev));
     this.shadowRoot.addEventListener("pointermove", (ev) => this._onHover(ev));
+    this.shadowRoot.addEventListener("input", (ev) => this._onInput(ev));
+    this.shadowRoot.addEventListener("change", (ev) => this._onInput(ev));
     this.addEventListener("pointerleave", () => this._onHover(null));
   }
 
@@ -413,16 +436,24 @@ class PumpSteerPanel extends HTMLElement {
         const key = el.dataset.key;
         if (key === "holiday") {
           // Holiday mode changes comfort a lot: always ask first.
-          this._confirm = { key, on: this._state(key)?.state !== "on" };
+          const on = this._state(key)?.state !== "on";
+          const dates = this._holidayDates();
+          const start = new Date();
+          start.setSeconds(0, 0);
+          this._confirm = {
+            key,
+            on,
+            useDates: !!dates,
+            start: toLocalInput(dates ? dates.start : start),
+            end: dates ? toLocalInput(dates.end) : "",
+            error: "",
+          };
           this._scheduleRender();
           return;
         }
         await hass.callService("switch", "toggle", { entity_id: this._ids[key] });
       } else if (a === "confirm-yes") {
-        const c = this._confirm;
-        this._confirm = null;
-        this._scheduleRender();
-        if (c) await hass.callService("switch", c.on ? "turn_on" : "turn_off", { entity_id: this._ids[c.key] });
+        await this._confirmHoliday();
       } else if (a === "confirm-no") {
         if (ev.target !== el && el.classList.contains("modal-backdrop")) return; // click inside dialog
         this._confirm = null;
@@ -898,25 +929,112 @@ class PumpSteerPanel extends HTMLElement {
     return start && end && end > start ? { start, end } : null;
   }
 
+  _onInput(ev) {
+    const el = ev.composedPath()[0];
+    const field = el?.dataset?.field;
+    if (!field || !this._confirm) return;
+    if (field === "mode") {
+      this._confirm.useDates = el.value === "dates";
+      this._confirm.error = "";
+      this._refreshDialog();
+    } else {
+      this._confirm[field] = el.value;
+      if (this._confirm.error) {
+        this._confirm.error = "";
+        this.shadowRoot.querySelector(".modal .err")?.remove();
+      }
+    }
+  }
+
+  _refreshDialog() {
+    const old = this.shadowRoot.querySelector(".modal-backdrop");
+    if (old) old.remove();
+    if (this._confirm) this.shadowRoot.querySelector(".page")?.insertAdjacentHTML("beforeend", this._confirmDialog());
+  }
+
+  async _confirmHoliday() {
+    const c = this._confirm;
+    if (!c) return;
+    const hass = this._hass;
+    const ids = this._ids;
+    const setDt = (key, iso) => (ids[key] ? hass.callService("datetime", "set_value", { entity_id: ids[key], datetime: iso }) : null);
+    const CLEARED = "1970-01-01T00:00:00+00:00"; // holiday.py treats 1970 as "no date"
+
+    if (!c.on) {
+      this._confirm = null;
+      this._scheduleRender();
+      await hass.callService("switch", "turn_off", { entity_id: ids.holiday });
+      if (this._holidayDates()) await Promise.all([setDt("holiday_start", CLEARED), setDt("holiday_end", CLEARED)]);
+      return;
+    }
+
+    if (!c.useDates) {
+      this._confirm = null;
+      this._scheduleRender();
+      if (this._holidayDates()) await Promise.all([setDt("holiday_start", CLEARED), setDt("holiday_end", CLEARED)]);
+      await hass.callService("switch", "turn_on", { entity_id: ids.holiday });
+      return;
+    }
+
+    const start = c.start ? new Date(c.start) : null;
+    const end = c.end ? new Date(c.end) : null;
+    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      c.error = this._t.errMissing;
+      this._refreshDialog();
+      return;
+    }
+    if (end <= start || end.getTime() <= Date.now()) {
+      c.error = this._t.errEnd;
+      this._refreshDialog();
+      return;
+    }
+    this._confirm = null;
+    this._scheduleRender();
+    await Promise.all([setDt("holiday_start", start.toISOString()), setDt("holiday_end", end.toISOString())]);
+    // Started already: switch on now. Future start: holiday.py turns it on at the start time.
+    if (start.getTime() <= Date.now()) await hass.callService("switch", "turn_on", { entity_id: ids.holiday });
+  }
+
   _confirmDialog() {
     const c = this._confirm;
     if (!c) return "";
     const t = this._t;
     const dates = this._holidayDates();
     const fmt = (d) => `${d.toLocaleDateString(this._lang, { day: "numeric", month: "short" })} ${this._time(d)}`;
-    const now = Date.now();
-    const lines = [c.on ? t.holidayOnText : t.holidayOffText];
-    if (dates) lines.push(`${t.holidayPeriod}: ${fmt(dates.start)} – ${fmt(dates.end)}`);
-    if (c.on && !dates) lines.push(t.holidayOnManual);
-    if (!c.on && dates && now >= dates.start.getTime() && now < dates.end.getTime()) lines.push(t.holidayReactivate);
+    const canDates = !!(this._ids.holiday_start && this._ids.holiday_end);
+    let body;
+    let primary;
+    if (!c.on) {
+      const lines = [t.holidayOffText];
+      if (dates) lines.push(`${t.holidayPeriod}: ${fmt(dates.start)} – ${fmt(dates.end)}`, t.holidayClears);
+      body = lines.map((l) => `<p>${esc(l)}</p>`).join("");
+      primary = t.holidayOffBtn;
+    } else {
+      const startFuture = c.useDates && c.start && new Date(c.start).getTime() > Date.now();
+      const choice = canDates
+        ? `<div class="radio-row" role="radiogroup">
+            <label class="radio ${!c.useDates ? "on" : ""}"><input type="radio" name="ps-mode" value="manual" data-field="mode" ${!c.useDates ? "checked" : ""}>${t.holidayUntilOff}</label>
+            <label class="radio ${c.useDates ? "on" : ""}"><input type="radio" name="ps-mode" value="dates" data-field="mode" ${c.useDates ? "checked" : ""}>${t.holidayWithDates}</label>
+          </div>`
+        : "";
+      const fields = c.useDates
+        ? `<div class="date-grid">
+            <label>${t.holidayStart}<input type="datetime-local" data-field="start" value="${esc(c.start)}"></label>
+            <label>${t.holidayEnd}<input type="datetime-local" data-field="end" value="${esc(c.end)}" min="${esc(c.start)}"></label>
+          </div>
+          <p>${esc(t.holidayFuture)}</p>`
+        : `<p>${esc(t.holidayOnManual)}</p>`;
+      body = `<p>${esc(t.holidayOnText)}</p>${choice}${fields}${c.error ? `<p class="err" role="alert">${esc(c.error)}</p>` : ""}`;
+      primary = c.useDates && startFuture ? t.holidaySave : t.holidayOnBtn;
+    }
     return `
       <div class="modal-backdrop" data-action="confirm-no">
         <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="ps-dlg-title">
           <h2 id="ps-dlg-title">${c.on ? t.holidayOnTitle : t.holidayOffTitle}</h2>
-          ${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
+          ${body}
           <div class="modal-actions">
             <button class="btn" data-action="confirm-no">${t.cancel}</button>
-            <button class="btn primary" data-action="confirm-yes">${c.on ? t.holidayOnBtn : t.holidayOffBtn}</button>
+            <button class="btn primary" data-action="confirm-yes">${primary}</button>
           </div>
         </div>
       </div>`;
@@ -1001,6 +1119,7 @@ class PumpSteerPanel extends HTMLElement {
     this._loadHistory();
     const sig = this._signature();
     if (sig === this._lastSig) return;
+    if (this._confirm && this.shadowRoot.querySelector(".modal")) return; // keep the open dialog intact
     this._lastSig = sig;
 
     const a = ctrl.attributes || {};
@@ -1077,7 +1196,7 @@ class PumpSteerPanel extends HTMLElement {
       </div>`;
 
     if (this._confirm) {
-      this.shadowRoot.querySelector(".page").insertAdjacentHTML("beforeend", this._confirmDialog());
+      this._refreshDialog();
       this.shadowRoot.querySelector('.modal [data-action="confirm-no"]')?.focus();
     }
 
@@ -1212,6 +1331,15 @@ class PumpSteerPanel extends HTMLElement {
       .modal { background: var(--ps-card); border: 1px solid var(--divider-color); border-radius: var(--ps-radius); padding: 22px; max-width: 420px; width: 100%; box-shadow: 0 12px 40px rgba(0, 0, 0, .4); }
       .modal h2 { font-size: 18px; margin: 0 0 10px; }
       .modal p { margin: 0 0 10px; line-height: 1.5; color: var(--secondary-text-color); font-size: 14px; }
+      .radio-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--ps-track); padding: 4px; border-radius: 10px; margin: 6px 0 12px; }
+      .radio { display: flex; align-items: center; justify-content: center; min-height: 40px; border-radius: 7px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; padding: 0 8px; }
+      .radio input { position: absolute; opacity: 0; pointer-events: none; }
+      .radio.on { background: var(--ps-card); }
+      .radio:focus-within { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+      .date-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 10px; }
+      .date-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--secondary-text-color); }
+      .date-grid input { min-height: 44px; border-radius: 8px; border: 1px solid var(--divider-color); background: var(--ps-track); color: var(--primary-text-color); font: inherit; padding: 0 10px; color-scheme: dark light; }
+      .modal .err { color: #ef5350; }
       .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
       .btn { min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--divider-color); background: transparent; color: var(--primary-text-color); font: inherit; font-weight: 600; cursor: pointer; }
       .btn.primary { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
