@@ -63,6 +63,13 @@ def _ws_entities(hass: HomeAssistant, connection, msg: dict[str, Any]) -> None:
     connection.send_result(msg["id"], result)
 
 
+def _file_mtime(path: Path) -> int:
+    try:
+        return int(path.stat().st_mtime)
+    except OSError:
+        return 0
+
+
 def _panel_wanted(hass: HomeAssistant, exclude_entry_id: str | None) -> bool:
     return any(
         bool(entry.options.get(SHOW_PANEL_OPTION, False))
@@ -93,14 +100,16 @@ async def async_sync_panel(
         if not state["ws"]:
             websocket_api.async_register_command(hass, _ws_entities)
             state["ws"] = True
+        js_file = Path(__file__).parent / "frontend" / "pumpsteer-panel.js"
+        mtime = await hass.async_add_executor_job(_file_mtime, js_file)
         await panel_custom.async_register_panel(
             hass,
             frontend_url_path=PANEL_URL_PATH,
             webcomponent_name=WEBCOMPONENT,
             sidebar_title="PumpSteer",
             sidebar_icon="mdi:heat-pump-outline",
-            # Version query busts the browser cache after updates.
-            module_url=f"{STATIC_URL}/pumpsteer-panel.js?v={PUMPSTEER_VERSION}",
+            # Version + file mtime busts the browser cache whenever the file changes.
+            module_url=f"{STATIC_URL}/pumpsteer-panel.js?v={PUMPSTEER_VERSION}-{mtime}",
             require_admin=False,
         )
         state["panel"] = True

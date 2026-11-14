@@ -415,6 +415,13 @@ class PumpSteerPanel extends HTMLElement {
   }
 
   async _onClick(ev) {
+    const first = ev.composedPath()[0];
+    if (first && first.tagName === "DIALOG" && this._confirm) {
+      // Click on the backdrop (outside the dialog content) cancels.
+      this._confirm = null;
+      this._scheduleRender();
+      return;
+    }
     const el = ev.composedPath().find((n) => n.dataset && n.dataset.action);
     if (!el) return;
     const a = el.dataset.action;
@@ -455,7 +462,6 @@ class PumpSteerPanel extends HTMLElement {
       } else if (a === "confirm-yes") {
         await this._confirmHoliday();
       } else if (a === "confirm-no") {
-        if (ev.target !== el && el.classList.contains("modal-backdrop")) return; // click inside dialog
         this._confirm = null;
         this._scheduleRender();
       } else if (a === "range") {
@@ -947,9 +953,22 @@ class PumpSteerPanel extends HTMLElement {
   }
 
   _refreshDialog() {
-    const old = this.shadowRoot.querySelector(".modal-backdrop");
+    const old = this.shadowRoot.querySelector("dialog.modal");
     if (old) old.remove();
-    if (this._confirm) this.shadowRoot.querySelector(".page")?.insertAdjacentHTML("beforeend", this._confirmDialog());
+    if (!this._confirm) return;
+    this.shadowRoot.querySelector(".page")?.insertAdjacentHTML("beforeend", this._confirmDialog());
+    const dlg = this.shadowRoot.querySelector("dialog.modal");
+    if (!dlg) return;
+    try {
+      dlg.showModal(); // top layer: always centred in the viewport
+    } catch (_e) {
+      dlg.setAttribute("open", "");
+    }
+    // Native Escape closes the dialog; keep our state in step.
+    dlg.addEventListener("cancel", () => {
+      this._confirm = null;
+      this._scheduleRender();
+    });
   }
 
   async _confirmHoliday() {
@@ -995,6 +1014,13 @@ class PumpSteerPanel extends HTMLElement {
     if (start.getTime() <= Date.now()) await hass.callService("switch", "turn_on", { entity_id: ids.holiday });
   }
 
+  _holidayPeriodText() {
+    const dates = this._holidayDates();
+    if (!dates) return "";
+    const fmt = (d) => `${d.toLocaleDateString(this._lang, { day: "numeric", month: "short" })} ${this._time(d)}`;
+    return esc(`${fmt(dates.start)} – ${fmt(dates.end)}`);
+  }
+
   _confirmDialog() {
     const c = this._confirm;
     if (!c) return "";
@@ -1028,8 +1054,8 @@ class PumpSteerPanel extends HTMLElement {
       primary = c.useDates && startFuture ? t.holidaySave : t.holidayOnBtn;
     }
     return `
-      <div class="modal-backdrop" data-action="confirm-no">
-        <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="ps-dlg-title">
+      <dialog class="modal" aria-labelledby="ps-dlg-title">
+        <div class="modal-in">
           <h2 id="ps-dlg-title">${c.on ? t.holidayOnTitle : t.holidayOffTitle}</h2>
           ${body}
           <div class="modal-actions">
@@ -1037,7 +1063,7 @@ class PumpSteerPanel extends HTMLElement {
             <button class="btn primary" data-action="confirm-yes">${primary}</button>
           </div>
         </div>
-      </div>`;
+      </dialog>`;
   }
 
   _helpBtn(key) {
@@ -1097,7 +1123,7 @@ class PumpSteerPanel extends HTMLElement {
         </div>` : ""}
         ${stepper("target_temperature", t.targetTemp, t.indoor, 1, "°")}
         ${sw("preheat", t.preheat, t.preheatSub)}
-        ${sw("holiday", t.holiday, t.holidaySub)}
+        ${sw("holiday", t.holiday, this._holidayPeriodText() || t.holidaySub)}
         ${stepper("house_inertia", t.ramp, t.rampSub, 1)}
         ${stepper("summer_threshold", t.summer, t.summerSub, 1, "°")}
       </section>`;
@@ -1327,8 +1353,9 @@ class PumpSteerPanel extends HTMLElement {
       .ticks span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--secondary-text-color); }
       .cursor { position: absolute; top: 0; bottom: 52px; width: 0; border-left: 1px dashed var(--primary-text-color); pointer-events: none; }
       .readout { position: absolute; top: 8px; z-index: 2; pointer-events: none; background: var(--ps-card); border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,.25); white-space: nowrap; }
-      .modal-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; padding: 16px; }
-      .modal { background: var(--ps-card); border: 1px solid var(--divider-color); border-radius: var(--ps-radius); padding: 22px; max-width: 420px; width: 100%; box-shadow: 0 12px 40px rgba(0, 0, 0, .4); }
+      dialog.modal { background: var(--ps-card); color: var(--primary-text-color); border: 1px solid var(--divider-color); border-radius: var(--ps-radius); padding: 0; max-width: min(420px, calc(100vw - 32px)); width: 100%; box-shadow: 0 12px 40px rgba(0, 0, 0, .4); }
+      dialog.modal::backdrop { background: rgba(0, 0, 0, .55); }
+      .modal-in { padding: 22px; }
       .modal h2 { font-size: 18px; margin: 0 0 10px; }
       .modal p { margin: 0 0 10px; line-height: 1.5; color: var(--secondary-text-color); font-size: 14px; }
       .radio-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--ps-track); padding: 4px; border-radius: 10px; margin: 6px 0 12px; }
