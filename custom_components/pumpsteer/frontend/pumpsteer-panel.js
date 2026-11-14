@@ -6,6 +6,13 @@
  * chart. No build step, no external dependencies, fully local.
  */
 
+// Mirrors settings.py (COMFORT_FLOOR_BY_AGGRESSIVENESS, PREHEAT_HEADROOM_BY_AGGRESSIVENESS,
+// RAMP_SCALE, RAMP_MIN/MAX_MINUTES, RAMP_OUT_FACTOR, HOLIDAY_TEMP). Help text only.
+const COMFORT_DROP = [0, 0.5, 1.0, 1.5, 2.0, 3.0];
+const PREHEAT_HEADROOM = [0, 0.3, 0.5, 0.7, 1.0, 1.5];
+const RAMP = { scale: 6, min: 15, max: 60, outFactor: 0.5 };
+const HOLIDAY_TEMP = 17;
+
 const TEXT = {
   sv: {
     title: "PumpSteer",
@@ -48,6 +55,16 @@ const TEXT = {
     holidaySub: "Lägre måltemperatur",
     targetTemp: "Måltemperatur",
     summer: "Sommargräns",
+    cancel: "Avbryt",
+    holidayOnTitle: "Slå på semesterläge?",
+    holidayOnBtn: "Slå på",
+    holidayOffTitle: "Stänga av semesterläge?",
+    holidayOffBtn: "Stäng av",
+    holidayOnText: `Måltemperaturen sänks till ${HOLIDAY_TEMP}° och huset blir kallare.`,
+    holidayOnManual: "Inga datum är satta, så semesterläget gäller tills du stänger av det.",
+    holidayOffText: "PumpSteer går tillbaka till din vanliga måltemperatur och värmer upp huset igen.",
+    holidayPeriod: "Semesterperiod",
+    holidayReactivate: "Obs: perioden pågår fortfarande, så semesterläget slås på igen automatiskt vid nästa uppdatering. Rensa datumen för att avsluta det helt.",
     summerSub: "Ute över detta = ingen styrning",
     helpLabel: "Förklaring",
     help: {
@@ -134,6 +151,16 @@ const TEXT = {
     holidaySub: "Lower target temperature",
     targetTemp: "Target temperature",
     summer: "Summer threshold",
+    cancel: "Cancel",
+    holidayOnTitle: "Turn on holiday mode?",
+    holidayOnBtn: "Turn on",
+    holidayOffTitle: "Turn off holiday mode?",
+    holidayOffBtn: "Turn off",
+    holidayOnText: `The target temperature drops to ${HOLIDAY_TEMP}° and the house gets colder.`,
+    holidayOnManual: "No dates are set, so holiday mode stays on until you turn it off.",
+    holidayOffText: "PumpSteer returns to your normal target temperature and heats the house up again.",
+    holidayPeriod: "Holiday period",
+    holidayReactivate: "Note: the period is still running, so holiday mode turns back on automatically at the next update. Clear the dates to end it for good.",
     summerSub: "Outdoor above this = no control",
     helpLabel: "Explanation",
     help: {
@@ -188,12 +215,6 @@ const MODE_COLOR = {
   summer_mode: "#8a929c", safe_mode: "#ef5350", error: "#ef5350",
 };
 const SAVE_COLOR = "#3ecf8e";
-// Mirrors settings.py (COMFORT_FLOOR_BY_AGGRESSIVENESS, PREHEAT_HEADROOM_BY_AGGRESSIVENESS,
-// RAMP_SCALE, RAMP_MIN/MAX_MINUTES, RAMP_OUT_FACTOR, HOLIDAY_TEMP). Help text only.
-const COMFORT_DROP = [0, 0.5, 1.0, 1.5, 2.0, 3.0];
-const PREHEAT_HEADROOM = [0, 0.3, 0.5, 0.7, 1.0, 1.5];
-const RAMP = { scale: 6, min: 15, max: 60, outFactor: 0.5 };
-const HOLIDAY_TEMP = 17;
 
 const PHASE = { braking: "braked", pre_braking: "braked", brake_hold: "braked", preheating: "preheated" };
 const PHASE_COLOR = { braked: "rgba(255, 159, 67, 0.22)", preheated: "rgba(79, 163, 255, 0.22)" };
@@ -220,6 +241,13 @@ class PumpSteerPanel extends HTMLElement {
     this._raf = null;
     this._histHours = 24;
     this._helpOpen = new Set();
+    this._confirm = null;
+    this._onKey = (ev) => {
+      if (ev.key === "Escape" && this._confirm) {
+        this._confirm = null;
+        this._scheduleRender();
+      }
+    };
     this._hist = null;
     this._histKey = null;
     this._histLoading = false;
@@ -250,6 +278,7 @@ class PumpSteerPanel extends HTMLElement {
   }
 
   connectedCallback() {
+    window.addEventListener("keydown", this._onKey);
     this._statsTimer = setInterval(() => {
       this._statsKey = null;
       this._histKey = null;
@@ -258,6 +287,7 @@ class PumpSteerPanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    window.removeEventListener("keydown", this._onKey);
     clearInterval(this._statsTimer);
   }
 
@@ -301,7 +331,7 @@ class PumpSteerPanel extends HTMLElement {
   _signature() {
     // Re-render only when one of our entities changed (hass updates are frequent).
     const parts = Object.values(this._ids).map((id) => this._hass.states[id]?.last_updated || "");
-    return [parts.join("|"), this._range, this._entryIndex, this._statsKey, this._narrow, !!this._stats, this._histHours, this._histKey, [...this._helpOpen].join(",")].join("#");
+    return [parts.join("|"), this._range, this._entryIndex, this._statsKey, this._narrow, !!this._stats, this._histHours, this._histKey, [...this._helpOpen].join(","), this._confirm ? this._confirm.key : ""].join("#");
   }
 
   async _loadStats() {
@@ -380,7 +410,23 @@ class PumpSteerPanel extends HTMLElement {
         if (num(attrs.max) !== null) next = Math.min(attrs.max, next);
         await hass.callService("number", "set_value", { entity_id: this._ids[key], value: Math.round(next * 100) / 100 });
       } else if (a === "toggle") {
-        await hass.callService("switch", "toggle", { entity_id: this._ids[el.dataset.key] });
+        const key = el.dataset.key;
+        if (key === "holiday") {
+          // Holiday mode changes comfort a lot: always ask first.
+          this._confirm = { key, on: this._state(key)?.state !== "on" };
+          this._scheduleRender();
+          return;
+        }
+        await hass.callService("switch", "toggle", { entity_id: this._ids[key] });
+      } else if (a === "confirm-yes") {
+        const c = this._confirm;
+        this._confirm = null;
+        this._scheduleRender();
+        if (c) await hass.callService("switch", c.on ? "turn_on" : "turn_off", { entity_id: this._ids[c.key] });
+      } else if (a === "confirm-no") {
+        if (ev.target !== el && el.classList.contains("modal-backdrop")) return; // click inside dialog
+        this._confirm = null;
+        this._scheduleRender();
       } else if (a === "range") {
         this._range = Number(el.dataset.value);
         this._stats = null;
@@ -841,6 +887,41 @@ class PumpSteerPanel extends HTMLElement {
       <div>${t.priceNow} ${this._fmt(a.current_price, 2)}</div>`;
   }
 
+  _holidayDates() {
+    const dt = (key) => {
+      const st = this._state(key);
+      const d = st && !["unknown", "unavailable", ""].includes(st.state) ? new Date(st.state) : null;
+      return d && !Number.isNaN(d.getTime()) && d.getFullYear() > 1970 ? d : null;
+    };
+    const start = dt("holiday_start");
+    const end = dt("holiday_end");
+    return start && end && end > start ? { start, end } : null;
+  }
+
+  _confirmDialog() {
+    const c = this._confirm;
+    if (!c) return "";
+    const t = this._t;
+    const dates = this._holidayDates();
+    const fmt = (d) => `${d.toLocaleDateString(this._lang, { day: "numeric", month: "short" })} ${this._time(d)}`;
+    const now = Date.now();
+    const lines = [c.on ? t.holidayOnText : t.holidayOffText];
+    if (dates) lines.push(`${t.holidayPeriod}: ${fmt(dates.start)} – ${fmt(dates.end)}`);
+    if (c.on && !dates) lines.push(t.holidayOnManual);
+    if (!c.on && dates && now >= dates.start.getTime() && now < dates.end.getTime()) lines.push(t.holidayReactivate);
+    return `
+      <div class="modal-backdrop" data-action="confirm-no">
+        <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="ps-dlg-title">
+          <h2 id="ps-dlg-title">${c.on ? t.holidayOnTitle : t.holidayOffTitle}</h2>
+          ${lines.map((l) => `<p>${esc(l)}</p>`).join("")}
+          <div class="modal-actions">
+            <button class="btn" data-action="confirm-no">${t.cancel}</button>
+            <button class="btn primary" data-action="confirm-yes">${c.on ? t.holidayOnBtn : t.holidayOffBtn}</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   _helpBtn(key) {
     const open = this._helpOpen.has(key);
     return `<button class="help-btn ${open ? "on" : ""}" data-action="help" data-key="${key}" aria-expanded="${open}" aria-label="${this._t.helpLabel}">?</button>`;
@@ -995,6 +1076,11 @@ class PumpSteerPanel extends HTMLElement {
         </div>
       </div>`;
 
+    if (this._confirm) {
+      this.shadowRoot.querySelector(".page").insertAdjacentHTML("beforeend", this._confirmDialog());
+      this.shadowRoot.querySelector('.modal [data-action="confirm-no"]')?.focus();
+    }
+
     const menu = this.shadowRoot.querySelector("ha-menu-button");
     if (menu) {
       menu.hass = this._hass;
@@ -1122,6 +1208,13 @@ class PumpSteerPanel extends HTMLElement {
       .ticks span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--secondary-text-color); }
       .cursor { position: absolute; top: 0; bottom: 52px; width: 0; border-left: 1px dashed var(--primary-text-color); pointer-events: none; }
       .readout { position: absolute; top: 8px; z-index: 2; pointer-events: none; background: var(--ps-card); border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 16px rgba(0,0,0,.25); white-space: nowrap; }
+      .modal-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+      .modal { background: var(--ps-card); border: 1px solid var(--divider-color); border-radius: var(--ps-radius); padding: 22px; max-width: 420px; width: 100%; box-shadow: 0 12px 40px rgba(0, 0, 0, .4); }
+      .modal h2 { font-size: 18px; margin: 0 0 10px; }
+      .modal p { margin: 0 0 10px; line-height: 1.5; color: var(--secondary-text-color); font-size: 14px; }
+      .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+      .btn { min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid var(--divider-color); background: transparent; color: var(--primary-text-color); font: inherit; font-weight: 600; cursor: pointer; }
+      .btn.primary { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
       button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
     </style>`;
   }

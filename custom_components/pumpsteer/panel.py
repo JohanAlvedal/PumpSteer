@@ -39,6 +39,8 @@ _ENTITY_MAP: dict[str, tuple[str, str]] = {
     "summer_threshold": ("number", "_summer_threshold"),
     "preheat": ("switch", "_preheat_enabled"),
     "holiday": ("switch", "_holiday_mode"),
+    "holiday_start": ("datetime", "_holiday_start"),
+    "holiday_end": ("datetime", "_holiday_end"),
 }
 
 
