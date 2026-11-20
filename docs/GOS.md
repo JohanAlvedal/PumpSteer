@@ -14,7 +14,7 @@ virtual outdoor temperature (`fake_temp`) to a configurable Home Assistant servi
 This makes it possible to connect PumpSteer to external systems such as helpers,
 MQTT, Modbus, REST commands, ESPHome entities or other Home Assistant integrations.
 
-GOS remains an **optional advanced/experimental output path** in PumpSteer 2.2.x.
+GOS remains an **optional advanced/experimental output path**.
 The core PumpSteer controller does not depend on it. Test the selected Home Assistant
 service and payload against a harmless target before using GOS for production heating
 control.

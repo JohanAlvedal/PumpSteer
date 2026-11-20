@@ -67,7 +67,7 @@ Feedforward is applied as a **bounded overlay** on top of PI output.
 
 ### 3. Brake is a Bounded, Ramped Overlay
 
-The brake raises the fake outdoor temperature by `BRAKE_DELTA_C` (default 10 °C),
+The brake raises the fake outdoor temperature by `BRAKE_DELTA_C` (default 15 °C),
 making the heat pump think it is warmer outside and reduce output.
 
 Rules:
@@ -193,9 +193,9 @@ If P80 for the day is below `ABSOLUTE_CHEAP_LIMIT`, all slots are classified as 
 (no braking occurs on universally cheap days).
 
 {: .note }
-`HISTORY_WEIGHT` / `HORIZON_WEIGHT` and `compute_price_thresholds()` (72-hour trailing
-history) exist in `settings.py` / `electricity_price.py` but are not applied.
-Reserved for a future hybrid implementation.
+`HISTORY_WEIGHT` / `HORIZON_WEIGHT` (in `settings.py`) and `compute_price_thresholds()`
+(history-based thresholds, in `electricity_price.py`) exist but are not used by the
+control loop. They are reserved for a future hybrid implementation.
 
 ---
 

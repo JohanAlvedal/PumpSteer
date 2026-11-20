@@ -20,9 +20,9 @@ Full documentation is available at **[johanalvedal.github.io/PumpSteer](https://
 
 PumpSteer installs from HACS (Home Assistant 2026.10 or older) or the built-in Marketplace (**Settings** → **Marketplace**, Home Assistant 2026.11 or newer).
 
-* **[Installation Guide](https://johanalvedal.github.io/PumpSteer/INSTALLATION)** – Step-by-step setup and upgrade notes.
+* **[Installation Guide](https://johanalvedal.github.io/PumpSteer/INSTALLATION)** – Step-by-step setup.
 * **[Configuration](https://johanalvedal.github.io/PumpSteer/Configuration)** – Detailed explanation of all integration settings.
-* **[Dashboard Setup](https://johanalvedal.github.io/PumpSteer/DASHBOARD)** – How to use the provided Lovelace templates.
+* **[Dashboard Setup](https://johanalvedal.github.io/PumpSteer/DASHBOARD)** – The built-in sidebar panel and the provided Lovelace templates.
 
 ### 🧠 Deep Dive
 * **[System Architecture](https://johanalvedal.github.io/PumpSteer/ARCHITECTURE)** – How the PI-control and state machine works.
@@ -40,7 +40,9 @@ PumpSteer installs from HACS (Home Assistant 2026.10 or older) or the built-in M
 
 PumpSteer calculates a **virtual outdoor temperature** based on electricity prices, indoor temperature, and weather forecasts.
 
-It pushes this value to hardware (like an **Ohmigo** device) connected to your heat pump's outdoor sensor. The heat pump "sees" a different temperature and adjusts its performance accordingly — saving you money without needing complex Modbus or Cloud APIs.
+It pushes this value to hardware (like an **Ohmigo** device) connected to your heat pump's outdoor sensor input, or to another Home Assistant target through the optional Generic Output System (for example Modbus or MQTT). The heat pump "sees" a different temperature and adjusts its performance accordingly — fully local, without cloud APIs.
+
+An optional sidebar panel shows the current decision, the price plan for the next 24 hours and comfort history.
 
 ---
 

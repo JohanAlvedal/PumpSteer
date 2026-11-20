@@ -22,7 +22,9 @@ adapted to match your setup. In particular, replace any entity IDs that are spec
 to this installation (such as `sensor.elpris_spot_avgifter` and `sensor.temperatur_nu`)
 with your own entity IDs. All PumpSteer-owned entities (prefixed `sensor.pumpsteer`,
 `number.pumpsteer`, `switch.pumpsteer`, `datetime.pumpsteer`) are registered
-automatically and do not need to be changed.
+automatically. They match a new installation; installations first set up with an older
+PumpSteer version may keep earlier IDs (for example `number.pumpsteer_house_inertia`
+instead of `number.pumpsteer_brake_ramp_time`).
 
 ---
 
@@ -111,7 +113,7 @@ All files in `other/` contain entity IDs specific to one installation.
 You will need to replace price sensor IDs, outdoor temperature entity IDs,
 and Nordpool config entry IDs with your own before using them.
 
-### `pumpsteer_package.yaml`
+### `packages.yaml`
 
 A Home Assistant [package file](https://www.home-assistant.io/docs/configuration/packages/)
 that adds helper template sensors on top of the built-in PumpSteer entities:
@@ -128,7 +130,8 @@ that adds helper template sensors on top of the built-in PumpSteer entities:
 | `sensor.pumpsteer_holiday_status` | Holiday mode state with scheduled start/end times |
 | `sensor.pumpsteer_price_thresholds` | P30/P80 thresholds as a readable string |
 
-Add it to your HA config by placing the file in your `packages/` folder and adding
+Add it to your HA config by placing the file in your `packages/` folder (for example as
+`packages/pumpsteer.yaml`) and adding
 this to `configuration.yaml` if not already present:
 
 ```yaml
@@ -136,7 +139,7 @@ homeassistant:
   packages: !include_dir_named packages
 ```
 
-### `nordpool_package.yaml`
+### `nordpool.yaml`
 
 A complete Nordpool price package for SE3 (Sweden) that creates:
 
@@ -148,12 +151,12 @@ A complete Nordpool price package for SE3 (Sweden) that creates:
 - `binary_sensor.elpris_ok` — true when price is below threshold
 
 {: .important }
-This package requires the [Nordpool integration](https://github.com/custom-components/nordpool)
-and uses a hardcoded `config_entry` ID. You must replace `01KHAXM5D239V0B77VNTXXXXXX` 
+This package requires the built-in [Nord Pool integration](https://www.home-assistant.io/integrations/nordpool/)
+(it uses the `nordpool.get_prices_for_date` action) and a hardcoded `config_entry` ID. You must replace `01KHAXM5D239V0B77VNTXXXXXX`
 with your own Nordpool config entry ID, found under
 **Settings → Devices & Services → Nordpool → Configure**.
 
-### `lovelace_cards.yaml`
+### `pumpsteer_cards_for_lovelace`
 
 A complete Lovelace dashboard layout including:
 
@@ -167,6 +170,10 @@ A complete Lovelace dashboard layout including:
 Copy individual cards from this file into your own dashboard via the
 **Raw Configuration Editor**.
 
+### `nordpool_lovelacecard.yaml`
+
+A dashboard view for the Nord Pool price sensors created by `nordpool.yaml`.
+
 ---
 
 ## PumpSteer entities reference
@@ -175,8 +182,10 @@ Copy individual cards from this file into your own dashboard via the
 
 | Entity | State | Key attributes |
 |---|---|---|
-| `sensor.pumpsteer` | Fake outdoor temperature (°C) | `mode`, `price_category`, `current_price`, `current_price_unit`, `brake_factor`, `heating_demand_c`, `p30`, `p80`, `indoor_temperature`, `outdoor_temperature`, `minutes_until_expensive`, `status`, `last_updated` |
-| `sensor.pumpsteer_thermal_outlook` | `preheat` / `neutral` / `warming` / `precool_risk` | `preheat_worthwhile`, `preheat_strength`, `warming_trend`, `cooling_trend`, `night_min_temp`, `day_max_temp` |
+| `sensor.pumpsteer` | Fake outdoor temperature (°C) | `mode`, `price_category`, `current_price`, `current_price_unit`, `brake_factor`, `heating_demand_c`, `p30`, `p80`, `indoor_temperature`, `outdoor_temperature`, `minutes_until_expensive`, `price_offset_c`, `price_reference`, `price_plan`, `status`, `last_updated` |
+| `sensor.pumpsteer_thermal_outlook` | `preheat` / `precool` / `idle` | `preheat_worthwhile`, `preheat_strength`, `expected_drop_c`, `warming_trend`, `cooling_trend`, `precool_risk`, `night_min_temp`, `day_max_temp` |
+| `sensor.pumpsteer_indoor_temperature` | Validated indoor temperature used for control (°C) | — |
+| `sensor.pumpsteer_outdoor_temperature` | Validated real outdoor temperature used for control (°C) | — |
 | `sensor.pumpsteer_estimated_savings` | Accumulated estimated value (currency) — beta | `reduced_kwh`, `added_kwh`, `kwh_per_c_hour`, `method`, `beta` |
 
 ### Numbers
