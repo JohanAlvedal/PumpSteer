@@ -52,6 +52,14 @@ class PIController:
         self._last_error = 0.0
         _LOGGER.debug("PIController reset")
 
+    def restart_clock(self, now: datetime) -> None:
+        """Keep the integral but restart the time base.
+
+        Used while inputs are briefly unavailable: the paused interval must not
+        be integrated in one large step when control resumes.
+        """
+        self._last_time = now
+
     def compute(
         self,
         target_temp: float,
