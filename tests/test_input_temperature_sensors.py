@@ -256,13 +256,14 @@ def test_setup_registers_two_inputs_with_original_controller(request):
             controller.hass, controller._config_entry, add_entities
         )
     )
-    assert len(added) == 4
+    assert len(added) == 5
     assert added[0].unique_id == "safe-mode-test"
-    assert [e._attr_translation_key for e in added[2:]] == [
+    assert [e._attr_translation_key for e in added[2:4]] == [
         "indoor_temperature",
         "outdoor_temperature",
     ]
-    assert all(e._controller is added[0] for e in added[2:])
+    assert all(e._controller is added[0] for e in added[2:4])
+    assert added[4]._attr_unique_id == "safe-mode-test_estimated_savings"
 
 
 def test_control_temperature_keeps_legacy_id_suggestion(temperatures):

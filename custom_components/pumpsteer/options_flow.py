@@ -11,7 +11,10 @@ from .const import (
     NOTIFICATION_LEVEL_OPTION,
     NOTIFICATION_LEVELS,
     OHMIGO_RELAY_ENTITY,
+    SAVINGS_KWH_OPTION,
+    SHOW_PANEL_OPTION,
 )
+from .savings import DEFAULT_KWH_PER_C_HOUR, MAX_KWH_PER_C_HOUR, MIN_KWH_PER_C_HOUR
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -178,6 +181,25 @@ class PumpSteerOptionsFlowHandler(config_entries.OptionsFlow):
                             }
                         }
                     ),
+                    vol.Optional(
+                        SAVINGS_KWH_OPTION,
+                        default=current_data.get(
+                            SAVINGS_KWH_OPTION, DEFAULT_KWH_PER_C_HOUR
+                        ),
+                    ): selector(
+                        {
+                            "number": {
+                                "min": MIN_KWH_PER_C_HOUR,
+                                "max": MAX_KWH_PER_C_HOUR,
+                                "step": 0.01,
+                                "mode": "box",
+                            }
+                        }
+                    ),
+                    vol.Optional(
+                        SHOW_PANEL_OPTION,
+                        default=current_data.get(SHOW_PANEL_OPTION, False),
+                    ): selector({"boolean": {}}),
                 }
             ),
             errors=errors,

@@ -1,5 +1,6 @@
 """PumpSteer heat pump controller."""
 
+import importlib
 import logging
 from contextlib import suppress
 from typing import Any
@@ -16,8 +17,23 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["sensor", "number", "switch", "datetime"]
 
 
+async def _async_sync_panel(
+    hass: HomeAssistant, exclude_entry_id: str | None = None
+) -> None:
+    """Add/remove the optional sidebar panel. Failures never block setup."""
+    try:
+        panel = await hass.async_add_import_executor_job(
+            importlib.import_module, f"{__name__}.panel"
+        )
+        await panel.async_sync_panel(hass, exclude_entry_id)
+    except Exception as err:
+        _LOGGER.warning("PumpSteer panel could not be updated: %s", err)
+
+
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload only when the optional relay entity itself changes."""
+    await _async_sync_panel(hass)
+
     runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if not isinstance(runtime, dict):
         return
@@ -52,6 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         raise
 
+    await _async_sync_panel(hass)
     _LOGGER.info("PumpSteer integration setup completed")
     return True
 
@@ -61,6 +78,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if not unloaded:
         return False
+
+    await _async_sync_panel(hass, exclude_entry_id=entry.entry_id)
 
     runtime = hass.data.get(DOMAIN, {}).pop(entry.entry_id, {})
     if isinstance(runtime, dict):
