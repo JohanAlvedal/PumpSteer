@@ -74,6 +74,8 @@ Go to **Settings → Devices & Services → PumpSteer → Configure** to access 
 | **Generic output service** | Optional Home Assistant service used by GOS, for example `modbus.write_register`, `mqtt.publish` or `number.set_value`. | — |
 | **Generic output payload template** | YAML payload template for GOS. May use the `fake_temp` variable. | — |
 | **Generic output interval** | Minimum minutes between Generic Output System calls. | 5 min |
+| **Estimated savings: kWh per °C and hour** | Assumed electricity use per °C of signal offset per hour. Used only by the beta **Estimated Savings** sensor; has no effect on control. See [Dashboard Setup](DASHBOARD#how-estimated-savings-is-calculated-beta). | 0.07 |
+| **Show PumpSteer panel in the sidebar** | Adds the built-in PumpSteer page to the Home Assistant sidebar. Display only; turning it off removes the page. | Off |
 
 {: .note }
 The notification service is configured directly here in the integration options — no
@@ -251,7 +253,7 @@ HA persistent notifications.
 **Entity:** `switch.pumpsteer_holiday_mode`
 **Default:** Off
 
-Lowers the target temperature to `HOLIDAY_TEMP` (default 16 °C) while keeping all
+Lowers the target temperature to `HOLIDAY_TEMP` (default 17 °C) while keeping all
 PI and braking logic active. Can also be scheduled using the holiday start/end datetime
 helpers.
 
@@ -384,14 +386,14 @@ If P80 for the day is below `ABSOLUTE_CHEAP_LIMIT`, all slots are classified as 
 ### Brake strength
 
 ```python
-BRAKE_DELTA_C: Final[float] = 10.0
+BRAKE_DELTA_C: Final[float] = 15.0
 ```
 
 How many degrees above real outdoor temperature the fake temperature is pushed during
 full braking. A higher value makes the heat pump reduce output more aggressively.
 
-Typical range: 8–15 °C. At 10 °C, most heat pumps will significantly reduce heating
-output. At 15 °C, the effect is very strong.
+Typical range: 10–15 °C. 10 °C is a conservative brake; the default 15 °C gives very
+strong braking on most heating systems.
 
 ---
 
@@ -469,7 +471,7 @@ When `indoor < target − floor`, the brake releases immediately.
 ### Holiday temperature
 
 ```python
-HOLIDAY_TEMP: Final[float] = 16.0
+HOLIDAY_TEMP: Final[float] = 17.0
 ```
 
 The target temperature used when holiday mode is active.

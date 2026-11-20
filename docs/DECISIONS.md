@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Design Decisions
-nav_order: 10
+nav_order: 12
 ---
 
 # ⚖️ Design Decisions
@@ -116,7 +116,8 @@ means the worst case is one "missed" cycle — imperceptible in practice.
 ### Why brake hold exists
 
 **Decision:** A non-expensive gap is bridged only when the next expensive period begins within
-`BRAKE_HOLD_MINUTES` (default 30 min). Otherwise the brake starts ramping out immediately.
+the bridge window `max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)` — 30 min at default
+inertia. Otherwise the brake starts ramping out immediately.
 
 **Problem this solves:**
 Price data at 15-minute resolution can produce alternating expensive/cheap/expensive
@@ -302,6 +303,27 @@ brake from zero (up to an hour of weaker braking) and discarded PI history every
 What safe mode sends is unchanged — real outdoor passthrough or nothing — so held memory
 never drives output while inputs are invalid. After a long outage the old state no longer
 describes the house, so the controller starts clean.
+
+---
+
+## Panel and Savings Estimate
+
+### Why the sidebar panel and Estimated Savings are observational and opt-in
+
+**Decision:** The sidebar panel is off by default and display only; settings changed
+there go through the normal PumpSteer number and switch entities. The Estimated Savings
+sensor receives samples from the controller but nothing in the control loop reads it.
+
+**Reasoning:** The control loop must stay explainable from its inputs alone. A UI or a
+savings figure that could feed back into decisions would break that. Keeping both
+outside the loop also means a frontend failure or a poor savings assumption can never
+change heating behavior: the panel is loaded lazily and a failure only logs a warning.
+
+**Why savings is an estimate and marked beta:** Nobody can observe the same day without
+PumpSteer. The sensor values only the *shift* of energy in time against today's mean
+price, using a user-tunable `savings_kwh_per_c_hour` assumption. That keeps it
+conservative and explainable, but it is not a measurement, so it carries `beta: true`
+and can be disabled like any entity.
 
 ---
 

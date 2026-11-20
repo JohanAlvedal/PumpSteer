@@ -113,21 +113,22 @@ during braking as a problem.
 
 ## Brake Strength
 
-`BRAKE_DELTA_C` (default 10 °C) controls how far the fake temperature is raised above
+`BRAKE_DELTA_C` (default 15 °C) controls how far the fake temperature is raised above
 real outdoor temperature during full braking.
 
-At `BRAKE_DELTA_C = 10`:
-- If it is −5 °C outside, the heat pump sees +5 °C
-- Most heat pumps will significantly reduce heating output at this signal
+At `BRAKE_DELTA_C = 15`:
+- If it is −5 °C outside, the heat pump sees +10 °C
+- Most heat pumps reduce heating output very strongly at this signal
 
-If your heat pump does not respond sufficiently to braking, increase to 12–15 °C.
+If braking is stronger than you need, or the comfort floor triggers often during
+expensive periods, lower it toward 10–12 °C (10 °C is a conservative brake).
 If braking causes the indoor temperature to drop faster than the comfort floor allows,
-the brake will release automatically — so raising this value is generally safe.
+the brake releases automatically.
 
 {: .warning }
-Very high values (above 15 °C) combined with high aggressiveness may cause the
-comfort floor to trigger frequently, producing rapid brake cycling. Prefer raising the
-aggressiveness level before increasing brake delta.
+Values above 15 °C combined with high aggressiveness may cause the comfort floor to
+trigger frequently, producing rapid brake cycling. Prefer adjusting the saving level
+before changing brake delta.
 
 ---
 

@@ -92,6 +92,12 @@ PumpSteer falls back to **safe mode** (passing through real outdoor temp) until 
 required sensors are available. Temperature sensors that only report when their value
 changes are accepted at the latest 5 minutes after HA has started.
 
+### Step 5 — Optional: enable the sidebar panel
+
+Go to **Settings → Devices & Services → PumpSteer → Configure** and turn on
+**Show PumpSteer panel in the sidebar**. See [Dashboard Setup](DASHBOARD) for what
+the panel shows.
+
 ---
 
 ## Manual Installation
@@ -106,71 +112,32 @@ If you prefer not to use HACS or the Marketplace:
 
 ---
 
-## Upgrade from 2.1.x → 2.2.x
+## Updating PumpSteer
 
-{: .highlight }
-No migration is required. Existing PumpSteer 2.1.x configurations continue to work.
-
-Important changes in 2.2.x:
-
-- ThermalOutlook now actively gates/scales preheat when available
-- preheat may use bounded saving-level headroom above target and tapers at the ceiling
-- pre-brake and active braking share the same comfort-floor protection
-- short price dips use bounded `brake_hold` behavior
-- DST price-slot indexing is hardened
-- ThermalModel fitting runs after completed brake phases with enough valid samples; it remains diagnostic
-- optional Ohmigo Relay Guard can recover a configured Active/Bypass relay
-- braking notifications can expose the exact current price used by the decision
-
-The Relay Guard is opt-in and is created only when an Ohmigo Active/Bypass relay is
-configured. It starts off on first creation.
-
----
-
-## Upgrade from 2.0.x → 2.1.x
-
-{: .highlight }
-No migration required. Existing setups continue working without changes.
-
-New in 2.1.x:
-- `sensor.pumpsteer_thermal_outlook` is automatically registered
-- `switch.pumpsteer_preheat_boost` replaces the options-flow toggle (your saved value is preserved via RestoreEntity)
-
----
-
-## Upgrade from 1.x → 2.x
-
-{: .warning }
-PumpSteer 2.0 is a **complete rewrite**. Treat this as a new integration, not an update.
-
-### Breaking changes
-
-| What changed | Action required |
-|---|---|
-| Price categories | Old categories (`very_cheap`, `extreme`) are gone. New: `cheap`, `normal`, `expensive` |
-| Entity IDs | All entities have been renamed — update dashboards and automations |
-| ML features | Removed entirely |
-| Options flow | Rebuilt — reconfigure after upgrade |
-
-### Recommended upgrade path
-
-1. Note your current settings (target temp, aggressiveness, etc.)
-2. Remove the old PumpSteer integration
-3. Install 2.x fresh via HACS or the Marketplace
-4. Reconfigure with your saved settings
-5. Observe for 24–48 hours before migrating dashboards and automations
+Update from HACS or the Marketplace when a new release is offered, then restart
+Home Assistant. Settings and entity IDs are kept. Release-specific notes are in
+the [Changelog](CHANGELOG).
 
 ---
 
 ## What PumpSteer creates
 
-After setup, PumpSteer registers the following entities:
+After setup, PumpSteer registers the following entities.
+
+{: .note }
+The entity IDs below are the ones created on a new installation. Installations first
+set up with an older PumpSteer version keep their original entity IDs (for example
+`number.pumpsteer_house_inertia` for Brake Ramp Time). Check
+**Settings → Devices & Services → PumpSteer** for the IDs in your installation.
 
 ### Sensors
 | Entity | Description |
 |---|---|
 | `sensor.pumpsteer` | The fake outdoor temperature plus control diagnostics such as mode, current price, brake factor and ThermalModel state |
-| `sensor.pumpsteer_thermal_outlook` | Forecast analysis (preheat worthwhile, trend, etc.) |
+| `sensor.pumpsteer_thermal_outlook` | Forecast analysis: `preheat`, `precool` or `idle` |
+| `sensor.pumpsteer_indoor_temperature` | The validated indoor temperature PumpSteer uses for control (read-only) |
+| `sensor.pumpsteer_outdoor_temperature` | The validated real outdoor temperature PumpSteer uses for control (read-only) |
+| `sensor.pumpsteer_estimated_savings` | **Beta.** Estimated value of shifting heat between price periods; never affects control |
 
 ### Number sliders
 | Entity | Description | Default |
@@ -185,7 +152,7 @@ After setup, PumpSteer registers the following entities:
 |---|---|---|
 | `switch.pumpsteer_preheat_boost` | Enable/disable preheat boost | On |
 | `switch.pumpsteer_notifications` | Enable/disable price notifications | On |
-| `switch.pumpsteer_holiday_mode` | Enable holiday mode (16 °C target) | Off |
+| `switch.pumpsteer_holiday_mode` | Enable holiday mode (17 °C target) | Off |
 | `switch.pumpsteer_ohmigo_push` | Enable/disable Ohmigo push | On |
 | `switch.pumpsteer_ohmigo_relay_guard` | Optional Active/Bypass relay recovery guard; created only when a relay is configured | Off on first creation |
 

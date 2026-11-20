@@ -56,12 +56,15 @@ fake_outdoor_temp = PI_output + brake_overlay + preheat_boost
 | **Ohmigo support** | Pushes fake temp directly to Ohmigo WiFi controller |
 | **Ohmigo Relay Guard** | Optional recovery of a configured Active/Bypass relay, outside the control loop |
 | **Generic Output System** | Optional service-based output to Modbus, MQTT, ESPHome and other HA targets |
-| **Holiday mode** | Lowers target to 16 °C during absence |
+| **Holiday mode** | Lowers target to 17 °C during absence |
+| **Sidebar panel** | Optional built-in page with status, 24 h price plan, comfort history and settings |
+| **Estimated savings** *(beta)* | Observational estimate of the value of shifting heat in time; never affects control |
 | **Fully local** | No cloud dependency and no black-box control loop |
 
 ## Documentation
 
 - [Generic Output System (GOS)]({{ site.baseurl }}/GOS.html)
+- [Ohmigo ACTIVE renewal]({{ site.baseurl }}/OHMIGO_ACTIVE_SAFETY.html)
 - [GitHub Repository](https://github.com/JohanAlvedal/PumpSteer)
 
 ---

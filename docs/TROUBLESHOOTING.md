@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Troubleshooting
-nav_order: 8
+nav_order: 9
 ---
 
 # 🛠 Troubleshooting
@@ -122,8 +122,10 @@ the mode changes to `brake_hold`.
 
 1. **Short-dip bridge is active**
    PumpSteer holds the current brake factor only when the next expensive period starts
-   within `BRAKE_HOLD_MINUTES` (default 30 min). If the next expensive period is farther
-   away, the brake should ramp out immediately.
+   within the bridge window `max(BRAKE_HOLD_MINUTES, ramp_in + ramp_out)` — 30 min at
+   the default Brake Ramp Time, longer for heavier houses. The effective window is shown
+   in `bridge_limit_minutes`. If the next expensive period is farther away, the brake
+   should ramp out immediately.
 
 2. **Next slot is also expensive**
    Check the `price_category` of upcoming slots. If the next slot is also expensive,
@@ -200,15 +202,23 @@ which is correct behavior. The heat pump will still provide some heat at −5 °
 
 ---
 
-## HA restart causes a large brake ramp jump
+## Brake factor is already high right after a restart
 
-**Symptom:** After a restart, `brake_factor` jumps to a high value immediately.
+**Symptom:** Right after a Home Assistant restart or integration reload, `brake_factor`
+is high instead of ramping in from zero.
 
-**Cause:** This should not happen with current code. The brake ramp state is persisted
-via `RestoreEntity` and the ramp dt is capped at 60 seconds per step.
+**Cause:** This is expected when the restart happens during braking. The PI integral and
+the brake/preheat ramps are restored and kept for up to 30 minutes since the last regular
+output, so braking continues where it left off. The same applies to short safe-mode
+outages (sensor dropouts, the price-list rollover at midnight). While safe mode lasts,
+the `controller_state` attribute shows `held` or `reset`.
 
-If you observe this: check that `extra_restore_state_data` is not returning `None` in
-logs. This can happen if the entity failed to save state before the restart.
+After a longer outage, or a large clock jump, the controller starts clean and the brake
+ramps in from zero again. The ramp `dt` is capped at 60 seconds per step, so the factor
+never jumps because of elapsed time alone.
+
+If the factor is restored although the last regular output was more than 30 minutes
+ago, check the logs for restore errors and report it as a bug.
 
 ---
 
@@ -256,6 +266,21 @@ Inspect the Relay Guard switch attributes for:
 
 `safe_mode` alone does not inhibit Relay Guard. Ohmigo may still be forwarding the
 real outdoor temperature, so the Active path can still be required.
+
+---
+
+## Sidebar panel does not appear or looks outdated
+
+1. Check that **Show PumpSteer panel in the sidebar** is enabled under
+   **Settings → Devices & Services → PumpSteer → Configure**.
+2. Reload the browser. The panel file is cache-busted on its modification time, but
+   some browsers and the companion app hold on to the old version.
+3. Check **Settings → System → Logs** for `PumpSteer panel could not be updated`. A
+   panel failure never blocks the integration itself.
+
+If the savings section is missing, `sensor.pumpsteer_estimated_savings` is probably
+disabled. The chart reads long-term statistics, which are compiled once per hour, so a
+fresh install shows no savings bars during the first hour.
 
 ---
 
@@ -338,7 +363,7 @@ temperature when that sensor is still available, so the heat pump can continue o
 own heating curve. If the outdoor sensor itself is unavailable, PumpSteer's output is
 also unavailable. Monitor the system after installation and configuration changes.
 
-### Offline temperature-validation candidate — not approved for active operation
+### How temperature inputs are validated
 
 Temperature inputs marked `restored` are rejected. After a Home Assistant start,
 an input requires a non-restored numeric HA report with `last_reported` later than
@@ -358,32 +383,11 @@ Inputs and configured source identities are rechecked after asynchronous data
 retrieval and immediately before each output service call. Changed or invalid
 inputs abort that cycle; `temperature_input_status: interrupted` and
 `receiver_state: unverified` describe this condition. Overlapping updates are
-skipped and reevaluated by the next normal poll. No additional polling is added.
+skipped and reevaluated by the next normal poll.
 A brief invalid state followed by the same valid number entirely between checks
 is not detected. No maximum measurement-age policy is inferred from HA timestamps.
 
-PI formulas, valid-input output payloads, send intervals, receiver fallback and
-Relay Guard are unchanged. Suppressing a write does not clear a receiver's last
-command. Dispatch is not physical acknowledgement, and existing service-error
-reporting does not prove delivery. Verify the installed receiver model, firmware,
-protocol, timeout/bypass wiring and source startup/cache contract before deployment.
-Rollback requires the prior integration version **and** a verified safe physical
-signal path; a code rollback alone does not reset the receiver.
-
-#### Separate BYPASS proposal — design only, pending hardware confirmation
-
-First establish whether the installed receiver already provides a verified safe
-fallback. If a physical relay is needed instead, confirm its wiring, polarity,
-failure position and feedback before choosing any command. `off` is not assumed
-to mean safe bypass. GOS requires its own verified physical fallback contract.
-
-The smallest conditional addition would reuse the existing entry runtime and
-Relay Guard: inhibit active recovery and cancel/await pending recovery before
-requesting the verified bypass action. Recovery must recheck inhibition before
-each `turn_on`; already dispatched commands cannot be retracted. Request bypass
-on the loss transition, using the existing targeted relay feedback to report
-requested/confirmed/unknown status. Reactivation conditions must be agreed and
-tested separately; a recovered numeric HA state alone is insufficient evidence.
-No new polling, generic monitor or history is proposed. HA/communication failure
-can prevent a software bypass command, so an independent physical failsafe remains
-a hardware requirement. This candidate implements none of these relay changes.
+Suppressing a write does not clear a receiver's last command. Dispatch is not
+physical acknowledgement, and service-error reporting does not prove delivery. Verify
+the installed receiver model, firmware, protocol, timeout/bypass wiring and the
+sensor's startup/cache behavior before relying on it for heating control.
