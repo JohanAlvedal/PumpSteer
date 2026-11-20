@@ -56,6 +56,7 @@ class PumpSteerSavingsSensor(SensorEntity, RestoreEntity):
             "added_kwh": round(self._estimator.added_kwh, 3),
             "kwh_per_c_hour": self._last_kwh_per_c_hour,
             "method": "shifted_kwh_x_price_minus_daily_mean",
+            "beta": True,
         }
 
     async def async_added_to_hass(self) -> None:

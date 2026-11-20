@@ -26,7 +26,7 @@ automatically and do not need to be changed.
 
 ---
 
-## Built-in sidebar panel (experimental)
+## Built-in sidebar panel
 
 PumpSteer can add its own page to the Home Assistant sidebar. No custom cards
 or HACS frontend plugins are needed, and it works fully locally.
@@ -43,10 +43,25 @@ The page shows:
 - price bars for the next 24 hours (from the `price_plan` attribute on
   `sensor.pumpsteer`) with the expected action per slot
 - a plain-language explanation of the current mode
-- the **Estimated Savings** chart (7 days, 30 days, year)
-- aggressiveness, target temperature, preheat, holiday mode and Brake Ramp Time
+- the **Estimated Savings** chart (7 days, 30 days, year) — beta, see below
+- a comfort history chart (indoor vs target with brake/preheat periods)
+- aggressiveness, target temperature, summer threshold, preheat, holiday mode
+  and Brake Ramp Time, each with a **?** explaining what it does
 
-### How Estimated Savings is calculated
+Turning on holiday mode from the panel asks for confirmation first, since it
+lowers the target to 17 °C. The dialog can also schedule a period using
+`datetime.pumpsteer_holiday_start` / `datetime.pumpsteer_holiday_end`.
+
+If the page looks outdated after an update, reload the browser (the panel file
+is cache-busted on its modification time, but some browsers hold on to it).
+
+### How Estimated Savings is calculated (beta)
+
+{: .warning }
+Estimated Savings is a **beta** feature. The method and the default
+`savings_kwh_per_c_hour` may change in later releases. The sensor carries the
+attribute `beta: true`. If you don't want it, disable the entity under
+Settings → Entities; the panel then hides the savings section.
 
 `sensor.pumpsteer_estimated_savings` is an **estimate, not a measurement**. Nobody
 can observe the same day without PumpSteer. The sensor never affects control.
@@ -162,6 +177,7 @@ Copy individual cards from this file into your own dashboard via the
 |---|---|---|
 | `sensor.pumpsteer` | Fake outdoor temperature (°C) | `mode`, `price_category`, `current_price`, `current_price_unit`, `brake_factor`, `heating_demand_c`, `p30`, `p80`, `indoor_temperature`, `outdoor_temperature`, `minutes_until_expensive`, `status`, `last_updated` |
 | `sensor.pumpsteer_thermal_outlook` | `preheat` / `neutral` / `warming` / `precool_risk` | `preheat_worthwhile`, `preheat_strength`, `warming_trend`, `cooling_trend`, `night_min_temp`, `day_max_temp` |
+| `sensor.pumpsteer_estimated_savings` | Accumulated estimated value (currency) — beta | `reduced_kwh`, `added_kwh`, `kwh_per_c_hour`, `method`, `beta` |
 
 ### Numbers
 

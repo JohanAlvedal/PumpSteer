@@ -13,13 +13,27 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [2.3.0] — Built-in sidebar panel
+
 ### Added
-- Optional sidebar panel (`show_panel` option, off by default) with live status,
-  24 h price plan, mode explanation, settings and savings chart.
-- `sensor.pumpsteer_estimated_savings`: observational estimate of the value of
-  shifting heat between price periods (`savings_kwh_per_c_hour` option).
+- Optional sidebar panel (`show_panel` option, off by default): live status,
+  24 h price plan with expected action per slot, plain-language mode
+  explanation, comfort history chart, settings with help texts, and a savings
+  chart. Turning on holiday mode from the panel asks for confirmation and can
+  schedule a start/end period.
+- `sensor.pumpsteer_estimated_savings` (**beta**): observational estimate of
+  the value of shifting heat between price periods (`savings_kwh_per_c_hour`
+  option). Never affects control; carries `beta: true` and can be disabled
+  like any entity.
 - `price_offset_c`, `price_reference` and `price_plan` attributes on
   `sensor.pumpsteer` (`price_plan` is excluded from the recorder).
+
+### Changed
+- `manifest.json` now depends on `frontend`, `http`, `panel_custom` and
+  `websocket_api` (needed to serve the panel). These are core Home Assistant
+  components and load regardless of whether the panel is enabled.
 
 ---
 
