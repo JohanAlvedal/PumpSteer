@@ -52,6 +52,21 @@ class PIController:
         self._last_error = 0.0
         _LOGGER.debug("PIController reset")
 
+    @property
+    def integral(self) -> float:
+        """Current integral term (persisted across restarts by sensor.py)."""
+        return self._integral
+
+    def restore_integral(self, value: float, integral_clamp: float) -> None:
+        """Restore a persisted integral after a restart.
+
+        The time base is left unset so the first compute() after the restart
+        integrates one nominal step, not the downtime.
+        """
+        self._integral = max(-integral_clamp, min(integral_clamp, float(value)))
+        self._last_time = None
+        self._last_error = 0.0
+
     def restart_clock(self, now: datetime) -> None:
         """Keep the integral but restart the time base.
 

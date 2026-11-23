@@ -98,6 +98,7 @@ _RESTORE_BRAKE_LAST_T = "brake_last_t"
 _RESTORE_BRAKE_LAST_EXPENSIVE_T = "brake_last_expensive_t"
 _RESTORE_WAS_BRAKING = "was_braking_last_cycle"
 _RESTORE_LAST_CONTROL_T = "last_control_t"
+_RESTORE_PI_INTEGRAL = "pi_integral"
 
 # Safe mode keeps controller memory (PI integral, brake/preheat ramps) through
 # short outages: a brief sensor dropout, a restart, or the price-list rollover
@@ -268,7 +269,7 @@ class PumpSteerSensor(RestoreEntity):
 
     @property
     def extra_restore_state_data(self):
-        """Persist brake ramp state across restarts."""
+        """Persist brake ramp state and PI integral across restarts."""
         from homeassistant.helpers.restore_state import ExtraStoredData
 
         class _BrakeData(ExtraStoredData):
@@ -279,12 +280,14 @@ class PumpSteerSensor(RestoreEntity):
                 brake_last_expensive_t,
                 was_braking,
                 last_control_t,
+                pi_integral,
             ):
                 self.brake_ramp = brake_ramp
                 self.brake_last_t = brake_last_t
                 self.brake_last_expensive_t = brake_last_expensive_t
                 self.was_braking = was_braking
                 self.last_control_t = last_control_t
+                self.pi_integral = pi_integral
 
             def as_dict(self):
                 return {
@@ -301,6 +304,7 @@ class PumpSteerSensor(RestoreEntity):
                     _RESTORE_LAST_CONTROL_T: (
                         self.last_control_t.isoformat() if self.last_control_t else None
                     ),
+                    _RESTORE_PI_INTEGRAL: self.pi_integral,
                 }
 
         return _BrakeData(
@@ -309,6 +313,7 @@ class PumpSteerSensor(RestoreEntity):
             self._brake_last_expensive_t,
             self._was_braking_last_cycle,
             self._last_control_t,
+            self._pi.integral,
         )
 
     async def async_added_to_hass(self) -> None:
@@ -372,13 +377,25 @@ class PumpSteerSensor(RestoreEntity):
             # closest record of when PumpSteer last produced regular output.
             if self._last_control_t is None:
                 self._last_control_t = self._brake_last_t
+            # PI integral: older stored data has no key and keeps the previous
+            # behaviour (start at 0). Discarded by _reset_controller_state() if
+            # the outage turns out to be longer than the hold window.
+            saved_integral = safe_float(data.get(_RESTORE_PI_INTEGRAL))
+            if saved_integral is not None and math.isfinite(saved_integral):
+                cfg = self._cfg()
+                self._pi.restore_integral(
+                    saved_integral,
+                    float(cfg.get("pid_integral_clamp", PID_INTEGRAL_CLAMP)),
+                )
             # Restored memory is only reused if the outage proves to be short.
             self._controller_held = True
         _LOGGER.debug(
-            "PumpSteer restored brake state: ramp=%.3f last_t=%s last_exp=%s",
+            "PumpSteer restored brake state: ramp=%.3f last_t=%s last_exp=%s "
+            "pi_integral=%.3f",
             self._brake_ramp,
             self._brake_last_t,
             self._brake_last_expensive_t,
+            self._pi.integral,
         )
 
         saved_k = safe_float(self._attributes.get("thermal_k"))

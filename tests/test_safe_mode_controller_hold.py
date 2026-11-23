@@ -198,6 +198,56 @@ def test_last_control_time_is_persisted(monkeypatch):
     assert saved["last_control_t"] == (BASE + timedelta(minutes=60)).isoformat()
 
 
+def test_pi_integral_is_persisted(monkeypatch):
+    sensor, _ = _sensor()
+    _cycle(sensor, monkeypatch, 60)
+    sensor._pi._integral = 4.2
+    restore_module = __import__(
+        "homeassistant.helpers.restore_state", fromlist=["ExtraStoredData"]
+    )
+    monkeypatch.setattr(restore_module, "ExtraStoredData", object, raising=False)
+    saved = sensor.extra_restore_state_data.as_dict()
+    assert saved["pi_integral"] == 4.2
+
+
+def test_short_restart_keeps_pi_integral(monkeypatch):
+    # Regulating with a saturated integral, HA down for ~3 minutes.
+    stored = {**_stored(0.0, 3), "was_braking_last_cycle": False, "pi_integral": 6.0}
+    sensor, _ = _restarted(monkeypatch, stored)
+    assert sensor._pi.integral == 6.0
+    now = BASE + timedelta(minutes=70)
+    asyncio.run(
+        sensor._enter_safe_mode("Waiting for Home Assistant startup", None, now)
+    )
+    assert sensor.extra_state_attributes["controller_state"] == "held"
+    assert sensor._pi.integral == 6.0
+
+
+def test_long_restart_discards_pi_integral(monkeypatch):
+    stored = {**_stored(0.0, 120), "pi_integral": 6.0}
+    sensor, _ = _restarted(monkeypatch, stored)
+    now = BASE + timedelta(minutes=70)
+    asyncio.run(
+        sensor._enter_safe_mode("Waiting for Home Assistant startup", None, now)
+    )
+    assert sensor.extra_state_attributes["controller_state"] == "reset"
+    assert sensor._pi.integral == 0.0
+
+
+@pytest.mark.parametrize("raw", [None, "nan", "garbage"])
+def test_old_or_invalid_stored_integral_starts_at_zero(monkeypatch, raw):
+    stored = _stored(0.0, 3)
+    if raw is not None:
+        stored["pi_integral"] = raw
+    sensor, _ = _restarted(monkeypatch, stored)
+    assert sensor._pi.integral == 0.0
+
+
+def test_restored_integral_is_clamped(monkeypatch):
+    sensor, _ = _restarted(monkeypatch, {**_stored(0.0, 3), "pi_integral": 50.0})
+    assert sensor._pi.integral == 6.0
+
+
 # ── Midnight price rollover ───────────────────────────────────────────────────
 
 
