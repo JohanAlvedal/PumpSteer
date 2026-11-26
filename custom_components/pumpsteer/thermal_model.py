@@ -55,6 +55,15 @@ _MAX_RATE_C_PER_HOUR = 1.0
 # Validation sessions shorter than this are too sensitive to sensor noise.
 _MIN_VALIDATION_SESSION_MINUTES = 10.0
 
+# A session must be at least this long before its drop is compared with the
+# prediction. Short sessions on a slow house mostly measure sensor quantization,
+# and a heavy house may hold its temperature before it starts to drop.
+_MIN_PREDICTION_VALIDATION_MINUTES = 60.0
+
+# Typical indoor sensor resolution. A drop smaller than this cannot be told apart
+# from zero, and it is the smallest scale prediction errors are judged against.
+_SENSOR_RESOLUTION_C = 0.1
+
 # A flat session still validates the model when the model clearly predicted a drop.
 _MIN_PREDICTED_DROP_FOR_FLAT_VALIDATION_C = 0.3
 
@@ -112,6 +121,8 @@ class ThermalModel:
         self._learning_sessions: int = 0
         self._validated_sessions: int = 0
         self._prediction_mae: Optional[float] = None
+        # Mean actual drop of the validated sessions; the scale MAE is judged on.
+        self._validation_mean_drop: Optional[float] = None
         self._last_prediction_error: Optional[float] = None
         self._last_session_duration_minutes: Optional[float] = None
         self._last_session_actual_drop: Optional[float] = None
@@ -160,6 +171,35 @@ class ThermalModel:
         return self._prediction_mae
 
     @property
+    def validation_mean_drop(self) -> Optional[float]:
+        """Mean actual drop (°C) of the sessions that validated predictions."""
+        return self._validation_mean_drop
+
+    @property
+    def relative_prediction_error(self) -> Optional[float]:
+        """Prediction MAE relative to the size of the drops being predicted.
+
+        The scale is never smaller than the sensor resolution, so a house that
+        barely cools cannot look accurate just because every error is small.
+        """
+        if self._prediction_mae is None:
+            return None
+        scale = max(self._validation_mean_drop or 0.0, _SENSOR_RESOLUTION_C)
+        return self._prediction_mae / scale
+
+    def expected_drop_rate(self, indoor: float, outdoor: float) -> Optional[float]:
+        """Expected indoor drop in °C/h under braking right now (k × ΔT)."""
+        if not self._valid:
+            return None
+        try:
+            delta_t = float(indoor) - float(outdoor)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(delta_t):
+            return None
+        return self._k * max(0.0, delta_t)
+
+    @property
     def last_prediction_error(self) -> Optional[float]:
         """Signed error from the latest validated session: actual - predicted drop."""
         return self._last_prediction_error
@@ -198,10 +238,9 @@ class ThermalModel:
             else max(0.0, min(1.0, 1.0 - (self._fit_rmse / 1.0)))
         )
         session_score = min(1.0, self._learning_sessions / 5.0)
+        relative_error = self.relative_prediction_error
         validation_score = (
-            0.0
-            if self._prediction_mae is None
-            else max(0.0, min(1.0, 1.0 - (self._prediction_mae / 1.0)))
+            0.0 if relative_error is None else max(0.0, min(1.0, 1.0 - relative_error))
         )
 
         score = max(
@@ -217,6 +256,14 @@ class ThermalModel:
         # A good in-sample fit does not prove predictive accuracy.
         if self._validated_sessions == 0:
             score = min(score, _UNVALIDATED_CONFIDENCE_CAP)
+        else:
+            # Validation is the real test. Predictions no better than the drops
+            # they predict earn no more trust than an unvalidated model.
+            score = min(
+                score,
+                _UNVALIDATED_CONFIDENCE_CAP
+                + (1.0 - _UNVALIDATED_CONFIDENCE_CAP) * validation_score,
+            )
         return score
 
     def should_refit(self) -> bool:
@@ -261,6 +308,7 @@ class ThermalModel:
         last_session_duration_minutes: Optional[float] = None,
         last_session_actual_drop: Optional[float] = None,
         last_session_predicted_drop: Optional[float] = None,
+        validation_mean_drop: Optional[float] = None,
     ) -> None:
         """Restore compact model-quality summaries without restoring raw samples."""
         self._sample_count = max(0, int(sample_count))
@@ -268,6 +316,7 @@ class ThermalModel:
         self._learning_sessions = max(0, int(learning_sessions))
         self._validated_sessions = max(0, int(validated_sessions))
         self._prediction_mae = self._finite_or_none(prediction_mae)
+        self._validation_mean_drop = self._finite_or_none(validation_mean_drop)
         self._last_prediction_error = self._signed_finite_or_none(last_prediction_error)
         self._last_session_duration_minutes = self._finite_or_none(
             last_session_duration_minutes
@@ -423,6 +472,7 @@ class ThermalModel:
             self.cancel_validation_session()
             self._validated_sessions = 0
             self._prediction_mae = None
+            self._validation_mean_drop = None
             self._last_prediction_error = None
             self._last_session_duration_minutes = None
             self._last_session_actual_drop = None
@@ -526,9 +576,14 @@ class ThermalModel:
 
         # Flat readings alone do not prove the model accurate, but a flat session
         # where the model predicted a clear drop is real evidence against it.
-        if session.prediction_valid and (
-            actual_drop >= 0.05
-            or predicted_drop >= _MIN_PREDICTED_DROP_FOR_FLAT_VALIDATION_C
+        # Only long sessions are compared: short ones mostly measure sensor noise.
+        if (
+            session.prediction_valid
+            and duration_minutes >= _MIN_PREDICTION_VALIDATION_MINUTES
+            and (
+                actual_drop >= _SENSOR_RESOLUTION_C
+                or predicted_drop >= _MIN_PREDICTED_DROP_FOR_FLAT_VALIDATION_C
+            )
         ):
             error = actual_drop - predicted_drop
             abs_error = abs(error)
@@ -538,6 +593,13 @@ class ThermalModel:
             self._prediction_mae = (
                 previous_total + abs_error
             ) / self._validated_sessions
+            # Older stored state has no mean drop; start it from this session.
+            if self._validation_mean_drop is None:
+                self._validation_mean_drop = actual_drop
+            else:
+                self._validation_mean_drop = (
+                    self._validation_mean_drop * previous_count + actual_drop
+                ) / self._validated_sessions
             self._last_prediction_error = error
             _LOGGER.info(
                 "ThermalModel validation: duration=%.0fmin actual_drop=%.2f°C "

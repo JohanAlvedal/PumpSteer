@@ -232,9 +232,10 @@ def test_sensor_diagnostics_include_confidence_and_learning_reason():
 def test_sensor_closes_session_when_braking_stops():
     sensor = _sensor()
     sensor._thermal_model.restore_k(0.05)
-    for minute in range(20):
+    # Prediction validation needs a session of at least 60 minutes.
+    for minute in range(61):
         now = _START + timedelta(minutes=minute)
-        indoor = 21.0 - 0.02 * minute
+        indoor = 21.0 - 0.01 * minute
         sensor._thermal_model.record_temp(now, indoor)
         sensor._update_thermal_learning(
             active=True, reason="active", now=now, indoor=indoor, outdoor=5.0
@@ -243,8 +244,8 @@ def test_sensor_closes_session_when_braking_stops():
     sensor._update_thermal_learning(
         active=False,
         reason="price_not_expensive",
-        now=_START + timedelta(minutes=20),
-        indoor=20.6,
+        now=_START + timedelta(minutes=61),
+        indoor=20.39,
         outdoor=5.0,
     )
 
