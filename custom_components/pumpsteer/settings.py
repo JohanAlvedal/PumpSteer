@@ -134,8 +134,13 @@ HOLIDAY_TEMP: Final[float] = 17.0
 # Users can override this per-installation in options (ohmigo_interval_minutes).
 OHMIGO_DEFAULT_INTERVAL_MINUTES: Final[float] = 5.0
 
-# Hysteresis: treat values within this range as unchanged; due keepalive pushes are still sent.
-OHMIGO_HYSTERESIS_C: Final[float] = 0.2
+# Resolution of the value written to Ohmigo.
+OHMIGO_STEP_C: Final[float] = 0.5
+
+# Margin beyond the step boundary (OHMIGO_STEP_C / 2) before the Ohmigo value
+# changes step. Prevents flip-flopping between two steps when the raw fake
+# temperature sits near a boundary. Due keepalive pushes resend the held value.
+OHMIGO_HYSTERESIS_C: Final[float] = 0.1
 
 # === SANITY BOUNDS ===
 MIN_REASONABLE_TEMP: Final[float] = -30.0

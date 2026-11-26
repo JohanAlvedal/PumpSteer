@@ -13,7 +13,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
-from .settings import OHMIGO_DEFAULT_INTERVAL_MINUTES, OHMIGO_HYSTERESIS_C
+from .settings import (
+    OHMIGO_DEFAULT_INTERVAL_MINUTES,
+    OHMIGO_HYSTERESIS_C,
+    OHMIGO_STEP_C,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -172,14 +176,23 @@ async def async_push_ohmigo(
         if elapsed < interval_minutes:
             return last_push_time
 
-    new_val = round(fake_temp * 2) / 2
+    new_val = round(fake_temp / OHMIGO_STEP_C) * OHMIGO_STEP_C
 
     cur_state = hass.states.get(ohmigo_entity)
     within_hysteresis = False
     if cur_state is not None:
         try:
             cur_val = float(cur_state.state)
-            if abs(new_val - cur_val) < OHMIGO_HYSTERESIS_C:
+            # Hold the current 0.5 °C step until the raw value has moved past
+            # the step boundary plus the hysteresis margin. Only a value on the
+            # 0.5 °C grid (i.e. one PumpSteer wrote) is held; anything else is
+            # replaced by the rounded value.
+            on_grid = abs(cur_val * 2 - round(cur_val * 2)) < 1e-6
+            if (
+                on_grid
+                and abs(fake_temp - cur_val) < OHMIGO_STEP_C / 2 + OHMIGO_HYSTERESIS_C
+            ):
+                new_val = cur_val
                 within_hysteresis = True
         except (ValueError, TypeError):
             pass

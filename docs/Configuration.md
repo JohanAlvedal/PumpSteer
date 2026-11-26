@@ -271,7 +271,7 @@ Enables or disables automatic pushing of the fake outdoor temperature to the con
 Ohmigo number entity. Toggle this without having to reconfigure the options flow.
 
 Pushes are skipped when:
-- The new value is within 0.2 °C of the current Ohmigo value (hysteresis)
+- The fake temperature is less than 0.35 °C from the current Ohmigo value (0.5 °C steps with 0.1 °C hysteresis); a due keepalive still resends the held value
 - Less than `ohmigo_interval_minutes` have passed since the last push
 
 ---

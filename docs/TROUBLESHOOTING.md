@@ -231,7 +231,7 @@ ago, check the logs for restore errors and report it as a bug.
 1. `switch.pumpsteer_ohmigo_push` is `on`
 2. The Ohmigo entity ID in the options flow matches the actual entity
 3. At least `ohmigo_interval_minutes` have passed since the last Ohmigo command
-4. Changes smaller than 0.2 °C are treated as an unchanged setpoint, but the current setpoint is still resent when the interval is due to keep the Ohmigo watchdog alive
+4. The setpoint is written in 0.5 °C steps and only changes step when the fake temperature is 0.35 °C from the current value, but the current setpoint is still resent when the interval is due to keep the Ohmigo watchdog alive
 
 Check HA debug logs for `Ohmigo push` or `Ohmigo keepalive resend` messages to confirm commands are occurring.
 

@@ -13,6 +13,12 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Ohmigo hysteresis now works. It compared the already rounded value against
+  the current one, so the 0.2 °C threshold could never trigger and the output
+  could flip between two 0.5 °C steps. The step is now held until the raw fake
+  temperature is 0.35 °C (half a step + `OHMIGO_HYSTERESIS_C` = 0.1 °C) away.
+
 ---
 
 ## [2.3.0] — Built-in sidebar panel

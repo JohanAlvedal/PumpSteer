@@ -110,3 +110,49 @@ def test_missing_or_invalid_state_still_pushes(setup_push, current_state):
     assert _push(hass, entry, None) == clock[0]
     assert hass.services.calls == [_expected_call()]
     assert len(logbook_calls) == 1
+
+
+def _push_value(hass, entry, fake_temp):
+    asyncio.run(ohmigo.async_push_ohmigo(hass, entry, fake_temp, None))
+    return hass.services.calls[-1][2]["value"]
+
+
+@pytest.mark.parametrize("fake_temp", [-3.26, -3.3, -3.34, -2.9, -2.66])
+def test_step_is_held_near_boundary(setup_push, fake_temp):
+    """Raw values within 0.35 °C of the current step keep that step."""
+    _, _, entry = setup_push
+    hass = _FakeHass("-3.0")
+
+    assert _push_value(hass, entry, fake_temp) == -3.0
+
+
+@pytest.mark.parametrize(
+    ("fake_temp", "expected"),
+    [(-3.36, -3.5), (-2.64, -2.5), (-3.4, -3.5), (-4.2, -4.0)],
+)
+def test_step_changes_beyond_hysteresis(setup_push, fake_temp, expected):
+    _, _, entry = setup_push
+    hass = _FakeHass("-3.0")
+
+    assert _push_value(hass, entry, fake_temp) == expected
+
+
+def test_no_flip_flop_around_boundary(setup_push):
+    """Noise around a step boundary must not toggle the written value."""
+    _, _, entry = setup_push
+    hass = _FakeHass("-3.0")
+    written = []
+    for fake_temp in [-3.2, -3.3, -3.24, -3.31, -3.27, -3.22, -3.29]:
+        value = _push_value(hass, entry, fake_temp)
+        hass.current_state = str(value)
+        written.append(value)
+
+    assert written == [-3.0] * 7
+
+
+def test_off_grid_current_value_is_not_held(setup_push):
+    """A value PumpSteer did not write is replaced by the rounded value."""
+    _, _, entry = setup_push
+    hass = _FakeHass("-3.1")
+
+    assert _push_value(hass, entry, -3.2) == -3.0
