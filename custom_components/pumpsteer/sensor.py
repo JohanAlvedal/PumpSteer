@@ -392,6 +392,9 @@ class PumpSteerSensor(RestoreEntity):
                     "thermal_validated_sessions", 0
                 ),
                 prediction_mae=self._attributes.get("thermal_prediction_mae_c"),
+                validation_mean_drop=self._attributes.get(
+                    "thermal_validation_mean_drop_c"
+                ),
                 last_prediction_error=self._attributes.get(
                     "thermal_last_prediction_error_c"
                 ),
@@ -813,6 +816,7 @@ class PumpSteerSensor(RestoreEntity):
         heating_demand_c: float = 0.0,
     ) -> Dict[str, Any]:
         """Return standard attributes included in all modes."""
+        expected_drop = self._thermal_model.expected_drop_rate(indoor, outdoor)
         return {
             "heating_demand_c": round(heating_demand_c, 2),
             "indoor_temperature": indoor,
@@ -864,6 +868,19 @@ class PumpSteerSensor(RestoreEntity):
                 round(self._thermal_model.prediction_mae, 3)
                 if self._thermal_model.prediction_mae is not None
                 else None
+            ),
+            "thermal_validation_mean_drop_c": (
+                round(self._thermal_model.validation_mean_drop, 3)
+                if self._thermal_model.validation_mean_drop is not None
+                else None
+            ),
+            "thermal_relative_prediction_error": (
+                round(self._thermal_model.relative_prediction_error, 2)
+                if self._thermal_model.relative_prediction_error is not None
+                else None
+            ),
+            "thermal_expected_drop_c_per_hour": (
+                round(expected_drop, 3) if expected_drop is not None else None
             ),
             "thermal_last_prediction_error_c": (
                 round(self._thermal_model.last_prediction_error, 3)

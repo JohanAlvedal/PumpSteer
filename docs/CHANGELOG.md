@@ -13,6 +13,18 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Thermal confidence is now judged against the size of the drops being predicted, not a fixed 1 °C. A house that barely cools during braking could previously show over 90 % confidence while the prediction error was twice the actual drop. The validation score is now `1 − MAE / mean actual drop` (scale never below the 0.1 °C sensor resolution), and confidence is capped between 50 % and 100 % by that score.
+- Predictions are only validated against sessions of at least 60 minutes with an actual drop of at least 0.1 °C (or a predicted drop of at least 0.3 °C). Shorter sessions still count as learning sessions but mostly measure sensor quantization.
+
+### Added
+- `thermal_expected_drop_c_per_hour` (k × (indoor − outdoor) right now), `thermal_relative_prediction_error` and `thermal_validation_mean_drop_c` attributes on `sensor.pumpsteer`.
+
+### Compatibility
+- Thermal Learning remains diagnostic only; PI, pricing and relay decisions are unchanged.
+- Stored prediction MAE from before this update has no recorded mean drop and is judged on the 0.1 °C sensor scale until new long sessions are validated, so confidence may drop after upgrading.
+- Thermal model constants changed: a full Home Assistant restart is required, not just a reload.
+
 ---
 
 ## [2.3.0] — Built-in sidebar panel
